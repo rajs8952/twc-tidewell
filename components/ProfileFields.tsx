@@ -1,0 +1,149 @@
+'use client'
+
+import { motion } from 'framer-motion'
+import { useState } from 'react'
+import { ACTIVITY_LEVELS, GENDERS, goalBreakdown, type Activity, type Gender } from '@/lib/hydration'
+
+const LB_PER_KG = 2.20462
+const round1 = (n: number) => Math.round(n * 10) / 10
+
+export function WeightInput({ kg, onChange, id = 'weight' }: { kg: number; onChange: (kg: number) => void; id?: string }) {
+  const [unit, setUnit] = useState<'kg' | 'lb'>('kg')
+  const [text, setText] = useState(kg ? String(round1(kg)) : '')
+
+  function switchUnit(u: 'kg' | 'lb') {
+    if (u === unit) return
+    setUnit(u)
+    if (kg) setText(String(round1(u === 'kg' ? kg : kg * LB_PER_KG)))
+  }
+
+  return (
+    <div>
+      <label htmlFor={id} className="label">Body weight</label>
+      <div className="flex gap-2">
+        <input
+          id={id}
+          type="number"
+          inputMode="decimal"
+          step="0.1"
+          min={unit === 'kg' ? 25 : 55}
+          max={unit === 'kg' ? 300 : 660}
+          required
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value)
+            const n = parseFloat(e.target.value)
+            if (Number.isFinite(n)) onChange(round1(unit === 'kg' ? n : n / LB_PER_KG))
+          }}
+          className="input"
+        />
+        <div className="flex rounded-2xl bg-mist p-1" role="radiogroup" aria-label="Weight unit">
+          {(['kg', 'lb'] as const).map((u) => (
+            <button
+              key={u}
+              type="button"
+              role="radio"
+              aria-checked={unit === u}
+              onClick={() => switchUnit(u)}
+              className={`rounded-xl px-3.5 text-sm font-bold transition ${unit === u ? 'bg-white text-ink shadow-sm' : 'text-muted'}`}
+            >
+              {u}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function GenderPicker({ value, onChange }: { value: Gender; onChange: (g: Gender) => void }) {
+  return (
+    <fieldset>
+      <legend className="label">Sex</legend>
+      <div className="grid grid-cols-3 gap-2">
+        {GENDERS.map((g) => (
+          <label
+            key={g.id}
+            className={`cursor-pointer rounded-2xl border px-2 py-3 text-center text-sm font-bold transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-tide-500 ${
+              value === g.id ? 'border-tide-500 bg-tide-50 text-tide-700' : 'border-line bg-white text-ink hover:border-tide-300'
+            }`}
+          >
+            <input type="radio" name="gender" value={g.id} checked={value === g.id} onChange={() => onChange(g.id)} className="sr-only" />
+            {g.label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  )
+}
+
+export function ActivityPicker({ value, onChange }: { value: Activity; onChange: (a: Activity) => void }) {
+  return (
+    <fieldset>
+      <legend className="label">Daily activity</legend>
+      <div className="space-y-2">
+        {ACTIVITY_LEVELS.map((a, i) => {
+          const active = value === a.id
+          return (
+            <label
+              key={a.id}
+              className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-tide-500 ${
+                active ? 'border-tide-500 bg-tide-50' : 'border-line bg-white hover:border-tide-300'
+              }`}
+            >
+              <input type="radio" name="activity" value={a.id} checked={active} onChange={() => onChange(a.id)} className="sr-only" />
+              <span className="flex h-6 items-end gap-0.5" aria-hidden>
+                {ACTIVITY_LEVELS.map((_, j) => (
+                  <span
+                    key={j}
+                    className={`w-1 rounded-full ${j <= i ? (active ? 'bg-tide-500' : 'bg-ink/40') : 'bg-line'}`}
+                    style={{ height: 6 + j * 4 }}
+                  />
+                ))}
+              </span>
+              <span className="flex-1">
+                <span className="block text-sm font-bold">{a.label}</span>
+                <span className="block text-xs text-muted">{a.hint}</span>
+              </span>
+              <span className="text-xs font-bold text-muted">{a.extraMl ? `+${a.extraMl} ml` : 'Base'}</span>
+            </label>
+          )
+        })}
+      </div>
+    </fieldset>
+  )
+}
+
+export function GoalPreview({ weightKg, gender, activity }: { weightKg: number; gender: Gender; activity: Activity }) {
+  const g = goalBreakdown({ weightKg, gender, activity })
+  const rows = [
+    { label: `${weightKg || 0} kg × 33 ml`, value: g.base },
+    { label: 'Activity', value: g.activityAdj },
+    ...(g.genderAdj ? [{ label: 'Sex adjustment', value: g.genderAdj }] : []),
+  ]
+  return (
+    <div className="rounded-3xl bg-tide-600 p-5 text-white">
+      <p className="text-sm font-semibold text-tide-100">Your daily goal</p>
+      <motion.p
+        key={g.total}
+        initial={{ opacity: 0.4, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="font-display text-4xl font-extrabold tracking-tight"
+      >
+        {(g.total / 1000).toFixed(2)} L
+      </motion.p>
+      <dl className="mt-3 space-y-1 text-sm text-tide-100">
+        {rows.map((r) => (
+          <div key={r.label} className="flex justify-between gap-4">
+            <dt>{r.label}</dt>
+            <dd className="font-semibold tabular-nums text-white">
+              {r.value > 0 && r !== rows[0] ? '+' : ''}
+              {r.value.toLocaleString()} ml
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-3 text-xs text-tide-200">Rounded to the nearest 50 ml, kept between 1.2 and 5 L.</p>
+    </div>
+  )
+}
