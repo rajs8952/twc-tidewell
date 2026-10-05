@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { useState } from 'react'
+import { HEIGHT_CM, cmToFeetInches, feetInchesToCm } from '@/lib/biometrics'
 import { ACTIVITY_LEVELS, GENDERS, goalBreakdown, type Activity, type Gender } from '@/lib/hydration'
 
 const LB_PER_KG = 2.20462
@@ -39,6 +40,108 @@ export function WeightInput({ kg, onChange, id = 'weight' }: { kg: number; onCha
         />
         <div className="flex rounded-2xl bg-mist p-1" role="radiogroup" aria-label="Weight unit">
           {(['kg', 'lb'] as const).map((u) => (
+            <button
+              key={u}
+              type="button"
+              role="radio"
+              aria-checked={unit === u}
+              onClick={() => switchUnit(u)}
+              className={`rounded-xl px-3.5 text-sm font-bold transition ${unit === u ? 'bg-white text-ink shadow-sm' : 'text-muted'}`}
+            >
+              {u}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Height in cm or feet + inches; always reports centimetres (or null when cleared). */
+export function HeightInput({ cm, onChange, id = 'height' }: { cm: number | null; onChange: (cm: number | null) => void; id?: string }) {
+  const [unit, setUnit] = useState<'cm' | 'ft'>('cm')
+  const [cmText, setCmText] = useState(cm ? String(round1(cm)) : '')
+  const initial = cm ? cmToFeetInches(cm) : null
+  const [ftText, setFtText] = useState(initial ? String(initial.ft) : '')
+  const [inText, setInText] = useState(initial ? String(initial.in) : '')
+
+  function switchUnit(u: 'cm' | 'ft') {
+    if (u === unit) return
+    setUnit(u)
+    if (!cm) return
+    const fi = cmToFeetInches(cm)
+    setCmText(String(round1(cm)))
+    setFtText(String(fi.ft))
+    setInText(String(fi.in))
+  }
+
+  function updateFeet(ft: string, inches: string) {
+    setFtText(ft)
+    setInText(inches)
+    const f = parseFloat(ft)
+    const i = inches === '' ? 0 : parseFloat(inches)
+    onChange(Number.isFinite(f) && Number.isFinite(i) ? feetInchesToCm(f, i) : null)
+  }
+
+  return (
+    <div>
+      <label htmlFor={id} className="label">Height</label>
+      <div className="flex gap-2">
+        {unit === 'cm' ? (
+          <div className="relative flex-1">
+            <input
+              id={id}
+              type="number"
+              inputMode="decimal"
+              step="0.5"
+              min={HEIGHT_CM.min}
+              max={HEIGHT_CM.max}
+              placeholder="170"
+              value={cmText}
+              onChange={(e) => {
+                setCmText(e.target.value)
+                const n = parseFloat(e.target.value)
+                onChange(Number.isFinite(n) ? round1(n) : null)
+              }}
+              className="input pr-12"
+            />
+            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted">cm</span>
+          </div>
+        ) : (
+          <div className="grid flex-1 grid-cols-2 gap-2">
+            <div className="relative">
+              <input
+                id={id}
+                type="number"
+                inputMode="numeric"
+                min={3}
+                max={8}
+                placeholder="5"
+                aria-label="Height, feet"
+                value={ftText}
+                onChange={(e) => updateFeet(e.target.value, inText)}
+                className="input pr-9"
+              />
+              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted">ft</span>
+            </div>
+            <div className="relative">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={11}
+                placeholder="7"
+                aria-label="Height, inches"
+                value={inText}
+                onChange={(e) => updateFeet(ftText, e.target.value)}
+                className="input pr-9"
+              />
+              <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted">in</span>
+            </div>
+          </div>
+        )}
+        <div className="flex rounded-2xl bg-mist p-1" role="radiogroup" aria-label="Height unit">
+          {(['cm', 'ft'] as const).map((u) => (
             <button
               key={u}
               type="button"

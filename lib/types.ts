@@ -8,6 +8,10 @@ export interface Profile {
   gender: Gender
   activity_level: Activity
   custom_goal_ml: number | null
+  /** Null until the user adds it (see supabase/profile.sql). */
+  height_cm: number | null
+  /** Stored instead of an age so it never goes stale. */
+  birth_year: number | null
 }
 
 export interface DrinkLog {

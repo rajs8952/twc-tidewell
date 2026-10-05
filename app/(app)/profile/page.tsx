@@ -1,22 +1,33 @@
 'use client'
 
-import { Loader2, LogOut } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { Building2, Droplets, Loader2, Ruler, UserRound } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AvatarPicker } from '@/components/AvatarPicker'
-import { ActivityPicker, GenderPicker, GoalPreview, WeightInput } from '@/components/ProfileFields'
+import { ActivityPicker, GenderPicker, GoalPreview, HeightInput, WeightInput } from '@/components/ProfileFields'
+import { BmiReadout } from '@/components/profile/BmiReadout'
+import { LogoutButton } from '@/components/profile/LogoutButton'
+import { ProfileSection } from '@/components/profile/ProfileSection'
+import { WellnessTeam } from '@/components/profile/WellnessTeam'
 import { uploadAvatar } from '@/lib/avatar'
+import { AGE, HEIGHT_CM, ageFromBirthYear, birthYearFromAge } from '@/lib/biometrics'
+import { PILLAR_COLORS } from '@/lib/brand'
 import { getProfile, updateProfile } from '@/lib/data'
 import { errorMessage } from '@/lib/errors'
 import { calculateDailyGoal } from '@/lib/hydration'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
 
+/*
+ * Profile: Account (photo, name, email, logout), Biometrics (height, weight,
+ * age, sex, activity → BMI and the water goal) and the Corporate Wellness team.
+ * Account and Biometrics save together; the wellness team is static.
+ */
+
 export default function ProfilePage() {
-  const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
-  const [profile, setProfile] = useState<Profile | null>(null)
   const [form, setForm] = useState<Profile | null>(null)
+  const [email, setEmail] = useState<string | null>(null)
+  const [ageText, setAgeText] = useState('')
   const [avatar, setAvatar] = useState<{ blob: Blob; url: string } | null>(null)
   const [customOn, setCustomOn] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -26,15 +37,25 @@ export default function ProfilePage() {
   useEffect(() => {
     getProfile(supabase)
       .then((p) => {
-        setProfile(p)
         setForm(p)
         setCustomOn(p.custom_goal_ml != null)
+        const age = ageFromBirthYear(p.birth_year)
+        setAgeText(age == null ? '' : String(age))
       })
       .catch((e) => setError(errorMessage(e)))
+    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null))
   }, [supabase])
 
-  if (!form || !profile) {
-    return error ? <p role="alert" className="notice-error">{error}</p> : <div className="h-96 animate-pulse rounded-3xl bg-white/70" aria-busy="true" />
+  if (!form) {
+    return error ? (
+      <p role="alert" className="notice-error">{error}</p>
+    ) : (
+      <div className="space-y-6" aria-busy="true" aria-label="Loading your profile">
+        <div className="h-12 w-48 animate-pulse rounded-2xl bg-white/70" />
+        <div className="h-72 animate-pulse rounded-3xl bg-white/70" />
+        <div className="h-96 animate-pulse rounded-3xl bg-white/70" />
+      </div>
+    )
   }
 
   const set = <K extends keyof Profile>(k: K, v: Profile[K]) => {
@@ -51,6 +72,13 @@ export default function ProfilePage() {
     setSaved(false)
     if (!form.full_name.trim()) return setError('Add your name.')
     if (!(form.weight_kg >= 25 && form.weight_kg <= 300)) return setError('Enter a weight between 25 and 300 kg.')
+    if (form.height_cm != null && !(form.height_cm >= HEIGHT_CM.min && form.height_cm <= HEIGHT_CM.max)) {
+      return setError(`Enter a height between ${HEIGHT_CM.min} and ${HEIGHT_CM.max} cm (about 3′3″ to 8′2″).`)
+    }
+    const age = ageText.trim() === '' ? null : Number(ageText)
+    if (age != null && !(Number.isInteger(age) && age >= AGE.min && age <= AGE.max)) {
+      return setError(`Enter an age between ${AGE.min} and ${AGE.max}, in whole years.`)
+    }
     const custom = customOn ? form.custom_goal_ml : null
     if (customOn && !(custom && custom >= 500 && custom <= 8000)) return setError('Set a custom goal between 500 and 8,000 ml.')
 
@@ -58,15 +86,18 @@ export default function ProfilePage() {
     try {
       let avatarUrl = form.avatar_url
       if (avatar) avatarUrl = await uploadAvatar(supabase, form.id, avatar.blob)
+      // Keep the stored birth year when the age shown hasn't changed, so saving doesn't nudge it.
+      const birthYear = age == null ? null : age === ageFromBirthYear(form.birth_year) ? form.birth_year : birthYearFromAge(age)
       const next = await updateProfile(supabase, form.id, {
         full_name: form.full_name.trim(),
         weight_kg: form.weight_kg,
+        height_cm: form.height_cm,
+        birth_year: birthYear,
         gender: form.gender,
         activity_level: form.activity_level,
         custom_goal_ml: custom,
         avatar_url: avatarUrl,
       })
-      setProfile(next)
       setForm(next)
       setAvatar(null)
       setSaved(true)
@@ -77,48 +108,89 @@ export default function ProfilePage() {
     }
   }
 
-  async function signOut() {
-    await supabase.auth.signOut()
-    router.replace('/login')
-    router.refresh()
-  }
-
   return (
     <>
-      <header className="mb-8 flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold sm:text-4xl">Edit profile</h1>
-          <p className="mt-1 text-muted">Your goal updates as soon as you save.</p>
-        </div>
-        <button type="button" onClick={signOut} className="btn-secondary">
-          <LogOut className="h-4 w-4" aria-hidden /> Log out
-        </button>
+      <header className="mb-6 sm:mb-8">
+        <h1 className="text-3xl font-extrabold sm:text-4xl">Profile</h1>
+        <p className="mt-1 text-muted">Your account, your body measurements and who to talk to at work.</p>
       </header>
 
-      <form onSubmit={onSave} className="grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+      <form onSubmit={onSave} className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         <div className="space-y-6">
-          <AvatarPicker
-            src={avatar?.url ?? form.avatar_url}
-            name={form.full_name}
-            onPick={(blob, url) => {
-              setSaved(false)
-              setAvatar({ blob, url })
-            }}
-          />
-          <div>
-            <label htmlFor="name" className="label">Name</label>
-            <input id="name" required value={form.full_name} onChange={(e) => set('full_name', e.target.value)} className="input" />
-          </div>
-          <WeightInput kg={form.weight_kg} onChange={(kg) => set('weight_kg', kg)} />
-          <GenderPicker value={form.gender} onChange={(g) => set('gender', g)} />
-          <ActivityPicker value={form.activity_level} onChange={(a) => set('activity_level', a)} />
+          <ProfileSection id="account" title="Account" icon={UserRound} accent="#0F2F37">
+            <AvatarPicker
+              src={avatar?.url ?? form.avatar_url}
+              name={form.full_name}
+              onPick={(blob, url) => {
+                setSaved(false)
+                setAvatar({ blob, url })
+              }}
+            />
+            <div className="mt-5 space-y-4">
+              <div>
+                <label htmlFor="name" className="label">Name</label>
+                <input id="name" required autoComplete="name" value={form.full_name} onChange={(e) => set('full_name', e.target.value)} className="input" />
+              </div>
+              <div>
+                <label htmlFor="email" className="label">Email</label>
+                <input id="email" type="email" readOnly value={email ?? ''} placeholder="Loading…" className="input bg-mist/70 text-ink" aria-describedby="email-hint" />
+                <p id="email-hint" className="mt-1 text-xs text-muted">The email you log in with. It can’t be changed here.</p>
+              </div>
+            </div>
+            <div className="mt-6 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted">Log out of OmniWell on this device.</p>
+              <LogoutButton />
+            </div>
+          </ProfileSection>
+
+          <ProfileSection
+            id="biometrics"
+            title="Biometrics"
+            description="Used for your BMI and smart daily targets."
+            icon={Ruler}
+            accent={PILLAR_COLORS.weight}
+          >
+            <div className="grid gap-4 sm:grid-cols-2">
+              <HeightInput cm={form.height_cm} onChange={(cm) => set('height_cm', cm)} />
+              <WeightInput kg={form.weight_kg} onChange={(kg) => set('weight_kg', kg)} />
+              <div>
+                <label htmlFor="age" className="label">Age</label>
+                <div className="relative">
+                  <input
+                    id="age"
+                    type="number"
+                    inputMode="numeric"
+                    min={AGE.min}
+                    max={AGE.max}
+                    step={1}
+                    placeholder="30"
+                    value={ageText}
+                    onChange={(e) => {
+                      setSaved(false)
+                      setAgeText(e.target.value)
+                    }}
+                    className="input pr-16"
+                  />
+                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted">years</span>
+                </div>
+              </div>
+            </div>
+            <div className="mt-4">
+              <GenderPicker value={form.gender} onChange={(g) => set('gender', g)} />
+            </div>
+            <div className="mt-4">
+              <BmiReadout heightCm={form.height_cm} weightKg={form.weight_kg} />
+            </div>
+            <div className="mt-5">
+              <ActivityPicker value={form.activity_level} onChange={(a) => set('activity_level', a)} />
+            </div>
+          </ProfileSection>
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-10 lg:self-start">
-          <GoalPreview weightKg={form.weight_kg} gender={form.gender} activity={form.activity_level} />
-
-          <div className="rounded-3xl bg-white p-5 ring-1 ring-line">
-            <label className="flex cursor-pointer items-center justify-between gap-4">
+          <ProfileSection id="water-goal" title="Water goal" description="Worked out from your biometrics." icon={Droplets} accent={PILLAR_COLORS.water}>
+            <GoalPreview weightKg={form.weight_kg} gender={form.gender} activity={form.activity_level} />
+            <label className="mt-4 flex cursor-pointer items-center justify-between gap-4">
               <span>
                 <span className="block text-sm font-bold">Set my own goal</span>
                 <span className="block text-xs text-muted">Use this if a doctor or coach gave you a target.</span>
@@ -151,7 +223,7 @@ export default function ProfilePage() {
                 <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted">ml</span>
               </div>
             )}
-          </div>
+          </ProfileSection>
 
           {error && <p role="alert" className="notice-error">{error}</p>}
           {saved && <p role="status" className="notice-ok">Profile saved.</p>}
@@ -162,6 +234,17 @@ export default function ProfilePage() {
           </button>
         </aside>
       </form>
+
+      <ProfileSection
+        id="wellness-team"
+        title="Corporate wellness"
+        description="Your company’s wellness team, here when you need them."
+        icon={Building2}
+        accent={PILLAR_COLORS.meditation}
+        className="mt-6"
+      >
+        <WellnessTeam />
+      </ProfileSection>
     </>
   )
 }

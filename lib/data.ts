@@ -11,6 +11,9 @@ function toProfile(r: any): Profile {
     gender: r.gender,
     activity_level: r.activity_level,
     custom_goal_ml: r.custom_goal_ml == null ? null : Number(r.custom_goal_ml),
+    // Undefined (not null) before supabase/profile.sql has been run.
+    height_cm: r.height_cm == null ? null : Number(r.height_cm),
+    birth_year: r.birth_year == null ? null : Number(r.birth_year),
   }
 }
 
@@ -61,6 +64,8 @@ export async function updateProfile(
   patch: Partial<Omit<Profile, 'id'>>,
 ): Promise<Profile> {
   const { data, error } = await supabase.from('profiles').update(patch).eq('id', id).select('*').single()
+  // PGRST204: a column in the patch doesn't exist, i.e. profile.sql hasn't been run.
+  if (error?.code === 'PGRST204') throw new Error('Height and age aren’t set up yet. Run supabase/profile.sql in Supabase first.')
   if (error) throw error
   return toProfile(data)
 }
