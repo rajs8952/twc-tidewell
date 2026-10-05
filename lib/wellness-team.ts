@@ -29,8 +29,8 @@ export const WELLNESS_TEAM: WellnessContact[] = [
     description: 'Support with work, family, money or legal worries.',
     icon: HeartHandshake,
     accent: '#2E9C8F',
-    phone: null,
-    email: null,
+    phone: '+91 98751 08108',
+    email: 'eap@thewellnesscorner.com',
     url: null,
     hours: null,
   },
@@ -62,7 +62,7 @@ export const WELLNESS_TEAM: WellnessContact[] = [
  * The local emergency number (e.g. '112' in India and the EU, '911' in the US).
  * Shown in the crisis alert; null shows "your local emergency number" instead.
  */
-export const EMERGENCY_NUMBER: string | null = null
+export const EMERGENCY_NUMBER: string | null = '112'
 
 export const WELLNESS_BY_ID = Object.fromEntries(WELLNESS_TEAM.map((c) => [c.id, c])) as Record<WellnessContact['id'], WellnessContact>
 
