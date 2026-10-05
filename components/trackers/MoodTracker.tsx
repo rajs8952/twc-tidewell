@@ -5,6 +5,9 @@ import { Trash2 } from 'lucide-react'
 import { useMemo, useState, useTransition } from 'react'
 import { deleteMood, getMoodLogs, logMood } from '@/app/actions/mood'
 import { useInitialLoad } from './useInitialLoad'
+import { InterventionBanner } from '@/components/interventions/InterventionBanner'
+import { evaluateMetric, moodInterventionKey, type Intervention } from '@/lib/intervention-engine'
+import { useDismissed } from '@/lib/useDismissed'
 import { addDays, dayKey, startOfWeek } from '@/lib/hydration'
 import {
   EMOTIONS,
@@ -104,6 +107,9 @@ export function MoodTracker({ initialData }: { initialData?: ActionResult<MoodLo
   const [emotions, setEmotions] = useState<string[]>([])
   const [note, setNote] = useState('')
   const [saving, startSaving] = useTransition()
+  // Set when a check-in triggers the crisis dialog; shown straight away, before the save returns.
+  const [crisis, setCrisis] = useState<Intervention | null>(null)
+  const { dismiss } = useDismissed()
 
   const now = new Date()
   const weekStart = startOfWeek(now)
@@ -157,6 +163,8 @@ export function MoodTracker({ initialData }: { initialData?: ActionResult<MoodLo
     setError(null)
     setLogs((prev) => [temp, ...prev])
     reset()
+    const check = evaluateMetric({ type: 'mood', value: input.mood_state })
+    if (check.severity === 'CRITICAL') setCrisis(check)
     startSaving(async () => {
       const res = await logMood(input)
       if (res.ok) setLogs((prev) => prev.map((l) => (l.id === temp.id ? { ...res.data, _key: temp.id } : l)))
@@ -188,6 +196,14 @@ export function MoodTracker({ initialData }: { initialData?: ActionResult<MoodLo
 
   return (
     <div className="space-y-5">
+      <InterventionBanner
+        intervention={crisis}
+        onDismiss={() => {
+          // Also counts for the Hub, so the same dialog doesn't greet them there today.
+          if (crisis) dismiss(moodInterventionKey(crisis))
+          setCrisis(null)
+        }}
+      />
       {error && <p role="alert" className="notice-error">{error}</p>}
 
       <div className="rounded-2xl bg-white p-4 ring-1 ring-line sm:p-5">

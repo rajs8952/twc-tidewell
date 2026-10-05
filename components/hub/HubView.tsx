@@ -1,20 +1,24 @@
 'use client'
 
+import { AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { getTrackerData, type TrackerData } from '@/app/actions/dashboard'
 import { Avatar } from '@/components/Avatar'
 import { HubCard } from '@/components/hub/HubCard'
+import { InterventionBanner } from '@/components/interventions/InterventionBanner'
 import { getLogsBetween } from '@/lib/data'
 import { errorMessage } from '@/lib/errors'
 import { exerciseRange } from '@/lib/exercise'
 import { hubSummaries, type HubSummary } from '@/lib/hub'
 import { addDays, effectiveGoal, greeting, startOfDay } from '@/lib/hydration'
+import { latestInterventions } from '@/lib/intervention-engine'
 import { meditationRange } from '@/lib/meditation'
 import { moodRange } from '@/lib/mood'
 import { sleepRange } from '@/lib/sleep'
 import { createClient } from '@/lib/supabase/client'
 import { TRACKERS, type TrackerId } from '@/lib/trackers'
+import { useDismissed } from '@/lib/useDismissed'
 import { useProfile } from '@/lib/useProfile'
 import { weightRange } from '@/lib/weight'
 
@@ -59,6 +63,17 @@ export function HubView() {
     return hubSummaries(trackerData, water)
   }, [trackerData, waterMl, profile])
 
+  // Alerts from the latest mood, sleep and weight; each can be dismissed (or, if critical, acknowledged) once.
+  const { isDismissed, dismiss, ready } = useDismissed()
+  const interventions = useMemo(() => {
+    if (!trackerData || !profile) return []
+    const data = <T,>(r: { ok: true; data: T[] } | { ok: false }) => (r.ok ? r.data : undefined)
+    return latestInterventions({ mood: data(trackerData.mood), sleep: data(trackerData.sleep), weight: data(trackerData.weight) }, profile)
+  }, [trackerData, profile])
+  const visible = ready ? interventions.filter((i) => !isDismissed(i.key)) : []
+  const crisis = visible.find((i) => i.severity === 'CRITICAL') ?? null
+  const banners = visible.filter((i) => i.severity !== 'CRITICAL')
+
   const loaded = Object.keys(summaries).length > 0
   const doneCount = TRACKERS.filter((t) => summaries[t.id]?.done).length
   const firstName = profile?.full_name.split(' ')[0]
@@ -83,6 +98,15 @@ export function HubView() {
       </header>
 
       {profileError && <p role="alert" className="notice-error mb-6">{profileError}</p>}
+
+      <InterventionBanner intervention={crisis} onDismiss={() => crisis && dismiss(crisis.key)} />
+      <div className={banners.length ? 'mb-6 space-y-3' : undefined}>
+        <AnimatePresence initial={false}>
+          {banners.map((i) => (
+            <InterventionBanner key={i.key} intervention={i} onDismiss={() => dismiss(i.key)} />
+          ))}
+        </AnimatePresence>
+      </div>
 
       <section aria-labelledby="today-title" className="mb-4 flex flex-wrap items-center justify-between gap-3 sm:mb-6">
         <h2 id="today-title" className="text-lg font-bold">

@@ -19,7 +19,7 @@ export function ProfileSection({
   className?: string
 }) {
   return (
-    <section aria-labelledby={`${id}-title`} className={`rounded-3xl bg-white p-5 ring-1 ring-line sm:p-6 ${className}`}>
+    <section id={id} aria-labelledby={`${id}-title`} className={`rounded-3xl bg-white p-5 ring-1 ring-line sm:p-6 ${className}`}>
       <div className="mb-5 flex items-center gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-white" style={{ background: accent }}>
           <Icon className="h-5 w-5" aria-hidden />

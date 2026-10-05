@@ -1,7 +1,5 @@
 import { Clock, ExternalLink, Mail, Phone, LifeBuoy } from 'lucide-react'
-import { WELLNESS_TEAM, type WellnessContact } from '@/lib/wellness-team'
-
-const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`
+import { WELLNESS_TEAM, telHref, type WellnessContact } from '@/lib/wellness-team'
 
 function ContactCard({ contact }: { contact: WellnessContact }) {
   const Icon = contact.icon
