@@ -1,12 +1,13 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { BarChart3, Droplets, UserRound } from 'lucide-react'
+import { BarChart3, Droplets, Sprout, UserRound } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const ITEMS = [
   { href: '/dashboard', label: 'Today', icon: Droplets },
+  { href: '/garden', label: 'Garden', icon: Sprout },
   { href: '/stats', label: 'Stats', icon: BarChart3 },
   { href: '/profile', label: 'Profile', icon: UserRound },
 ]
@@ -32,7 +33,7 @@ export function AppNav() {
               <Link
                 href={href}
                 aria-current={active ? 'page' : undefined}
-                className={`relative flex flex-col items-center gap-1 rounded-2xl px-5 py-2.5 text-xs font-bold transition md:px-4 ${
+                className={`relative flex flex-col items-center gap-1 rounded-2xl px-4 py-2.5 text-xs font-bold transition sm:px-5 md:px-4 ${
                   active ? 'text-tide-700' : 'text-muted hover:text-ink'
                 }`}
               >

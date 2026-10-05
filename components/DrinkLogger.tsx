@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { Plus } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BEVERAGE_ORDER, BEVERAGES, PRESETS, type BeverageId } from '@/lib/hydration'
 import { BeverageIcon } from './BeverageIcon'
 
@@ -31,11 +31,33 @@ export function DrinkLogger({ onAdd }: { onAdd: (beverage: BeverageId, ml: numbe
   const customMl = Number(custom)
   const customValid = Number.isFinite(customMl) && customMl >= 10 && customMl <= 5000
 
+  // Fade the chip row's right edge while more chips are hidden off-screen.
+  const chipsRef = useRef<HTMLDivElement>(null)
+  const [moreChips, setMoreChips] = useState(false)
+  useEffect(() => {
+    const el = chipsRef.current
+    if (!el) return
+    const update = () => setMoreChips(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+    window.addEventListener('resize', update)
+    return () => {
+      el.removeEventListener('scroll', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [])
+
   return (
     <section className="rounded-3xl bg-white p-5 ring-1 ring-line sm:p-6" aria-labelledby="log-heading">
       <h2 id="log-heading" className="text-lg font-bold">Log a drink</h2>
 
-      <div role="radiogroup" aria-label="Beverage" className="-mx-1 mt-4 flex gap-2 overflow-x-auto px-1 pb-1">
+      <div className="relative mt-4">
+      <div
+        ref={chipsRef}
+        role="radiogroup"
+        aria-label="Beverage"
+        className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {BEVERAGE_ORDER.map((id) => {
           const active = id === beverage
           const item = BEVERAGES[id]
@@ -64,6 +86,13 @@ export function DrinkLogger({ onAdd }: { onAdd: (beverage: BeverageId, ml: numbe
           )
         })}
       </div>
+        <div
+          className={`pointer-events-none absolute inset-y-0 -right-1 w-10 bg-gradient-to-l from-white transition-opacity ${
+            moreChips ? 'opacity-100' : 'opacity-0'
+          }`}
+          aria-hidden
+        />
+      </div>
 
       <p className="mt-3 text-sm text-muted">
         {b.multiplier === 1
@@ -71,19 +100,19 @@ export function DrinkLogger({ onAdd }: { onAdd: (beverage: BeverageId, ml: numbe
           : `${b.label} counts as ${Math.round(b.multiplier * 100)}% of its volume.`}
       </p>
 
-      <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
+      <div className="mt-4 grid grid-cols-5 gap-1.5 sm:gap-2">
         {PRESETS.map((p) => (
           <motion.button
             key={p.ml}
             type="button"
             whileTap={{ scale: 0.94 }}
             onClick={() => onAdd(beverage, p.ml)}
-            className="flex flex-col items-center gap-1 rounded-2xl border border-line bg-white px-2 py-3 transition hover:border-tide-400 hover:bg-tide-50"
+            className="flex flex-col items-center gap-1 rounded-xl border border-line bg-white px-1 py-3 transition hover:border-tide-400 hover:bg-tide-50 sm:px-2"
             aria-label={`Add ${p.ml} ml ${b.label.toLowerCase()} (${p.label.toLowerCase()})`}
           >
             <MiniGlass ml={p.ml} color={b.color} />
             <span className="font-display text-base font-bold leading-none">{p.ml}</span>
-            <span className="text-xs text-muted">{p.label}</span>
+            <span className="text-center text-[11px] leading-tight text-muted sm:text-xs">{p.label}</span>
           </motion.button>
         ))}
       </div>

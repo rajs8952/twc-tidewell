@@ -1,54 +1,81 @@
 'use client'
 
-import { AnimatePresence, motion } from 'framer-motion'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
+import { getTrackerData, type TrackerData } from '@/app/actions/dashboard'
 import { Avatar } from '@/components/Avatar'
-import { DrinkLogger } from '@/components/DrinkLogger'
-import { StreakCard, type WeekDay } from '@/components/StreakCard'
-import { TodayLog } from '@/components/TodayLog'
-import { WaterVessel } from '@/components/WaterVessel'
+import { ExerciseTracker } from '@/components/trackers/ExerciseTracker'
+import { MeditationTracker } from '@/components/trackers/MeditationTracker'
+import { MoodTracker } from '@/components/trackers/MoodTracker'
+import { SleepTracker } from '@/components/trackers/SleepTracker'
+import { PlaceholderCard, TrackerBoundary, TrackerCard } from '@/components/trackers/TrackerCard'
+import { WaterTracker } from '@/components/trackers/WaterTracker'
+import { WeightTracker } from '@/components/trackers/WeightTracker'
 import { flushPendingAvatar } from '@/lib/avatar'
-import { addLog, deleteLog, getDailyTotals, getLogsBetween, getProfile } from '@/lib/data'
+import { getProfile } from '@/lib/data'
 import { errorMessage } from '@/lib/errors'
-import {
-  BEVERAGES,
-  addDays,
-  computeStreaks,
-  dayKey,
-  effectiveGoal,
-  greeting,
-  motivationalMessage,
-  startOfDay,
-  startOfWeek,
-  type BeverageId,
-} from '@/lib/hydration'
+import { exerciseRange } from '@/lib/exercise'
+import { greeting } from '@/lib/hydration'
+import { meditationRange } from '@/lib/meditation'
+import { moodRange } from '@/lib/mood'
+import { sleepRange } from '@/lib/sleep'
 import { createClient } from '@/lib/supabase/client'
-import type { DrinkLog, Profile } from '@/lib/types'
+import { TRACKERS, type TrackerId } from '@/lib/trackers'
+import type { Profile } from '@/lib/types'
+import { weightRange } from '@/lib/weight'
+
+/**
+ * Six-column grid, in registry order. Water spans the first row; Mood and
+ * Meditation share the second; Sleep, Weight and Exercise (two columns
+ * inside each) take a full row apiece.
+ * On tablets every card is full width.
+ */
+const SPAN: Partial<Record<TrackerId, string>> = {
+  water: 'sm:col-span-2 lg:col-span-6',
+  mood: 'sm:col-span-2 lg:col-span-3',
+  meditation: 'sm:col-span-2 lg:col-span-3',
+  sleep: 'sm:col-span-2 lg:col-span-6',
+  weight: 'sm:col-span-2 lg:col-span-6',
+  exercise: 'sm:col-span-2 lg:col-span-6',
+}
 
 export default function DashboardPage() {
   const supabase = useMemo(() => createClient(), [])
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [logs, setLogs] = useState<DrinkLog[]>([])
-  const [history, setHistory] = useState<Record<string, number>>({})
   const [error, setError] = useState<string | null>(null)
-  const [splash, setSplash] = useState<{ key: number; ml: number } | null>(null)
-  const [celebrate, setCelebrate] = useState(false)
+  // null while loading; each tracker card waits for its slice.
+  const [trackerData, setTrackerData] = useState<TrackerData | null>(null)
+
+  // All server-action trackers in one request: Next.js runs a page's server
+  // actions one at a time, so per-card loads queued up behind each other.
+  useEffect(() => {
+    let alive = true
+    const now = new Date()
+    getTrackerData({
+      mood: moodRange(now),
+      meditation: meditationRange(now),
+      sleep: sleepRange(now),
+      weight: weightRange(now),
+      exercise: exerciseRange(now),
+    })
+      .then((d) => alive && setTrackerData(d))
+      .catch((e) => {
+        if (!alive) return
+        const failed = { ok: false as const, error: errorMessage(e, 'Couldn’t load your trackers. Reload to try again.') }
+        setTrackerData({ mood: failed, meditation: failed, sleep: failed, weight: failed, exercise: failed })
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   useEffect(() => {
     let alive = true
     ;(async () => {
       try {
-        const today = startOfDay(new Date())
-        const [p, l, h] = await Promise.all([
-          getProfile(supabase),
-          getLogsBetween(supabase, today, addDays(today, 1)),
-          getDailyTotals(supabase),
-        ])
+        const p = await getProfile(supabase)
         if (!alive) return
         setProfile(p)
-        setLogs(l)
-        setHistory(h)
         const url = await flushPendingAvatar(supabase, p.id)
         if (url && alive) setProfile({ ...p, avatar_url: url })
       } catch (e) {
@@ -61,80 +88,7 @@ export default function DashboardPage() {
   }, [supabase])
 
   const now = new Date()
-  const todayKey = dayKey(now)
-  const goal = profile ? effectiveGoal(profile) : 0
-  const todayTotal = logs.reduce((s, l) => s + l.effective_ml, 0)
-  const totals = useMemo(() => ({ ...history, [todayKey]: todayTotal }), [history, todayKey, todayTotal])
-  const streaks = computeStreaks(totals, goal || Infinity, now)
-  const progress = goal ? todayTotal / goal : 0
-  const remaining = Math.max(goal - todayTotal, 0)
-
-  const week: WeekDay[] = Array.from({ length: 7 }, (_, i) => {
-    const d = addDays(startOfWeek(now), i)
-    const k = dayKey(d)
-    return {
-      key: k,
-      label: d.toLocaleDateString(undefined, { weekday: 'narrow' }),
-      progress: goal ? Math.min((totals[k] ?? 0) / goal, 1) : 0,
-      isToday: k === todayKey,
-      isFuture: d > now,
-    }
-  })
-
-  async function handleAdd(beverage: BeverageId, ml: number) {
-    if (!profile) return
-    const b = BEVERAGES[beverage]
-    const temp: DrinkLog = {
-      id: `temp-${Date.now()}`,
-      beverage,
-      amount_ml: ml,
-      multiplier: b.multiplier,
-      effective_ml: Math.round(ml * b.multiplier),
-      logged_at: new Date().toISOString(),
-    }
-    const before = todayTotal
-    setError(null)
-    setLogs((prev) => [temp, ...prev])
-    setSplash({ key: Date.now(), ml: temp.effective_ml })
-    if (before < goal && before + temp.effective_ml >= goal) {
-      setCelebrate(true)
-      setTimeout(() => setCelebrate(false), 2600)
-    }
-    try {
-      const saved = await addLog(supabase, beverage, ml)
-      setLogs((prev) => prev.map((x) => (x.id === temp.id ? saved : x)))
-    } catch (e) {
-      setLogs((prev) => prev.filter((x) => x.id !== temp.id))
-      setError(`That drink wasn’t saved: ${errorMessage(e)}`)
-    }
-  }
-
-  async function handleDelete(id: string) {
-    const removed = logs.find((l) => l.id === id)
-    setLogs((prev) => prev.filter((l) => l.id !== id))
-    try {
-      await deleteLog(supabase, id)
-    } catch (e) {
-      if (removed) setLogs((prev) => [...prev, removed].sort((a, b) => b.logged_at.localeCompare(a.logged_at)))
-      setError(`That drink wasn’t removed: ${errorMessage(e)}`)
-    }
-  }
-
-  if (!profile) {
-    return error ? (
-      <p role="alert" className="notice-error">{error}</p>
-    ) : (
-      <div className="grid animate-pulse gap-8 md:grid-cols-2" aria-busy="true" aria-label="Loading">
-        <div className="mx-auto h-[380px] w-[240px] rounded-[48px] bg-white/70" />
-        <div className="space-y-4">
-          <div className="h-40 rounded-3xl bg-white/70" />
-          <div className="h-64 rounded-3xl bg-white/70" />
-        </div>
-      </div>
-    )
-  }
-
-  const firstName = profile.full_name.split(' ')[0]
+  const firstName = profile?.full_name.split(' ')[0]
 
   return (
     <>
@@ -148,47 +102,38 @@ export default function DashboardPage() {
             {firstName ? `, ${firstName}` : ''}
           </h1>
         </div>
-        <Link href="/profile" aria-label="Edit profile" className="rounded-full">
-          <Avatar src={profile.avatar_url} name={profile.full_name} size={48} />
-        </Link>
+        {profile && (
+          <Link href="/profile" aria-label="Edit profile" className="rounded-full">
+            <Avatar src={profile.avatar_url} name={profile.full_name} size={48} />
+          </Link>
+        )}
       </header>
 
       {error && <p role="alert" className="notice-error mb-6">{error}</p>}
 
-      <div className="grid gap-8 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] md:gap-12">
-        <section className="flex flex-col items-center md:sticky md:top-10 md:self-start" aria-label="Today’s progress">
-          <div className="relative w-full">
-            <WaterVessel current={todayTotal} goal={goal} splashKey={splash?.key} celebrate={celebrate} />
-            <AnimatePresence>
-              {splash && (
-                <motion.span
-                  key={splash.key}
-                  className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2 rounded-full bg-ink px-3 py-1 font-display text-sm font-bold text-white"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: [0, 1, 1, 0], y: -24 }}
-                  transition={{ duration: 1.3, times: [0, 0.15, 0.7, 1] }}
-                  aria-hidden
-                >
-                  +{splash.ml} ml
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </div>
-          <div className="mt-6 max-w-xs text-center" aria-live="polite">
-            <p className="font-display text-xl font-bold leading-snug">{motivationalMessage(progress, now)}</p>
-            <p className="mt-1 text-sm text-muted">
-              {remaining > 0
-                ? `${remaining.toLocaleString()} ml to go, about ${Math.ceil(remaining / 250)} ${Math.ceil(remaining / 250) === 1 ? 'glass' : 'glasses'}.`
-                : `You’ve had ${todayTotal.toLocaleString()} ml today.`}
-            </p>
-          </div>
-        </section>
-
-        <div className="space-y-6">
-          <StreakCard current={streaks.current} best={streaks.best} week={week} />
-          <DrinkLogger onAdd={handleAdd} />
-          <TodayLog logs={logs} onDelete={handleDelete} />
-        </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-6">
+        {TRACKERS.map((t) => (
+          <TrackerBoundary key={t.id} name={t.name} className={SPAN[t.id]}>
+            {t.status === 'live' ? (
+              <TrackerCard tracker={t} className={SPAN[t.id]}>
+                {t.id === 'water' && <WaterTracker profile={profile} />}
+                {t.id === 'mood' && <MoodTracker initialData={trackerData?.mood ?? null} />}
+                {t.id === 'meditation' && <MeditationTracker initialData={trackerData?.meditation ?? null} />}
+                {t.id === 'sleep' && <SleepTracker initialData={trackerData?.sleep ?? null} />}
+                {t.id === 'weight' && (
+                  <WeightTracker
+                    profileWeightKg={profile?.weight_kg}
+                    onProfileWeightChange={(kg) => setProfile((p) => (p ? { ...p, weight_kg: kg } : p))}
+                    initialData={trackerData?.weight ?? null}
+                  />
+                )}
+                {t.id === 'exercise' && <ExerciseTracker profileWeightKg={profile?.weight_kg} initialData={trackerData?.exercise ?? null} />}
+              </TrackerCard>
+            ) : (
+              <PlaceholderCard tracker={t} className={SPAN[t.id]} />
+            )}
+          </TrackerBoundary>
+        ))}
       </div>
     </>
   )

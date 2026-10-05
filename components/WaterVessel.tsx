@@ -95,11 +95,17 @@ export function WaterVessel({ current, goal, splashKey = 0, celebrate = false }:
               <motion.path d={wavePath(8, 0)} fill="#fff" {...drift(4.5)} />
             </motion.g>
           </mask>
+          {/* Inverse of the water: keeps the dark readout legible right up to the waterline. */}
+          <mask id={`${id}-above`} maskUnits="userSpaceOnUse" x={-10} y={-10} width={220} height={H + 30}>
+            <rect x={-10} y={-10} width={220} height={H + 30} fill="#fff" />
+            <motion.g {...level}>
+              <motion.path d={wavePath(8, 0)} fill="#000" {...drift(4.5)} />
+            </motion.g>
+          </mask>
         </defs>
 
         {/* glass */}
         <path d={VESSEL_PATH} fill="#FFFFFF" fillOpacity={0.78} />
-        {readout('#0F2F37')}
 
         <g clipPath={`url(#${id}-vessel)`}>
           <motion.g {...level}>
@@ -139,6 +145,8 @@ export function WaterVessel({ current, goal, splashKey = 0, celebrate = false }:
             )}
           </AnimatePresence>
         </g>
+
+        <g mask={`url(#${id}-above)`}>{readout('#0F2F37')}</g>
 
         {/* level marks */}
         {[0.25, 0.5, 0.75].map((p) => {
