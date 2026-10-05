@@ -1,4 +1,6 @@
-# Tidewell: water tracker
+# OmniWell: your whole wellbeing in one place
+
+> Formerly **Tidewell**, a water tracker. OmniWell keeps the water tracker and adds mood, meditation, sleep, weight and exercise, plus insights that connect them. Brand constants live in `lib/brand.ts`.
 
 A web water tracker built with Next.js 14 (App Router), Tailwind CSS, Framer Motion and Supabase. It includes auth with an avatar upload, a goal calculated from your profile, an animated glass that fills as you drink, streaks, logging for several drink types, and weekly stats.
 

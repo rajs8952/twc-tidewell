@@ -1,5 +1,5 @@
 -- ============================================================
--- Tidewell wellness trackers, phase 1: tables only.
+-- OmniWell wellness trackers, phase 1: tables only.
 -- Run AFTER schema.sql. Paste into Supabase → SQL Editor → Run.
 -- Safe to re-run. Does not touch profiles or drink_logs.
 --

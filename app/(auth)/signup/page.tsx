@@ -96,6 +96,7 @@ export default function SignupPage() {
           <motion.div key="account" {...slide}>
             <p className="text-sm font-bold text-tide-600">Step 1 of 2</p>
             <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">Create your account</h1>
+            <p className="mt-2 text-muted">Six trackers, one place. It takes about a minute.</p>
             <form onSubmit={nextStep} className="mt-8 space-y-5">
               <AvatarPicker src={avatar?.url ?? null} name={name} onPick={(blob, url) => setAvatar({ blob, url })} />
               <div>
@@ -137,8 +138,8 @@ export default function SignupPage() {
               <ArrowLeft className="h-4 w-4" aria-hidden /> Back
             </button>
             <p className="text-sm font-bold text-tide-600">Step 2 of 2</p>
-            <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">Set your daily goal</h1>
-            <p className="mt-2 text-muted">We use these to work out how much you should drink. You can change them any time.</p>
+            <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">A little about you</h1>
+            <p className="mt-2 text-muted">We use this to set your daily water goal and estimate calories for workouts. You can change it any time.</p>
             <form onSubmit={createAccount} className="mt-8 space-y-6">
               <WeightInput kg={weightKg} onChange={setWeightKg} />
               <GenderPicker value={gender} onChange={setGender} />

@@ -5,6 +5,7 @@ import { Minus, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { deleteWeight, getWeightLogs, logWeight } from '@/app/actions/weight'
 import { useInitialLoad } from './useInitialLoad'
+import { storageKey } from '@/lib/brand'
 import { addDays, startOfDay } from '@/lib/hydration'
 import {
   MAX_FAT,
@@ -24,7 +25,7 @@ import {
 } from '@/lib/weight'
 
 const ACCENT = '#2E9C8F'
-const UNIT_KEY = 'tidewell:weight-unit'
+const UNIT_KEY = storageKey('weight-unit')
 
 /** `_key` keeps a row's React key stable when the server copy replaces the optimistic one. */
 type Row = WeightLog & { _key?: string }

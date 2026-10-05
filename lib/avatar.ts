@@ -1,7 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { blobToDataUrl, dataUrlToBlob } from './image'
+import { storageKey } from '@/lib/brand'
 
-const PENDING_KEY = 'tidewell:pending-avatar'
+const PENDING_KEY = storageKey('pending-avatar')
 
 /** Uploads to avatars/<uid>/avatar and stores a cache-busted public URL on the profile. */
 export async function uploadAvatar(supabase: SupabaseClient, userId: string, blob: Blob): Promise<string> {

@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------
- * Tidewell hydration model
+ * OmniWell hydration model
  * Pure functions only — safe to unit test and to use anywhere.
  * ------------------------------------------------------------------ */
 

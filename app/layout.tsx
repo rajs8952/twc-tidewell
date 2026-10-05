@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
+import { BRAND } from '@/lib/brand'
 import './globals.css'
 
 // Self-hosted from @fontsource-variable so builds don't need to reach Google Fonts.
@@ -17,12 +18,15 @@ const body = localFont({
 })
 
 export const metadata: Metadata = {
-  title: 'Tidewell — daily water tracker',
-  description: 'A personal daily water goal, a glass that fills as you drink, and streaks that keep you going.',
+  title: { default: `${BRAND.name} — ${BRAND.tagline}`, template: `%s · ${BRAND.name}` },
+  description: BRAND.description,
+  applicationName: BRAND.name,
+  appleWebApp: { title: BRAND.name, capable: true, statusBarStyle: 'default' },
+  openGraph: { title: BRAND.name, description: BRAND.description, siteName: BRAND.name, type: 'website' },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#EDF4F3',
+  themeColor: BRAND.themeColor,
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',

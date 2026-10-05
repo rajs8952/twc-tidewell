@@ -18,7 +18,8 @@ function weekTitle(offset: number, start: Date) {
   return `${fmt(start)} to ${fmt(end)}`
 }
 
-export default function StatsPage() {
+/** Water › Stats: the week's hydration, per day and per drink. */
+export function WaterStats() {
   const supabase = useMemo(() => createClient(), [])
   const [profile, setProfile] = useState<Profile | null>(null)
   const [offset, setOffset] = useState(0)
@@ -91,9 +92,9 @@ export default function StatsPage() {
 
   return (
     <>
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold sm:text-4xl">Your hydration</h1>
+          <h2 className="text-2xl font-extrabold">Your hydration</h2>
           <p className="mt-1 text-muted">Counted amounts, after each drink’s hydration share is applied.</p>
         </div>
         <div className="flex items-center gap-1 rounded-full bg-white p-1 ring-1 ring-line">
@@ -126,7 +127,7 @@ export default function StatsPage() {
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <section className="rounded-3xl bg-white p-5 ring-1 ring-line sm:p-7" aria-labelledby="week-heading">
-          <h2 id="week-heading" className="mb-8 text-lg font-bold">Daily totals</h2>
+          <h3 id="week-heading" className="mb-8 text-lg font-bold">Daily totals</h3>
           {logs && goal ? (
             <WeeklyBars key={weekStartKey} days={days} goal={goal} />
           ) : (
@@ -145,7 +146,7 @@ export default function StatsPage() {
         </section>
 
         <section className="rounded-3xl bg-white p-5 ring-1 ring-line sm:p-7" aria-labelledby="mix-heading">
-          <h2 id="mix-heading" className="mb-6 text-lg font-bold">What you drank</h2>
+          <h3 id="mix-heading" className="mb-6 text-lg font-bold">What you drank</h3>
           {logs ? <BeverageDonut key={weekStartKey} shares={shares} /> : <div className="h-40 animate-pulse rounded-2xl bg-mist" />}
         </section>
       </div>

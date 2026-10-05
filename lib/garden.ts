@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------
- * Tidewell garden: a plant that grows as you hit your water goal.
+ * OmniWell garden: a plant that grows as you hit your water goal.
  * Everything is derived from daily totals, so nothing extra is stored.
  * ------------------------------------------------------------------ */
 

@@ -1,5 +1,5 @@
 -- ============================================================
--- Tidewell schema. Paste into Supabase → SQL Editor → Run.
+-- OmniWell (formerly Tidewell) core schema. Paste into Supabase → SQL Editor → Run.
 -- Safe to re-run.
 -- ============================================================
 

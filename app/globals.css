@@ -35,7 +35,7 @@
     @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45;
   }
   .btn-primary {
-    @apply btn bg-ink text-white hover:bg-tide-700;
+    @apply btn bg-ink text-white hover:bg-ink/85;
   }
   .btn-secondary {
     @apply btn bg-white text-ink ring-1 ring-line hover:ring-tide-400;
@@ -45,6 +45,35 @@
   }
   .notice-ok {
     @apply rounded-2xl bg-tide-100 px-4 py-3 text-sm font-semibold text-tide-700;
+  }
+  /* OmniWell multi-pillar gradient (water → sleep → meditation → mood → exercise → weight). */
+  .bg-brand-gradient {
+    background-image: linear-gradient(120deg, #2189d6, #4a5bc4, #7c6bd6, #e8628a, #e9851f, #2e9c8f);
+  }
+  /* Gradient text uses darker steps of the same hues so every stop clears 3:1 on white. */
+  .text-brand-gradient {
+    background-image: linear-gradient(100deg, #1a6db5, #4a5bc4, #6a55c9, #c2416a, #b9650e, #237a70);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+@layer utilities {
+  .animate-drift {
+    animation: drift 18s ease-in-out infinite alternate;
+  }
+  .animate-drift-slow {
+    animation: drift 26s ease-in-out infinite alternate-reverse;
+  }
+}
+
+@keyframes drift {
+  from {
+    transform: translate3d(-4%, -3%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(4%, 3%, 0) scale(1.08);
   }
 }
 

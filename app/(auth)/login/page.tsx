@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AuthShell } from '@/components/AuthShell'
 import { flushPendingAvatar } from '@/lib/avatar'
+import { BRAND } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
@@ -48,7 +49,7 @@ export default function LoginPage() {
   return (
     <AuthShell>
       <h1 className="text-3xl font-extrabold sm:text-4xl">Welcome back</h1>
-      <p className="mt-2 text-muted">Log in to pick up today’s glass where you left it.</p>
+      <p className="mt-2 text-muted">Log in to pick up where you left off.</p>
 
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
         <div>
@@ -87,7 +88,7 @@ export default function LoginPage() {
       </form>
 
       <p className="mt-6 text-center text-sm text-muted">
-        New to Tidewell?{' '}
+        New to {BRAND.name}?{' '}
         <Link href="/signup" className="font-bold text-tide-600 hover:underline">Create an account</Link>
       </p>
     </AuthShell>

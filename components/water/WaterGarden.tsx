@@ -22,7 +22,8 @@ const MOOD_STYLE: Record<Mood, string> = {
 
 const shortDate = (key: string) => parseDayKey(key).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
-export default function GardenPage() {
+/** Water › Garden: a plant that grows as you hit your water goal. */
+export function WaterGarden() {
   const supabase = useMemo(() => createClient(), [])
   const [profile, setProfile] = useState<Profile | null>(null)
   const [logs, setLogs] = useState<DrinkLog[]>([])
@@ -115,8 +116,8 @@ export default function GardenPage() {
 
   return (
     <>
-      <header className="mb-6 sm:mb-10">
-        <h1 className="text-3xl font-extrabold sm:text-4xl">Your garden</h1>
+      <header className="mb-6">
+        <h2 className="text-2xl font-extrabold">Your garden</h2>
         <p className="mt-1 text-muted">Every drink waters your plant. Hit your goal to help it bloom.</p>
       </header>
 
@@ -132,7 +133,7 @@ export default function GardenPage() {
               <p className="text-sm font-semibold text-muted">
                 Plant {current.number} · day {daysGrowing}
               </p>
-              <h2 className="text-2xl font-extrabold">{species.name}</h2>
+              <h3 className="text-2xl font-extrabold">{species.name}</h3>
             </div>
             <span className={`rounded-full px-3 py-1 text-sm font-bold ${MOOD_STYLE[mood]}`}>{MOOD_LABEL[mood]}</span>
           </div>
@@ -197,7 +198,7 @@ export default function GardenPage() {
 
         <div className="space-y-6">
           <section className="rounded-3xl bg-white p-5 ring-1 ring-line sm:p-6" aria-labelledby="water-heading">
-            <h2 id="water-heading" className="text-lg font-bold">Drink and water</h2>
+            <h3 id="water-heading" className="text-lg font-bold">Drink and water</h3>
             <p className="mt-1 text-sm text-muted">Log a glass of water. Your plant drinks with you.</p>
             <div className="mt-4 grid grid-cols-3 gap-2">
               {WATER_AMOUNTS.map((ml) => (
@@ -235,7 +236,7 @@ export default function GardenPage() {
 
           <section className="rounded-3xl bg-white p-5 ring-1 ring-line sm:p-6" aria-labelledby="shelf-heading">
             <div className="flex items-baseline justify-between gap-3">
-              <h2 id="shelf-heading" className="text-lg font-bold">Bloomed plants</h2>
+              <h3 id="shelf-heading" className="text-lg font-bold">Bloomed plants</h3>
               <span className="text-sm font-semibold text-muted">{grown.length}</span>
             </div>
             {grown.length === 0 ? (
@@ -257,7 +258,7 @@ export default function GardenPage() {
           </section>
 
           <section className="rounded-3xl bg-white p-5 text-sm ring-1 ring-line sm:p-6" aria-labelledby="how-heading">
-            <h2 id="how-heading" className="text-lg font-bold">How your plant grows</h2>
+            <h3 id="how-heading" className="text-lg font-bold">How your plant grows</h3>
             <ul className="mt-3 space-y-2 text-muted">
               <li>Each day adds growth equal to the share of your goal you drank, up to one full day.</li>
               <li>{GROW_TARGET} full days grow a seed into a bloom, then a new seed is planted.</li>

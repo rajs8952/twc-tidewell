@@ -1,7 +1,17 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const APP_ROUTES = ['/dashboard', '/garden', '/stats', '/profile']
+const APP_ROUTES = [
+  '/dashboard',
+  '/water',
+  '/sleep',
+  '/mood',
+  '/meditation',
+  '/exercise',
+  '/weight',
+  '/insights',
+  '/profile',
+]
 const AUTH_ROUTES = ['/login', '/signup']
 
 export async function updateSession(request: NextRequest) {
