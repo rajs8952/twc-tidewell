@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
+import { TopProgressBar } from '@/components/TopProgressBar'
+import { PwaClient } from '@/components/pwa/PwaClient'
 import { BRAND } from '@/lib/brand'
 import './globals.css'
 
@@ -35,7 +37,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${display.variable} ${body.variable}`}>
-      <body className="min-h-dvh bg-mist font-body text-ink antialiased">{children}</body>
+      <body className="min-h-dvh bg-mist font-body text-ink antialiased">
+        <TopProgressBar />
+        {children}
+        <PwaClient />
+      </body>
     </html>
   )
 }

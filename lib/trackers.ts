@@ -1,4 +1,4 @@
-import { Droplets, Dumbbell, Moon, Scale, Smile, Wind, type LucideIcon } from 'lucide-react'
+import { Calculator, Droplets, Dumbbell, Moon, Scale, Smile, Wind, type LucideIcon } from 'lucide-react'
 
 /* ------------------------------------------------------------------
  * Tracker registry: the one place a wellness module is declared.
@@ -84,3 +84,15 @@ export const TRACKERS: TrackerModule[] = [
     status: 'live',
   },
 ]
+
+/**
+ * Tools listed in the Trackers menu after the six trackers. Not trackers:
+ * they log nothing, so they're left out of the Hub cards and "done" count.
+ */
+export const BMI_TOOL = {
+  name: 'BMI calculator',
+  description: 'Enter your height and weight to see your body-mass index.',
+  icon: Calculator,
+  accent: '#237A70',
+  href: '/bmi',
+} as const

@@ -9,8 +9,12 @@ const APP_ROUTES = [
   '/meditation',
   '/exercise',
   '/weight',
+  '/bmi',
   '/insights',
   '/profile',
+  '/messages',
+  '/therapist',
+  '/dietitian',
 ]
 const AUTH_ROUTES = ['/login', '/signup']
 

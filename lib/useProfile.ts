@@ -6,6 +6,7 @@ import { getProfile } from './data'
 import { errorMessage } from './errors'
 import { createClient } from './supabase/client'
 import type { Profile } from './types'
+import { trackProgress } from './progress'
 
 /**
  * The signed-in user's profile for a page. Also uploads a profile photo that
@@ -20,7 +21,7 @@ export function useProfile() {
     let alive = true
     ;(async () => {
       try {
-        const p = await getProfile(supabase)
+        const p = await trackProgress(getProfile(supabase))
         if (!alive) return
         setProfile(p)
         const url = await flushPendingAvatar(supabase, p.id)

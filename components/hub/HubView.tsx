@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { getTrackerData, type TrackerData } from '@/app/actions/dashboard'
 import { Avatar } from '@/components/Avatar'
 import { HubCard } from '@/components/hub/HubCard'
+import { WellnessTeam } from '@/components/hub/WellnessTeam'
 import { InterventionBanner } from '@/components/interventions/InterventionBanner'
 import { getLogsBetween } from '@/lib/data'
 import { errorMessage } from '@/lib/errors'
@@ -21,6 +22,7 @@ import { TRACKERS, type TrackerId } from '@/lib/trackers'
 import { useDismissed } from '@/lib/useDismissed'
 import { useProfile } from '@/lib/useProfile'
 import { weightRange } from '@/lib/weight'
+import { trackProgress } from '@/lib/progress'
 
 /** The Home Hub: one at-a-glance card per tracker, each linking to its page. */
 export function HubView() {
@@ -33,13 +35,13 @@ export function HubView() {
     let alive = true
     const now = new Date()
     // One server action for the five server-loaded trackers (Next.js runs actions one at a time).
-    getTrackerData({
+    trackProgress(getTrackerData({
       mood: moodRange(now),
       meditation: meditationRange(now),
       sleep: sleepRange(now),
       weight: weightRange(now),
       exercise: exerciseRange(now),
-    })
+    }))
       .then((d) => alive && setTrackerData(d))
       .catch((e) => {
         if (!alive) return
@@ -48,7 +50,7 @@ export function HubView() {
       })
     // Water reads straight from the browser, as the water tracker does.
     const today = startOfDay(now)
-    getLogsBetween(supabase, today, addDays(today, 1))
+    trackProgress(getLogsBetween(supabase, today, addDays(today, 1)))
       .then((logs) => alive && setWaterMl(logs.reduce((s, l) => s + l.effective_ml, 0)))
       .catch(() => alive && setWaterMl(-1))
     return () => {
@@ -139,6 +141,16 @@ export function HubView() {
           </li>
         ))}
       </ul>
+
+      <section id="wellness-team" aria-labelledby="wellness-team-title" className="mt-10 scroll-mt-6">
+        <div className="mb-4">
+          <h2 id="wellness-team-title" className="text-lg font-bold">
+            Your wellness team
+          </h2>
+          <p className="text-sm text-muted">Your company’s therapist, dietitian and employee assistance programme, here when you need them.</p>
+        </div>
+        <WellnessTeam />
+      </section>
     </>
   )
 }

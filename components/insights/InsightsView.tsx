@@ -9,6 +9,7 @@ import { IconPair, InsightCard } from '@/components/insights/InsightCard'
 import { errorMessage } from '@/lib/errors'
 import type { Insights } from '@/lib/insights/analyze'
 import type { HeadlineIcon } from '@/lib/insights/headline'
+import { trackProgress } from '@/lib/progress'
 
 const ICON: Record<Insights['insights'][number]['id'], HeadlineIcon> = {
   'water-next-sleep': 'water-sleep',
@@ -29,7 +30,7 @@ export function InsightsView() {
 
   useEffect(() => {
     let alive = true
-    getInsights()
+    trackProgress(getInsights())
       .then((r) => {
         if (!alive) return
         if (r.ok) setData(r.data)

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import type { ActionResult } from '@/lib/types'
+import { trackProgress } from '@/lib/progress'
 
 /**
  * A tracker's first load, from one of two sources:
@@ -25,7 +26,7 @@ export function useInitialLoad<T>(
       return
     }
     let alive = true
-    latest.current.load().then((res) => {
+    trackProgress(latest.current.load()).then((res) => {
       if (alive) latest.current.apply(res)
     })
     return () => {

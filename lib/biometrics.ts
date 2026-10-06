@@ -36,3 +36,10 @@ export function bmiBand(value: number): { label: string; position: number } {
   if (value < 30) return { label: 'Above the healthy range', position }
   return { label: 'Well above the healthy range', position }
 }
+
+/** Weights (kg, one decimal) that give a BMI of 18.5 to 24.9 at this height. */
+export function healthyWeightRange(heightCm: number | null): { min: number; max: number } | null {
+  if (!heightCm) return null
+  const m2 = (heightCm / 100) ** 2
+  return { min: Math.round(18.5 * m2 * 10) / 10, max: Math.round(24.9 * m2 * 10) / 10 }
+}

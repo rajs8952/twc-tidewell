@@ -7,7 +7,7 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { Logo, LogoMark } from './Logo'
 import { BRAND } from '@/lib/brand'
-import { TRACKERS } from '@/lib/trackers'
+import { BMI_TOOL, TRACKERS } from '@/lib/trackers'
 
 /* ------------------------------------------------------------------
  * App navigation.
@@ -21,7 +21,11 @@ import { TRACKERS } from '@/lib/trackers'
 const HOME = { href: '/dashboard', label: 'Home', icon: House, accent: '#0F2F37' }
 const INSIGHTS = { href: '/insights', label: 'Insights', icon: Sparkles, accent: '#6A55C9' }
 const PROFILE = { href: '/profile', label: 'Profile', icon: UserRound, accent: '#0F2F37' }
-const TRACKER_LINKS = TRACKERS.map((t) => ({ href: t.href, label: t.name, icon: t.icon, accent: t.accent }))
+// The six trackers, then tools such as the BMI calculator (in the menu only, not on the Hub).
+const TRACKER_LINKS = [
+  ...TRACKERS.map((t) => ({ href: t.href, label: t.name, icon: t.icon, accent: t.accent })),
+  { href: BMI_TOOL.href, label: 'BMI', icon: BMI_TOOL.icon, accent: BMI_TOOL.accent },
+]
 
 type Item = { href: string; label: string; icon: LucideIcon; accent: string }
 

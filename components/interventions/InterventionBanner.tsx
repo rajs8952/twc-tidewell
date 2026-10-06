@@ -14,13 +14,13 @@ import { EMERGENCY_NUMBER, WELLNESS_BY_ID, contactHref, telHref } from '@/lib/we
  *    close button and ignores Esc and backdrop clicks; it only closes
  *    through an explicit "I'm okay for now", so it can't be lost by accident
  *    but never traps someone who needs to leave.
- *  - WARNING / SUGGESTION: a dismissible inline banner with
- *    "Schedule consultation".
+ *  - WARNING / SUGGESTION: a dismissible inline banner whose button opens
+ *    the right team's inbox ("Talk to Dietitian" / "Talk to Therapist").
  *  - NORMAL: nothing.
  * ------------------------------------------------------------------ */
 
 /** Where the wellness team is listed, for contacts that have no details yet. */
-const TEAM_PAGE = '/profile#wellness-team'
+const TEAM_PAGE = '/dashboard#wellness-team'
 
 const isExternal = (href: string) => /^https?:/.test(href)
 
@@ -43,7 +43,9 @@ function InlineBanner({ intervention, onDismiss }: { intervention: Intervention;
   const titleId = useId()
   const action = intervention.actions[0]
   const href = (action && contactHref(action.contact, 'book')) ?? TEAM_PAGE
-  const who = action ? WELLNESS_BY_ID[action.contact].name.toLowerCase() : 'wellness team'
+  // Named after who it opens a conversation with; other contacts keep a generic label.
+  const label = action?.contact === 'dietitian' ? 'Talk to Dietitian' : action?.contact === 'therapist' ? 'Talk to Therapist' : 'Contact the wellness team'
+  const ActionIcon = action && action.contact !== 'eap' ? MessageCircleHeart : CalendarCheck
 
   return (
     <motion.section
@@ -72,9 +74,9 @@ function InlineBanner({ intervention, onDismiss }: { intervention: Intervention;
         {...(isExternal(href) ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
         className="btn-primary shrink-0 self-start sm:self-center"
       >
-        <CalendarCheck className="h-4 w-4" aria-hidden />
-        Schedule consultation
-        <span className="sr-only">with the {who}{isExternal(href) ? ' (opens in a new tab)' : ''}</span>
+        <ActionIcon className="h-4 w-4" aria-hidden />
+        {label}
+        {isExternal(href) && <span className="sr-only">(opens in a new tab)</span>}
       </Link>
 
       <button
@@ -204,6 +206,8 @@ function CrisisDialog({ intervention, onAcknowledge }: { intervention: Intervent
                 <a
                   key={a.label}
                   href={a.href}
+                  // Opening an in-app inbox leaves this page, so count it as acknowledged.
+                  onClick={a.href.startsWith('/') ? onAcknowledge : undefined}
                   {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   className={`flex min-h-[52px] w-full items-center justify-center gap-2 rounded-full px-5 text-base font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white ${
                     i === 0 ? 'bg-white text-[#0B2228] hover:bg-white/90' : 'bg-white/10 text-white ring-1 ring-white/40 hover:bg-white/20'

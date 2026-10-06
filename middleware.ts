@@ -6,6 +6,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Skip static assets, generated icons and the web manifest: none need a session.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // Skip static assets, generated icons, the web manifest and the PWA's service
+  // worker and offline page: none need a session, and the worker must never get
+  // a login redirect instead of itself. The cron route checks its own secret.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|manifest.webmanifest|sw.js|swe-worker|~offline|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }

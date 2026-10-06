@@ -1,13 +1,14 @@
 'use client'
 
-import { Building2, Droplets, Loader2, Ruler, UserRound } from 'lucide-react'
+import { Droplets, Loader2, Ruler, UserRound } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AvatarPicker } from '@/components/AvatarPicker'
+import { InstallCard } from '@/components/pwa/InstallCard'
+import { NotificationSettings } from '@/components/notifications/NotificationSettings'
 import { ActivityPicker, GenderPicker, GoalPreview, HeightInput, WeightInput } from '@/components/ProfileFields'
 import { BmiReadout } from '@/components/profile/BmiReadout'
 import { LogoutButton } from '@/components/profile/LogoutButton'
 import { ProfileSection } from '@/components/profile/ProfileSection'
-import { WellnessTeam } from '@/components/profile/WellnessTeam'
 import { uploadAvatar } from '@/lib/avatar'
 import { AGE, HEIGHT_CM, ageFromBirthYear, birthYearFromAge } from '@/lib/biometrics'
 import { PILLAR_COLORS } from '@/lib/brand'
@@ -16,11 +17,12 @@ import { errorMessage } from '@/lib/errors'
 import { calculateDailyGoal } from '@/lib/hydration'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@/lib/types'
+import { trackProgress } from '@/lib/progress'
 
 /*
  * Profile: Account (photo, name, email, logout), Biometrics (height, weight,
- * age, sex, activity → BMI and the water goal) and the Corporate Wellness team.
- * Account and Biometrics save together; the wellness team is static.
+ * age, sex, activity → BMI and the water goal), saved together. The wellness
+ * team's contacts live on the Home screen (components/hub/WellnessTeam.tsx).
  */
 
 export default function ProfilePage() {
@@ -35,7 +37,7 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    getProfile(supabase)
+    trackProgress(getProfile(supabase))
       .then((p) => {
         setForm(p)
         setCustomOn(p.custom_goal_ml != null)
@@ -112,7 +114,7 @@ export default function ProfilePage() {
     <>
       <header className="mb-6 sm:mb-8">
         <h1 className="text-3xl font-extrabold sm:text-4xl">Profile</h1>
-        <p className="mt-1 text-muted">Your account, your body measurements and who to talk to at work.</p>
+        <p className="mt-1 text-muted">Your account and your body measurements.</p>
       </header>
 
       <form onSubmit={onSave} className="grid gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
@@ -185,6 +187,8 @@ export default function ProfilePage() {
               <ActivityPicker value={form.activity_level} onChange={(a) => set('activity_level', a)} />
             </div>
           </ProfileSection>
+
+          <InstallCard />
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-10 lg:self-start">
@@ -235,16 +239,10 @@ export default function ProfilePage() {
         </aside>
       </form>
 
-      <ProfileSection
-        id="wellness-team"
-        title="Corporate wellness"
-        description="Your company’s wellness team, here when you need them."
-        icon={Building2}
-        accent={PILLAR_COLORS.meditation}
-        className="mt-6"
-      >
-        <WellnessTeam />
-      </ProfileSection>
+      <div className="mt-6">
+        <NotificationSettings />
+      </div>
+
     </>
   )
 }

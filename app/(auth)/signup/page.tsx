@@ -7,8 +7,10 @@ import { useRouter } from 'next/navigation'
 import { useMemo, useState, type FormEvent } from 'react'
 import { AuthShell } from '@/components/AuthShell'
 import { AvatarPicker } from '@/components/AvatarPicker'
-import { ActivityPicker, GenderPicker, GoalPreview, WeightInput } from '@/components/ProfileFields'
+import { ActivityPicker, GenderPicker, HeightInput, WeightInput } from '@/components/ProfileFields'
+import { BmiReadout } from '@/components/profile/BmiReadout'
 import { stashPendingAvatar, uploadAvatar } from '@/lib/avatar'
+import { HEIGHT_CM } from '@/lib/biometrics'
 import type { Activity, Gender } from '@/lib/hydration'
 import { createClient } from '@/lib/supabase/client'
 
@@ -24,6 +26,7 @@ export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
+  const [heightCm, setHeightCm] = useState<number | null>(null)
   const [weightKg, setWeightKg] = useState(70)
   const [gender, setGender] = useState<Gender>('unspecified')
   const [activity, setActivity] = useState<Activity>('moderate')
@@ -41,6 +44,9 @@ export default function SignupPage() {
   async function createAccount(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    if (!(heightCm != null && heightCm >= HEIGHT_CM.min && heightCm <= HEIGHT_CM.max)) {
+      return setError(`Enter a height between ${HEIGHT_CM.min} and ${HEIGHT_CM.max} cm (about 3′3″ to 8′2″).`)
+    }
     if (!(weightKg >= 25 && weightKg <= 300)) return setError('Enter a weight between 25 and 300 kg.')
     setLoading(true)
 
@@ -49,7 +55,7 @@ export default function SignupPage() {
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
-        data: { full_name: name.trim(), weight_kg: weightKg, gender, activity_level: activity },
+        data: { full_name: name.trim(), height_cm: heightCm, weight_kg: weightKg, gender, activity_level: activity },
       },
     })
 
@@ -139,12 +145,15 @@ export default function SignupPage() {
             </button>
             <p className="text-sm font-bold text-tide-600">Step 2 of 2</p>
             <h1 className="mt-1 text-3xl font-extrabold sm:text-4xl">A little about you</h1>
-            <p className="mt-2 text-muted">We use this to set your daily water goal and estimate calories for workouts. You can change it any time.</p>
+            <p className="mt-2 text-muted">We use this for your BMI and smart daily targets. You can change it any time in Profile.</p>
             <form onSubmit={createAccount} className="mt-8 space-y-6">
-              <WeightInput kg={weightKg} onChange={setWeightKg} />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <HeightInput cm={heightCm} onChange={setHeightCm} />
+                <WeightInput kg={weightKg} onChange={setWeightKg} />
+              </div>
               <GenderPicker value={gender} onChange={setGender} />
+              <BmiReadout heightCm={heightCm} weightKg={weightKg} />
               <ActivityPicker value={activity} onChange={setActivity} />
-              <GoalPreview weightKg={weightKg} gender={gender} activity={activity} />
               {error && <p role="alert" className="notice-error">{error}</p>}
               <button type="submit" disabled={loading} className="btn-primary w-full py-3.5 text-base">
                 {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}

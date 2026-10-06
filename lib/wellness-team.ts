@@ -40,8 +40,8 @@ export const WELLNESS_TEAM: WellnessContact[] = [
     description: 'One-to-one sessions for stress, anxiety, low mood or burnout.',
     icon: MessageCircleHeart,
     accent: '#7C6BD6',
-    phone: null,
-    email: null,
+    phone: '+91 98751 08108',
+    email: 'eap@thewellnesscorner.com',
     url: null,
     hours: null,
   },
@@ -52,7 +52,7 @@ export const WELLNESS_TEAM: WellnessContact[] = [
     icon: Apple,
     accent: '#E9851F',
     phone: null,
-    email: null,
+    email: 'dietitian@thewellnesscorner.com',
     url: null,
     hours: null,
   },
@@ -66,14 +66,19 @@ export const EMERGENCY_NUMBER: string | null = '112'
 
 export const WELLNESS_BY_ID = Object.fromEntries(WELLNESS_TEAM.map((c) => [c.id, c])) as Record<WellnessContact['id'], WellnessContact>
 
+/** Teams with a secure inbox (app/(app)/messages/[team]); kept in step with TEAMS in lib/messages.ts. */
+const SECURE_INBOX = { therapist: '/messages/therapist', dietitian: '/messages/dietitian' } as const
+
 export const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`
 
 /**
  * Where a call-to-action should go, in order of what suits it best:
- * call → phone; chat/book → booking link, then email, then phone.
+ * call → phone; chat/book → the team's secure in-app inbox (therapist and
+ * dietitian), else a booking link, then email, then phone.
  * Null when the contact has no details yet.
  */
 export function contactHref(id: WellnessContact['id'], kind: 'call' | 'chat' | 'book'): string | null {
+  if (kind !== 'call' && id in SECURE_INBOX) return SECURE_INBOX[id as keyof typeof SECURE_INBOX]
   const c = WELLNESS_BY_ID[id]
   const phone = c.phone ? telHref(c.phone) : null
   const email = c.email ? `mailto:${c.email}` : null

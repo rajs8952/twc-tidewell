@@ -37,7 +37,7 @@ export async function getProfile(supabase: SupabaseClient): Promise<Profile> {
 
   const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
   if (error) throw error
-  if (data) return toProfile(data)
+  if (data) return backfillHeight(supabase, toProfile(data), user.user_metadata)
 
   // Fallback if the sign-up trigger wasn't installed: create the row from metadata.
   // ON CONFLICT DO NOTHING, since concurrent loads (e.g. Strict Mode) can race here.
@@ -55,7 +55,23 @@ export async function getProfile(supabase: SupabaseClient): Promise<Profile> {
   if (createError) throw createError
   const { data: created, error: reloadError } = await supabase.from('profiles').select('*').eq('id', user.id).single()
   if (reloadError) throw reloadError
-  return toProfile(created)
+  return backfillHeight(supabase, toProfile(created), meta)
+}
+
+/**
+ * Height is asked for at sign-up but the database's sign-up trigger
+ * (schema.sql) only copies name, weight, sex and activity. The first time
+ * the profile loads without a height, copy it from the sign-up details.
+ * Best effort: if it fails, the user can still add it in Profile.
+ */
+async function backfillHeight(supabase: SupabaseClient, profile: Profile, meta: Record<string, unknown> | undefined): Promise<Profile> {
+  const h = Number(meta?.height_cm)
+  if (profile.height_cm != null || !(h >= 100 && h <= 250)) return profile
+  const { data, error } = await supabase.from('profiles').update({ height_cm: Math.round(h * 10) / 10 }).eq('id', profile.id).select('*').single()
+  if (error || !data) return profile
+  // Copied once only: if they clear their height later, it mustn't come back.
+  await supabase.auth.updateUser({ data: { height_cm: null } }).catch(() => {})
+  return toProfile(data)
 }
 
 export async function updateProfile(

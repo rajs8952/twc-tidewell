@@ -6,10 +6,13 @@ import { PILLAR_COLORS, PILLAR_ORDER } from './brand'
  * manifest): six pillar petals on a soft background. Drawn with plain
  * positioned circles because ImageResponse supports only a subset of CSS.
  */
-export function brandIcon(size: number) {
+export function brandIcon(size: number, { maskable = false }: { maskable?: boolean } = {}) {
   const s = size
-  const petal = s * 0.36
-  const ring = s * 0.19
+  // Maskable icons get cropped to the device's shape (circle, squircle…), so the
+  // mark is shrunk into the central 80% "safe zone" on a full-bleed background.
+  const scale = maskable ? 0.72 : 1
+  const petal = s * 0.36 * scale
+  const ring = s * 0.19 * scale
   return new ImageResponse(
     (
       <div
@@ -19,7 +22,7 @@ export function brandIcon(size: number) {
           display: 'flex',
           position: 'relative',
           background: '#F6F9F8',
-          borderRadius: s * 0.22,
+          borderRadius: maskable ? 0 : s * 0.22,
         }}
       >
         {PILLAR_ORDER.map((k, i) => {
@@ -43,10 +46,10 @@ export function brandIcon(size: number) {
         <div
           style={{
             position: 'absolute',
-            width: s * 0.15,
-            height: s * 0.15,
-            left: s * 0.425,
-            top: s * 0.425,
+            width: s * 0.15 * scale,
+            height: s * 0.15 * scale,
+            left: s / 2 - (s * 0.15 * scale) / 2,
+            top: s / 2 - (s * 0.15 * scale) / 2,
             borderRadius: s,
             background: '#FFFFFF',
           }}
