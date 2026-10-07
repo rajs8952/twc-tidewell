@@ -3,10 +3,9 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Minus, Moon, Plus, Star, Sun, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useTrackerStorage } from '@omniwell/ui'
-import { useSaving } from '@omniwell/ui'
-import { useInitialLoad } from '@omniwell/ui'
-import { addDays, dayKey, startOfWeek } from '@omniwell/core/dates'
+import type { TrackerStorage } from '@rajs8952/core/storage'
+import { useInitialLoad, useSaving, useStore } from '@rajs8952/ui'
+import { addDays, dayKey, startOfWeek } from '@rajs8952/core/dates'
 import {
   HOURS_STEP,
   MAX_AWAKENINGS,
@@ -23,7 +22,7 @@ import {
   type SleepLog,
   sleepRange,
   type ActionResult,
-} from '@omniwell/core/sleep'
+} from '@rajs8952/core/sleep'
 
 const ACCENT = '#4A5BC4'
 const CHART_MAX_HOURS = 12
@@ -66,8 +65,16 @@ function Stars({ value, onChange }: { value: number | null; onChange: (v: number
 }
 
 /** The Sleep tracker module: log last night, this week's hours, recent nights. */
-export function SleepTracker({ initialData }: { initialData?: ActionResult<SleepLog[]> | null } = {}) {
-  const store = useTrackerStorage().sleep
+export function SleepTracker({
+  adapter,
+  initialData,
+}: {
+  /** Where this tracker reads and writes; defaults to the <TrackerStorageProvider>'s storage. */
+  adapter?: TrackerStorage['sleep']
+  /** Prefetched by the dashboard; omit to load standalone. */
+  initialData?: ActionResult<SleepLog[]> | null
+} = {}) {
+  const store = useStore('sleep', adapter)
   const [logs, setLogs] = useState<Row[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)

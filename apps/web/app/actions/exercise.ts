@@ -1,9 +1,8 @@
 'use server'
 
-import { toExerciseLog, validateExerciseInput, type ActionResult, type ExerciseLog } from '@omniwell/core/exercise'
+import { toExerciseLog, validateExerciseInput, type ActionResult, type ExerciseLog } from '@rajs8952/core/exercise'
+import { EXERCISE_QUERY, fetchRange } from '@rajs8952/storage/supabase'
 import { SIGNED_OUT, friendlyDbError, isUuid, signedInClient } from '@/lib/supabase/actions'
-import { EXERCISE_QUERY } from '@/lib/supabase/tables'
-import { fetchRange } from '@/lib/supabase/queries'
 
 /*
  * Server actions for the Exercise tracker. They run with the caller's

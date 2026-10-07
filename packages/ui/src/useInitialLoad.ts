@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import type { ActionResult } from '@omniwell/core/types'
+import type { ActionResult } from '@rajs8952/core/types'
 import { useTrackLoad } from './storage'
 
 /**

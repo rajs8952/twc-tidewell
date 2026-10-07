@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { errorMessage } from '@omniwell/core/errors'
-import type { Profile } from '@omniwell/core/types'
-import { useTrackLoad, useTrackerStorage } from './storage'
+import { errorMessage } from '@rajs8952/core/errors'
+import type { ProfileStore } from '@rajs8952/core/storage'
+import type { Profile } from '@rajs8952/core/types'
+import { useStore, useTrackLoad } from './storage'
 
-/** The profile, loaded through the tracker storage. */
-export function useStoredProfile() {
-  const store = useTrackerStorage().profile
+/** The profile, loaded from `adapter` or else the provider's storage. */
+export function useStoredProfile(adapter?: ProfileStore) {
+  const store = useStore('profile', adapter)
   const trackLoad = useTrackLoad()
   const [profile, setProfile] = useState<Profile | null>(null)
   const [error, setError] = useState<string | null>(null)

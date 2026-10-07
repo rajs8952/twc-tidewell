@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { flushPendingAvatar } from './avatar'
 import { getProfile } from './data'
-import { errorMessage } from '@omniwell/core/errors'
+import { errorMessage } from '@rajs8952/core/errors'
 import { createClient } from './supabase/client'
-import type { Profile } from '@omniwell/core/types'
+import type { Profile } from '@rajs8952/core/types'
 import { trackProgress } from './progress'
 
 /**

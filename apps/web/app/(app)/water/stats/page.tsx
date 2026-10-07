@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { WaterStats } from '@omniwell/tracker-water/WaterStats'
+import { WaterStats } from '@rajs8952/tracker-water/WaterStats'
 
 export const metadata: Metadata = { title: 'Water stats' }
 

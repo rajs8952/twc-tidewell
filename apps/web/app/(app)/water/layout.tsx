@@ -1,5 +1,5 @@
 import { PageHeader } from '@/components/PageHeader'
-import { TrackerBoundary } from '@omniwell/ui/TrackerBoundary'
+import { TrackerBoundary } from '@rajs8952/ui/TrackerBoundary'
 import { WaterTabs } from '@/components/water/WaterTabs'
 import { TRACKERS } from '@/lib/trackers'
 

@@ -1,12 +1,12 @@
 'use client'
 
 import { PageHeader } from '@/components/PageHeader'
-import { ExerciseTracker } from '@omniwell/tracker-exercise'
-import { MeditationTracker } from '@omniwell/tracker-meditation'
+import { ExerciseTracker } from '@rajs8952/tracker-exercise'
+import { MeditationTracker } from '@rajs8952/tracker-meditation'
 import { MoodWithSupport } from '@/components/MoodWithSupport'
-import { SleepTracker } from '@omniwell/tracker-sleep'
-import { TrackerBoundary } from '@omniwell/ui'
-import { WeightTracker } from '@omniwell/tracker-weight'
+import { SleepTracker } from '@rajs8952/tracker-sleep'
+import { TrackerBoundary } from '@rajs8952/ui'
+import { WeightTracker } from '@rajs8952/tracker-weight'
 import { TRACKERS, type TrackerId } from '@/lib/trackers'
 import { useProfile } from '@/lib/useProfile'
 

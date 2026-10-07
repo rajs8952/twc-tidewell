@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { BEVERAGES, type BeverageId } from '@omniwell/core/hydration'
+import { BEVERAGES, type BeverageId } from '@rajs8952/core/hydration'
 import { BeverageIcon } from './BeverageIcon'
 
 export interface BevShare {

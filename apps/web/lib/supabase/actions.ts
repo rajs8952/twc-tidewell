@@ -22,10 +22,7 @@ export async function signedInClient() {
   return (await signedIn())?.supabase ?? null
 }
 
-/** PostgREST's "table not found" (PGRST205) means wellness.sql hasn't been run on this project. */
-export function friendlyDbError(e: { code?: string; message: string }, tracker: string) {
-  return e.code === 'PGRST205' ? `${tracker} tracking isn’t set up yet. Run supabase/wellness.sql in Supabase first.` : e.message
-}
+export { friendlyDbError } from '@rajs8952/storage/supabase'
 
 export const isUuid = (id: unknown): id is string => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)
 

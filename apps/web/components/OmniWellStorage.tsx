@@ -6,11 +6,12 @@ import { deleteMeditation, getMeditationLogs, logMeditation } from '@/app/action
 import { deleteMood, getMoodLogs, logMood } from '@/app/actions/mood'
 import { deleteSleep, getSleepLogs, logSleep } from '@/app/actions/sleep'
 import { deleteWeight, getWeightLogs, logWeight } from '@/app/actions/weight'
-import { TrackerStorageProvider } from '@omniwell/ui'
-import { addLog, deleteLog, getDailyTotals, getLogsBetween, getProfile, updateProfile } from '@/lib/data'
+import { TrackerStorageProvider } from '@rajs8952/ui'
+import { getProfile } from '@/lib/data'
+import { addDrinkLog, deleteDrinkLog, getDailyTotals, getDrinkLogs, updateProfileRow } from '@rajs8952/storage/supabase'
 import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
-import type { TrackerStorage } from '@omniwell/core/storage'
+import type { TrackerStorage } from '@rajs8952/core/storage'
 
 /**
  * OmniWell's tracker storage: server actions for the wellness logs,
@@ -25,14 +26,14 @@ export function createOmniWellStorage(): TrackerStorage {
     exercise: { list: (r) => getExerciseLogs(r.from, r.to), create: logExercise, remove: deleteExercise },
     meditation: { list: (r) => getMeditationLogs(r.from, r.to), create: logMeditation, remove: deleteMeditation },
     water: {
-      list: (from, to) => getLogsBetween(supabase, from, to),
-      add: (beverage, ml) => addLog(supabase, beverage, ml),
-      remove: (id) => deleteLog(supabase, id),
+      list: (from, to) => getDrinkLogs(supabase, from, to),
+      add: (beverage, ml) => addDrinkLog(supabase, beverage, ml),
+      remove: (id) => deleteDrinkLog(supabase, id),
       dailyTotals: (days) => getDailyTotals(supabase, days),
     },
     profile: {
       get: () => getProfile(supabase),
-      update: (id, patch) => updateProfile(supabase, id, patch),
+      update: (id, patch) => updateProfileRow(supabase, id, patch),
     },
   }
 }

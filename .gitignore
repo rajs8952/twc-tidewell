@@ -12,3 +12,6 @@ out
 **/public/sw*
 **/public/swe-worker*
 dist
+
+# Holds registry tokens; never commit it. Packages carry their registry in publishConfig.
+.npmrc

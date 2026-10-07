@@ -15,9 +15,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useTrackerStorage } from '@omniwell/ui'
-import { useSaving } from '@omniwell/ui'
-import { useInitialLoad } from '@omniwell/ui'
+import type { TrackerStorage } from '@rajs8952/core/storage'
+import { useInitialLoad, useSaving, useStore } from '@rajs8952/ui'
 import {
   ACTIVITIES,
   ACTIVITY_BY_ID,
@@ -33,8 +32,8 @@ import {
   type Intensity,
   exerciseRange,
   type ActionResult,
-} from '@omniwell/core/exercise'
-import { addDays, dayKey, startOfWeek } from '@omniwell/core/dates'
+} from '@rajs8952/core/exercise'
+import { addDays, dayKey, startOfWeek } from '@rajs8952/core/dates'
 
 const ACCENT = '#E9851F'
 
@@ -63,14 +62,17 @@ const when = (iso: string) => {
 
 /** The Exercise tracker module: quick workout log, weekly active minutes, recent workouts. */
 export function ExerciseTracker({
+  adapter,
   profileWeightKg,
   initialData,
 }: {
+  /** Where this tracker reads and writes; defaults to the <TrackerStorageProvider>'s storage. */
+  adapter?: TrackerStorage['exercise']
   profileWeightKg?: number
   /** Prefetched by the dashboard; omit to load standalone. */
   initialData?: ActionResult<ExerciseLog[]> | null
 }) {
-  const store = useTrackerStorage().exercise
+  const store = useStore('exercise', adapter)
   const [logs, setLogs] = useState<Row[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)

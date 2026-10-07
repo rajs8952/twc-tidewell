@@ -26,31 +26,40 @@ importers:
       '@fontsource-variable/nunito-sans':
         specifier: ^5.3.0
         version: 5.3.0
-      '@omniwell/core':
+      '@rajs8952/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@omniwell/tracker-bmi':
+      '@rajs8952/interventions':
+        specifier: workspace:*
+        version: link:../../packages/interventions
+      '@rajs8952/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      '@rajs8952/tracker-bmi':
         specifier: workspace:*
         version: link:../../packages/tracker-bmi
-      '@omniwell/tracker-exercise':
+      '@rajs8952/tracker-exercise':
         specifier: workspace:*
         version: link:../../packages/tracker-exercise
-      '@omniwell/tracker-meditation':
+      '@rajs8952/tracker-meditation':
         specifier: workspace:*
         version: link:../../packages/tracker-meditation
-      '@omniwell/tracker-mood':
+      '@rajs8952/tracker-mood':
         specifier: workspace:*
         version: link:../../packages/tracker-mood
-      '@omniwell/tracker-sleep':
+      '@rajs8952/tracker-sleep':
         specifier: workspace:*
         version: link:../../packages/tracker-sleep
-      '@omniwell/tracker-water':
+      '@rajs8952/tracker-water':
         specifier: workspace:*
         version: link:../../packages/tracker-water
-      '@omniwell/tracker-weight':
+      '@rajs8952/tracker-weight':
         specifier: workspace:*
         version: link:../../packages/tracker-weight
-      '@omniwell/ui':
+      '@rajs8952/trackers':
+        specifier: workspace:*
+        version: link:../../packages/trackers
+      '@rajs8952/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@serwist/next':
@@ -87,9 +96,15 @@ importers:
         specifier: ^3.6.7
         version: 3.6.7
     devDependencies:
-      '@omniwell/tailwind-preset':
+      '@rajs8952/config-eslint':
         specifier: workspace:*
-        version: link:../../packages/tailwind-preset
+        version: link:../../packages/config-eslint
+      '@rajs8952/config-tailwind':
+        specifier: workspace:*
+        version: link:../../packages/config-tailwind
+      '@rajs8952/config-typescript':
+        specifier: workspace:*
+        version: link:../../packages/config-typescript
       '@types/node':
         specifier: ^20.16.10
         version: 20.19.43
@@ -108,9 +123,6 @@ importers:
       eslint:
         specifier: ^8.57.1
         version: 8.57.1
-      eslint-config-next:
-        specifier: 14.2.15
-        version: 14.2.15(eslint@8.57.1)(typescript@5.9.3)
       postcss:
         specifier: ^8.4.47
         version: 8.5.29
@@ -124,8 +136,46 @@ importers:
         specifier: ^5.6.2
         version: 5.9.3
 
+  packages/config-eslint:
+    dependencies:
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^8.18.0
+        version: 8.71.1(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1)(typescript@5.9.3)
+      '@typescript-eslint/parser':
+        specifier: ^8.18.0
+        version: 8.71.1(eslint@8.57.1)(typescript@5.9.3)
+      eslint:
+        specifier: ^8.57.0
+        version: 8.57.1
+      eslint-config-next:
+        specifier: 14.2.15
+        version: 14.2.15(eslint@8.57.1)(typescript@5.9.3)
+      eslint-plugin-react-hooks:
+        specifier: ^5.1.0
+        version: 5.2.0(eslint@8.57.1)
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+
+  packages/config-tailwind:
+    devDependencies:
+      tailwindcss:
+        specifier: ^3.4.13
+        version: 3.4.19
+
+  packages/config-typescript: {}
+
   packages/core:
     devDependencies:
+      '@rajs8952/config-eslint':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@rajs8952/config-typescript':
+        specifier: workspace:*
+        version: link:../config-typescript
+      eslint:
+        specifier: ^8.57.1
+        version: 8.57.1
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(jiti@1.21.7)(postcss@8.5.29)(typescript@5.9.3)
@@ -136,27 +186,83 @@ importers:
         specifier: ^3.2.7
         version: 3.2.7(@types/node@20.19.43)(jiti@1.21.7)
 
-  packages/tailwind-preset:
+  packages/interventions:
+    dependencies:
+      '@rajs8952/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
-      tailwindcss:
-        specifier: ^3.4.13
-        version: 3.4.19
+      '@rajs8952/config-eslint':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@rajs8952/config-typescript':
+        specifier: workspace:*
+        version: link:../config-typescript
+      eslint:
+        specifier: ^8.57.1
+        version: 8.57.1
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(jiti@1.21.7)(postcss@8.5.29)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/node@20.19.43)(jiti@1.21.7)
+
+  packages/storage:
+    dependencies:
+      '@rajs8952/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@rajs8952/config-eslint':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@rajs8952/config-typescript':
+        specifier: workspace:*
+        version: link:../config-typescript
+      '@supabase/supabase-js':
+        specifier: ^2.45.4
+        version: 2.117.2
+      eslint:
+        specifier: ^8.57.1
+        version: 8.57.1
+      tsup:
+        specifier: ^8.5.0
+        version: 8.5.1(jiti@1.21.7)(postcss@8.5.29)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.6.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/node@20.19.43)(jiti@1.21.7)
 
   packages/tracker-bmi:
     dependencies:
-      '@omniwell/core':
+      '@rajs8952/core':
         specifier: workspace:*
         version: link:../core
-      '@omniwell/ui':
+      '@rajs8952/ui':
         specifier: workspace:*
         version: link:../ui
       lucide-react:
         specifier: ^0.451.0
         version: 0.451.0(react@18.3.1)
     devDependencies:
+      '@rajs8952/config-eslint':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@rajs8952/config-typescript':
+        specifier: workspace:*
+        version: link:../config-typescript
       '@types/react':
         specifier: ^18.3.11
         version: 18.3.31
+      eslint:
+        specifier: ^8.57.1
+        version: 8.57.1
       react:
         specifier: 18.3.1
         version: 18.3.1
@@ -169,19 +275,28 @@ importers:
 
   packages/tracker-exercise:
     dependencies:
-      '@omniwell/core':
+      '@rajs8952/core':
         specifier: workspace:*
         version: link:../core
-      '@omniwell/ui':
+      '@rajs8952/ui':
         specifier: workspace:*
         version: link:../ui
       lucide-react:
         specifier: ^0.451.0
         version: 0.451.0(react@18.3.1)
     devDependencies:
+      '@rajs8952/config-eslint':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@rajs8952/config-typescript':
+        specifier: workspace:*
+        version: link:../config-typescript
       '@types/react':
         specifier: ^18.3.11
         version: 18.3.31
+      eslint:
+        specifier: ^8.57.1
+        version: 8.57.1
       framer-motion:
         specifier: ^11.11.1
         version: 11.18.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -197,19 +312,28 @@ importers:
 
   packages/tracker-meditation:
     dependencies:
-      '@omniwell/core':
+      '@rajs8952/core':
         specifier: workspace:*
         version: link:../core
-      '@omniwell/ui':
+      '@rajs8952/ui':
         specifier: workspace:*
         version: link:../ui
       lucide-react:
         specifier: ^0.451.0
         version: 0.451.0(react@18.3.1)
     devDependencies:
+      '@rajs8952/config-eslint':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@rajs8952/config-typescript':
+        specifier: workspace:*
+        version: link:../config-typescript
       '@types/react':
         specifier: ^18.3.11
         version: 18.3.31
+      eslint:
+        specifier: ^8.57.1
+        version: 8.57.1
       framer-motion:
         specifier: ^11.11.1
         version: 11.18.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -225,19 +349,28 @@ importers:
 
   packages/tracker-mood:
     dependencies:
-      '@omniwell/core':
+      '@rajs8952/core':
         specifier: workspace:*
         version: link:../core
-      '@omniwell/ui':
+      '@rajs8952/ui':
         specifier: workspace:*
         version: link:../ui
       lucide-react:
         specifier: ^0.451.0
         version: 0.451.0(react@18.3.1)
     devDependencies:
+      '@rajs8952/config-eslint':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@rajs8952/config-typescript':
+        specifier: workspace:*
+        version: link:../config-typescript
       '@types/react':
         specifier: ^18.3.11
         version: 18.3.31
+      eslint:
+        specifier: ^8.57.1
+        version: 8.57.1
       framer-motion:
         specifier: ^11.11.1
         version: 11.18.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -253,19 +386,28 @@ importers:
 
   packages/tracker-sleep:
     dependencies:
-      '@omniwell/core':
+      '@rajs8952/core':
         specifier: workspace:*
         version: link:../core
-      '@omniwell/ui':
+      '@rajs8952/ui':
         specifier: workspace:*
         version: link:../ui
       lucide-react:
         specifier: ^0.451.0
         version: 0.451.0(react@18.3.1)
     devDependencies:
+      '@rajs8952/config-eslint':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@rajs8952/config-typescript':
+        specifier: workspace:*
+        version: link:../config-typescript
       '@types/react':
         specifier: ^18.3.11
         version: 18.3.31
+      eslint:
+        specifier: ^8.57.1
+        version: 8.57.1
       framer-motion:
         specifier: ^11.11.1
         version: 11.18.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -281,19 +423,28 @@ importers:
 
   packages/tracker-water:
     dependencies:
-      '@omniwell/core':
+      '@rajs8952/core':
         specifier: workspace:*
         version: link:../core
-      '@omniwell/ui':
+      '@rajs8952/ui':
         specifier: workspace:*
         version: link:../ui
       lucide-react:
         specifier: ^0.451.0
         version: 0.451.0(react@18.3.1)
     devDependencies:
+      '@rajs8952/config-eslint':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@rajs8952/config-typescript':
+        specifier: workspace:*
+        version: link:../config-typescript
       '@types/react':
         specifier: ^18.3.11
         version: 18.3.31
+      eslint:
+        specifier: ^8.57.1
+        version: 8.57.1
       framer-motion:
         specifier: ^11.11.1
         version: 11.18.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -309,19 +460,28 @@ importers:
 
   packages/tracker-weight:
     dependencies:
-      '@omniwell/core':
+      '@rajs8952/core':
         specifier: workspace:*
         version: link:../core
-      '@omniwell/ui':
+      '@rajs8952/ui':
         specifier: workspace:*
         version: link:../ui
       lucide-react:
         specifier: ^0.451.0
         version: 0.451.0(react@18.3.1)
     devDependencies:
+      '@rajs8952/config-eslint':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@rajs8952/config-typescript':
+        specifier: workspace:*
+        version: link:../config-typescript
       '@types/react':
         specifier: ^18.3.11
         version: 18.3.31
+      eslint:
+        specifier: ^8.57.1
+        version: 8.57.1
       framer-motion:
         specifier: ^11.11.1
         version: 11.18.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -337,34 +497,49 @@ importers:
 
   packages/trackers:
     dependencies:
-      '@omniwell/tracker-bmi':
+      '@rajs8952/core':
+        specifier: workspace:*
+        version: link:../core
+      '@rajs8952/tracker-bmi':
         specifier: workspace:*
         version: link:../tracker-bmi
-      '@omniwell/tracker-exercise':
+      '@rajs8952/tracker-exercise':
         specifier: workspace:*
         version: link:../tracker-exercise
-      '@omniwell/tracker-meditation':
+      '@rajs8952/tracker-meditation':
         specifier: workspace:*
         version: link:../tracker-meditation
-      '@omniwell/tracker-mood':
+      '@rajs8952/tracker-mood':
         specifier: workspace:*
         version: link:../tracker-mood
-      '@omniwell/tracker-sleep':
+      '@rajs8952/tracker-sleep':
         specifier: workspace:*
         version: link:../tracker-sleep
-      '@omniwell/tracker-water':
+      '@rajs8952/tracker-water':
         specifier: workspace:*
         version: link:../tracker-water
-      '@omniwell/tracker-weight':
+      '@rajs8952/tracker-weight':
         specifier: workspace:*
         version: link:../tracker-weight
-      '@omniwell/ui':
+      '@rajs8952/ui':
         specifier: workspace:*
         version: link:../ui
+      lucide-react:
+        specifier: ^0.451.0
+        version: 0.451.0(react@18.3.1)
     devDependencies:
+      '@rajs8952/config-eslint':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@rajs8952/config-typescript':
+        specifier: workspace:*
+        version: link:../config-typescript
       '@types/react':
         specifier: ^18.3.11
         version: 18.3.31
+      eslint:
+        specifier: ^8.57.1
+        version: 8.57.1
       react:
         specifier: 18.3.1
         version: 18.3.1
@@ -374,16 +549,31 @@ importers:
       typescript:
         specifier: ^5.6.2
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/node@20.19.43)(jiti@1.21.7)
 
   packages/ui:
     dependencies:
-      '@omniwell/core':
+      '@rajs8952/core':
         specifier: workspace:*
         version: link:../core
+      lucide-react:
+        specifier: ^0.451.0
+        version: 0.451.0(react@18.3.1)
     devDependencies:
+      '@rajs8952/config-eslint':
+        specifier: workspace:*
+        version: link:../config-eslint
+      '@rajs8952/config-typescript':
+        specifier: workspace:*
+        version: link:../config-typescript
       '@types/react':
         specifier: ^18.3.11
         version: 18.3.31
+      eslint:
+        specifier: ^8.57.1
+        version: 8.57.1
       framer-motion:
         specifier: ^11.11.1
         version: 11.18.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -2014,6 +2204,12 @@ packages:
     engines: {node: '>=10'}
     peerDependencies:
       eslint: ^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0-0
+
+  eslint-plugin-react-hooks@5.2.0:
+    resolution: {integrity: sha512-+f15FfK64YQwZdJNELETdn5ibXEUQmW1DZL6KXhNnc2heoy/sg9VJJeT7n8TlMWouzWqSWavFkIhHyIbIAEapg==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      eslint: ^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0-0 || ^9.0.0
 
   eslint-plugin-react@7.37.5:
     resolution: {integrity: sha512-Qteup0SqU15kdocexFNAJMvCJEfa2xUKNV4CC1xsVMrIIqEy3SQ/rqyxCWNzfrd3/ldy6HMlD2e0JDVpDg2qIA==}
@@ -5015,8 +5211,8 @@ snapshots:
       '@typescript-eslint/parser': 8.71.1(eslint@8.57.1)(typescript@5.9.3)
       eslint: 8.57.1
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@8.57.1)
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1)
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1))(eslint@8.57.1)
       eslint-plugin-jsx-a11y: 6.10.2(eslint@8.57.1)
       eslint-plugin-react: 7.37.5(eslint@8.57.1)
       eslint-plugin-react-hooks: 5.0.0-canary-7118f5dd7-20230705(eslint@8.57.1)
@@ -5035,7 +5231,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@8.57.1):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3
@@ -5046,22 +5242,22 @@ snapshots:
       tinyglobby: 0.2.17
       unrs-resolver: 1.12.2
     optionalDependencies:
-      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1)
+      eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1))(eslint@8.57.1)
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.14.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1):
+  eslint-module-utils@2.14.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1))(eslint@8.57.1):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       '@typescript-eslint/parser': 8.71.1(eslint@8.57.1)(typescript@5.9.3)
       eslint: 8.57.1
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@8.57.1)
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1)
     transitivePeerDependencies:
       - supports-color
 
-  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1):
+  eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1))(eslint@8.57.1):
     dependencies:
       '@rtsao/scc': 1.1.0
       array-includes: 3.2.0
@@ -5072,7 +5268,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 8.57.1
       eslint-import-resolver-node: 0.3.10
-      eslint-module-utils: 2.14.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1)
+      eslint-module-utils: 2.14.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.71.1(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1))(eslint@8.57.1)
       hasown: 2.0.4
       is-core-module: 2.17.0
       is-glob: 4.0.3
@@ -5110,6 +5306,10 @@ snapshots:
       string.prototype.includes: 2.0.1
 
   eslint-plugin-react-hooks@5.0.0-canary-7118f5dd7-20230705(eslint@8.57.1):
+    dependencies:
+      eslint: 8.57.1
+
+  eslint-plugin-react-hooks@5.2.0(eslint@8.57.1):
     dependencies:
       eslint: 8.57.1
 

@@ -1,3 +1,4 @@
+import type { ContactRole } from '@rajs8952/interventions'
 import { Apple, HeartHandshake, MessageCircleHeart, type LucideIcon } from 'lucide-react'
 
 /* ------------------------------------------------------------------
@@ -9,7 +10,7 @@ import { Apple, HeartHandshake, MessageCircleHeart, type LucideIcon } from 'luci
  * ------------------------------------------------------------------ */
 
 export interface WellnessContact {
-  id: 'eap' | 'dietitian' | 'therapist'
+  id: ContactRole
   name: string
   description: string
   icon: LucideIcon

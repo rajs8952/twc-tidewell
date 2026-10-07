@@ -8,21 +8,21 @@ import { Avatar } from '@/components/Avatar'
 import { HubCard } from '@/components/hub/HubCard'
 import { WellnessTeam } from '@/components/hub/WellnessTeam'
 import { InterventionBanner } from '@/components/interventions/InterventionBanner'
-import { getLogsBetween } from '@/lib/data'
-import { errorMessage } from '@omniwell/core/errors'
-import { exerciseRange } from '@omniwell/core/exercise'
-import { hubSummaries, type HubSummary } from '@/lib/hub'
-import { addDays, greeting, startOfDay } from '@omniwell/core/dates'
-import { effectiveGoal } from '@omniwell/core/hydration'
-import { latestInterventions } from '@/lib/intervention-engine'
-import { meditationRange } from '@omniwell/core/meditation'
-import { moodRange } from '@omniwell/core/mood'
-import { sleepRange } from '@omniwell/core/sleep'
+import { getDrinkLogs } from '@rajs8952/storage/supabase'
+import { errorMessage } from '@rajs8952/core/errors'
+import { exerciseRange } from '@rajs8952/core/exercise'
+import { hubSummaries, type HubSummary } from '@rajs8952/trackers/hub'
+import { addDays, greeting, startOfDay } from '@rajs8952/core/dates'
+import { effectiveGoal } from '@rajs8952/core/hydration'
+import { latestInterventions } from '@rajs8952/interventions'
+import { meditationRange } from '@rajs8952/core/meditation'
+import { moodRange } from '@rajs8952/core/mood'
+import { sleepRange } from '@rajs8952/core/sleep'
 import { createClient } from '@/lib/supabase/client'
 import { TRACKERS, type TrackerId } from '@/lib/trackers'
 import { useDismissed } from '@/lib/useDismissed'
 import { useProfile } from '@/lib/useProfile'
-import { weightRange } from '@omniwell/core/weight'
+import { weightRange } from '@rajs8952/core/weight'
 import { trackProgress } from '@/lib/progress'
 
 /** The Home Hub: one at-a-glance card per tracker, each linking to its page. */
@@ -51,7 +51,7 @@ export function HubView() {
       })
     // Water reads straight from the browser, as the water tracker does.
     const today = startOfDay(now)
-    trackProgress(getLogsBetween(supabase, today, addDays(today, 1)))
+    trackProgress(getDrinkLogs(supabase, today, addDays(today, 1)))
       .then((logs) => alive && setWaterMl(logs.reduce((s, l) => s + l.effective_ml, 0)))
       .catch(() => alive && setWaterMl(-1))
     return () => {

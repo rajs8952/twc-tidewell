@@ -4,10 +4,23 @@
  * unit-tested. Each "done" definition is a named target below.
  * ------------------------------------------------------------------ */
 
-import type { TrackerData } from '@/app/actions/dashboard'
-import { dayKey } from '@omniwell/core/dates'
-import { MOOD_BY_ID } from '@omniwell/core/mood'
-import type { TrackerId } from './trackers'
+import { dayKey } from '@rajs8952/core/dates'
+import type { ExerciseLog } from '@rajs8952/core/exercise'
+import type { MeditationLog } from '@rajs8952/core/meditation'
+import { MOOD_BY_ID, type MoodLog } from '@rajs8952/core/mood'
+import type { SleepLog } from '@rajs8952/core/sleep'
+import type { ActionResult } from '@rajs8952/core/types'
+import type { WeightLog } from '@rajs8952/core/weight'
+import type { TrackerId } from './registry'
+
+/** Each tracker's first screen of data; one failed load only affects its own card. */
+export interface TrackerData {
+  mood: ActionResult<MoodLog[]>
+  meditation: ActionResult<MeditationLog[]>
+  sleep: ActionResult<SleepLog[]>
+  weight: ActionResult<WeightLog[]>
+  exercise: ActionResult<ExerciseLog[]>
+}
 
 /** Sleep: last night counts as complete from 7 h, the bottom of the 7–9 h guide. */
 export const SLEEP_TARGET_MIN = 7 * 60

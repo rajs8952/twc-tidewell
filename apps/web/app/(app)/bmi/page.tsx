@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { PageHeader } from '@/components/PageHeader'
-import { BmiCalculator } from '@omniwell/tracker-bmi/BmiCalculator'
+import { BmiCalculator } from '@rajs8952/tracker-bmi/BmiCalculator'
 import { BMI_TOOL } from '@/lib/trackers'
 
 export const metadata: Metadata = { title: 'BMI calculator' }

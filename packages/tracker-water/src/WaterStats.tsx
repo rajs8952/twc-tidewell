@@ -2,13 +2,14 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import type { ProfileStore, WaterStore } from '@rajs8952/core/storage'
+import { useStore } from '@rajs8952/ui'
 import { BeverageDonut, type BevShare } from './BeverageDonut'
 import { WeeklyBars, type BarDay } from './WeeklyBars'
-import { useTrackerStorage } from '@omniwell/ui'
-import { errorMessage } from '@omniwell/core/errors'
-import { addDays, dayKey, startOfWeek } from '@omniwell/core/dates'
-import { BEVERAGE_ORDER, BEVERAGES, effectiveGoal } from '@omniwell/core/hydration'
-import type { DrinkLog, Profile } from '@omniwell/core/types'
+import { errorMessage } from '@rajs8952/core/errors'
+import { addDays, dayKey, startOfWeek } from '@rajs8952/core/dates'
+import { BEVERAGE_ORDER, BEVERAGES, effectiveGoal } from '@rajs8952/core/hydration'
+import type { DrinkLog, Profile } from '@rajs8952/core/types'
 
 function weekTitle(offset: number, start: Date) {
   if (offset === 0) return 'This week'
@@ -19,8 +20,9 @@ function weekTitle(offset: number, start: Date) {
 }
 
 /** Water › Stats: the week's hydration, per day and per drink. */
-export function WaterStats() {
-  const storage = useTrackerStorage()
+export function WaterStats({ adapter, profileAdapter }: { adapter?: WaterStore; profileAdapter?: ProfileStore } = {}) {
+  const water = useStore('water', adapter)
+  const profiles = useStore('profile', profileAdapter)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [offset, setOffset] = useState(0)
   const [logs, setLogs] = useState<DrinkLog[] | null>(null)
@@ -31,20 +33,20 @@ export function WaterStats() {
   const weekStartKey = dayKey(weekStart)
 
   useEffect(() => {
-    storage.profile.get().then(setProfile).catch((e) => setError(errorMessage(e)))
-  }, [storage])
+    profiles.get().then(setProfile).catch((e) => setError(errorMessage(e)))
+  }, [water, profiles])
 
   useEffect(() => {
     let alive = true
     setLogs(null)
     const start = addDays(startOfWeek(new Date()), offset * 7)
-    storage.water.list(start, addDays(start, 7))
+    water.list(start, addDays(start, 7))
       .then((l) => alive && setLogs(l))
       .catch((e) => alive && setError(errorMessage(e)))
     return () => {
       alive = false
     }
-  }, [storage, offset])
+  }, [water, offset])
 
   const goal = profile ? effectiveGoal(profile) : 0
   const todayKey = dayKey(now)

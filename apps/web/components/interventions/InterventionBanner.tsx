@@ -5,7 +5,7 @@ import { CalendarCheck, Lightbulb, LifeBuoy, MessageCircleHeart, Phone, Triangle
 import Link from 'next/link'
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { Intervention, InterventionAction } from '@/lib/intervention-engine'
+import type { Intervention, InterventionAction } from '@rajs8952/interventions'
 import { EMERGENCY_NUMBER, WELLNESS_BY_ID, contactHref, telHref } from '@/lib/wellness-team'
 
 /* ------------------------------------------------------------------

@@ -2,29 +2,28 @@
 
 import { Loader2, Save } from 'lucide-react'
 import { useState } from 'react'
-import { HeightInput, WeightInput } from '@omniwell/ui'
+import type { ProfileStore } from '@rajs8952/core/storage'
+import { HeightInput, useStore, useStoredProfile, WeightInput } from '@rajs8952/ui'
 import { BmiReadout } from './BmiReadout'
-import { HEIGHT_CM, healthyWeightRange } from '@omniwell/core/biometrics'
-import { useTrackerStorage } from '@omniwell/ui'
-import { errorMessage } from '@omniwell/core/errors'
-import type { Profile } from '@omniwell/core/types'
-import { useStoredProfile } from '@omniwell/ui'
+import { HEIGHT_CM, healthyWeightRange } from '@rajs8952/core/biometrics'
+import { errorMessage } from '@rajs8952/core/errors'
+import type { Profile } from '@rajs8952/core/types'
 
 /**
  * BMI calculator: starts from the profile's height and weight, recalculates
  * as you type, and only changes the profile when you choose "Save to profile",
  * so trying other numbers is safe.
  */
-export function BmiCalculator() {
-  const { profile, setProfile, error } = useStoredProfile()
+export function BmiCalculator({ profileAdapter }: { profileAdapter?: ProfileStore } = {}) {
+  const { profile, setProfile, error } = useStoredProfile(profileAdapter)
   if (error) return <p role="alert" className="omni-notice-error">{error}</p>
   if (!profile) return <div className="h-80 animate-pulse rounded-3xl bg-white/70" aria-busy="true" aria-label="Loading your measurements" />
   // Keyed so the inputs start from the saved values once the profile has loaded.
-  return <Calculator key={profile.id} profile={profile} onSaved={setProfile} />
+  return <Calculator key={profile.id} profile={profile} onSaved={setProfile} profileAdapter={profileAdapter} />
 }
 
-function Calculator({ profile, onSaved }: { profile: Profile; onSaved: (p: Profile) => void }) {
-  const storage = useTrackerStorage()
+function Calculator({ profile, onSaved, profileAdapter }: { profile: Profile; onSaved: (p: Profile) => void; profileAdapter?: ProfileStore }) {
+  const profiles = useStore('profile', profileAdapter)
   const [heightCm, setHeightCm] = useState<number | null>(profile.height_cm)
   const [weightKg, setWeightKg] = useState(profile.weight_kg)
   const [saving, setSaving] = useState(false)
@@ -41,7 +40,7 @@ function Calculator({ profile, onSaved }: { profile: Profile; onSaved: (p: Profi
     if (!validWeight) return setMessage({ ok: false, text: 'Enter a weight between 25 and 300 kg.' })
     setSaving(true)
     try {
-      const next = await storage.profile.update(profile.id, { height_cm: heightCm, weight_kg: weightKg })
+      const next = await profiles.update(profile.id, { height_cm: heightCm, weight_kg: weightKg })
       onSaved(next)
       setMessage({ ok: true, text: 'Saved to your profile. Your water goal uses the new weight.' })
     } catch (e) {

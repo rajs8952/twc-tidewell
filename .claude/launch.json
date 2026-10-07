@@ -7,7 +7,7 @@
       "runtimeArgs": [
         "pnpm",
         "--filter",
-        "@omniwell/web",
+        "@rajs8952/web",
         "dev"
       ],
       "port": 3000
@@ -18,7 +18,7 @@
       "runtimeArgs": [
         "pnpm",
         "--filter",
-        "@omniwell/web",
+        "@rajs8952/web",
         "exec",
         "next",
         "start",

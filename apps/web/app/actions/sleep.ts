@@ -1,9 +1,8 @@
 'use server'
 
-import { validateSleepInput, type ActionResult, type SleepLog } from '@omniwell/core/sleep'
+import { validateSleepInput, type ActionResult, type SleepLog } from '@rajs8952/core/sleep'
+import { fetchRange, SLEEP_QUERY } from '@rajs8952/storage/supabase'
 import { SIGNED_OUT, friendlyDbError, isUuid, signedInClient } from '@/lib/supabase/actions'
-import { SLEEP_QUERY } from '@/lib/supabase/tables'
-import { fetchRange } from '@/lib/supabase/queries'
 
 /*
  * Server actions for the Sleep tracker. They run with the caller's session

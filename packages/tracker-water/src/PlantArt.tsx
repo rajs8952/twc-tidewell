@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useId } from 'react'
-import { BUD_AT, SPECIES, SPROUT_AT, type Mood, type Species, type SpeciesId } from '@omniwell/core/garden'
+import { BUD_AT, SPECIES, SPROUT_AT, type Mood, type Species, type SpeciesId } from '@rajs8952/core/garden'
 
 const BASE_X = 100
 const SOIL_Y = 178

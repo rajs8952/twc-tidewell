@@ -1,20 +1,25 @@
 {
-  "name": "@omniwell/tailwind-preset",
+  "name": "@rajs8952/config-tailwind",
   "version": "0.0.0",
   "description": "Tailwind preset for the OmniWell trackers: theme tokens as --omni-* CSS variables and omni-* component classes.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rajs8952/twc-tidewell.git",
+    "directory": "packages/config-tailwind"
+  },
   "main": "./index.js",
+  "types": "./index.d.ts",
   "files": [
     "index.js",
     "index.d.ts"
   ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "peerDependencies": {
     "tailwindcss": "^3.4.0"
   },
   "devDependencies": {
     "tailwindcss": "^3.4.13"
-  },
-  "types": "./index.d.ts",
-  "publishConfig": {
-    "access": "restricted"
   }
 }

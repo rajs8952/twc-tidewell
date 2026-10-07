@@ -1,6 +1,6 @@
 'use client'
 
-import { WaterTracker } from '@omniwell/tracker-water'
+import { WaterTracker } from '@rajs8952/tracker-water'
 import { useProfile } from '@/lib/useProfile'
 
 /** Water › Today: the glass, streak, drink logger and today's log. */

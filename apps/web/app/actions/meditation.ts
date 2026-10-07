@@ -1,9 +1,8 @@
 'use server'
 
-import { validateMeditationInput, type ActionResult, type MeditationLog } from '@omniwell/core/meditation'
+import { validateMeditationInput, type ActionResult, type MeditationLog } from '@rajs8952/core/meditation'
+import { fetchRange, MEDITATION_QUERY } from '@rajs8952/storage/supabase'
 import { SIGNED_OUT, friendlyDbError, isUuid, signedInClient } from '@/lib/supabase/actions'
-import { MEDITATION_QUERY } from '@/lib/supabase/tables'
-import { fetchRange } from '@/lib/supabase/queries'
 
 /*
  * Server actions for the Meditation tracker. They run with the caller's

@@ -1,5 +1,5 @@
 import type { Config } from 'tailwindcss'
-import omniwell from '@omniwell/tailwind-preset'
+import omniwell from '@rajs8952/config-tailwind'
 
 const config: Config = {
   presets: [omniwell],

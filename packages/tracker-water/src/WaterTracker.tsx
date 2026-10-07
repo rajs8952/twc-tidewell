@@ -3,30 +3,38 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import type { WaterStore } from '@rajs8952/core/storage'
+import { StreakCard, useStore, type WeekDay } from '@rajs8952/ui'
 import { DrinkLogger } from './DrinkLogger'
-import { StreakCard, type WeekDay } from './StreakCard'
 import { TodayLog } from './TodayLog'
 import { WaterVessel } from './WaterVessel'
-import { useTrackerStorage } from '@omniwell/ui'
-import { errorMessage } from '@omniwell/core/errors'
+import { errorMessage } from '@rajs8952/core/errors'
 import {
   addDays,
   computeStreaks,
   dayKey,
   startOfDay,
   startOfWeek,
-} from '@omniwell/core/dates'
+} from '@rajs8952/core/dates'
 import {
   BEVERAGES,
   effectiveGoal,
   motivationalMessage,
   type BeverageId,
-} from '@omniwell/core/hydration'
-import type { DrinkLog, Profile } from '@omniwell/core/types'
+} from '@rajs8952/core/hydration'
+import type { DrinkLog, Profile } from '@rajs8952/core/types'
 
 /** The water tracker module: today's glass, streak, logger and log. */
-export function WaterTracker({ profile }: { profile: Profile | null }) {
-  const storage = useTrackerStorage()
+export function WaterTracker({
+  profile,
+  adapter,
+}: {
+  /** Whose goal to fill toward; null while it loads. */
+  profile: Profile | null
+  /** Where this tracker reads and writes; defaults to the <TrackerStorageProvider>'s storage. */
+  adapter?: WaterStore
+}) {
+  const water = useStore('water', adapter)
   const [logs, setLogs] = useState<DrinkLog[]>([])
   const [history, setHistory] = useState<Record<string, number>>({})
   const [loaded, setLoaded] = useState(false)
@@ -39,7 +47,7 @@ export function WaterTracker({ profile }: { profile: Profile | null }) {
     ;(async () => {
       try {
         const today = startOfDay(new Date())
-        const [l, h] = await Promise.all([storage.water.list(today, addDays(today, 1)), storage.water.dailyTotals()])
+        const [l, h] = await Promise.all([water.list(today, addDays(today, 1)), water.dailyTotals()])
         if (!alive) return
         setLogs(l)
         setHistory(h)
@@ -51,7 +59,7 @@ export function WaterTracker({ profile }: { profile: Profile | null }) {
     return () => {
       alive = false
     }
-  }, [storage])
+  }, [water])
 
   const now = new Date()
   const todayKey = dayKey(now)
@@ -94,7 +102,7 @@ export function WaterTracker({ profile }: { profile: Profile | null }) {
       setTimeout(() => setCelebrate(false), 2600)
     }
     try {
-      const saved = await storage.water.add(beverage, ml)
+      const saved = await water.add(beverage, ml)
       setLogs((prev) => prev.map((x) => (x.id === temp.id ? saved : x)))
     } catch (e) {
       setLogs((prev) => prev.filter((x) => x.id !== temp.id))
@@ -106,7 +114,7 @@ export function WaterTracker({ profile }: { profile: Profile | null }) {
     const removed = logs.find((l) => l.id === id)
     setLogs((prev) => prev.filter((l) => l.id !== id))
     try {
-      await storage.water.remove(id)
+      await water.remove(id)
     } catch (e) {
       if (removed) setLogs((prev) => [...prev, removed].sort((a, b) => b.logged_at.localeCompare(a.logged_at)))
       setError(`That drink wasn’t removed: ${errorMessage(e)}`)

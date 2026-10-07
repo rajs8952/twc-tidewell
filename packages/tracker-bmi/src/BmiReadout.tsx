@@ -1,4 +1,4 @@
-import { bmi, bmiBand } from '@omniwell/core/biometrics'
+import { bmi, bmiBand } from '@rajs8952/core/biometrics'
 
 /* BMI bands on a 15–35 scale: under 18.5, 18.5–25, 25–30, 30+. */
 const BANDS = [

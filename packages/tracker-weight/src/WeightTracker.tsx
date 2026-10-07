@@ -3,11 +3,10 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useTrackerStorage } from '@omniwell/ui'
-import { useSaving } from '@omniwell/ui'
-import { useInitialLoad } from '@omniwell/ui'
-import { storageKey } from '@omniwell/core/persist'
-import { addDays, startOfDay } from '@omniwell/core/dates'
+import type { TrackerStorage } from '@rajs8952/core/storage'
+import { useInitialLoad, useSaving, useStore } from '@rajs8952/ui'
+import { storageKey } from '@rajs8952/core/persist'
+import { addDays, startOfDay } from '@rajs8952/core/dates'
 import {
   MAX_FAT,
   MAX_KG,
@@ -23,7 +22,7 @@ import {
   type ActionResult,
   type WeightLog,
   type WeightUnit,
-} from '@omniwell/core/weight'
+} from '@rajs8952/core/weight'
 
 const ACCENT = '#2E9C8F'
 const UNIT_KEY = storageKey('weight-unit')
@@ -104,10 +103,13 @@ function TrendChart({ points, unit }: { points: Row[]; unit: WeightUnit }) {
 
 /** The Weight tracker module: quick weigh-in, trend chart, recent entries. */
 export function WeightTracker({
+  adapter,
   profileWeightKg,
   onProfileWeightChange,
   initialData,
 }: {
+  /** Where this tracker reads and writes; defaults to the <TrackerStorageProvider>'s storage. */
+  adapter?: TrackerStorage['weight']
   /** profiles.weight_kg: the starting value before any weigh-ins exist. */
   profileWeightKg?: number
   /** Called when a weigh-in also updated the profile, so the water goal can refresh. */
@@ -115,7 +117,7 @@ export function WeightTracker({
   /** Prefetched by the dashboard; omit to load standalone. */
   initialData?: ActionResult<WeightLog[]> | null
 }) {
-  const store = useTrackerStorage().weight
+  const store = useStore('weight', adapter)
   const [logs, setLogs] = useState<Row[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)

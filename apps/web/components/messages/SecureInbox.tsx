@@ -3,7 +3,7 @@
 import { Loader2, Lock, MessageCircleHeart, PenSquare, Phone, RotateCw, Send } from 'lucide-react'
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { getMyThreads, getThreadMessages, sendMessage, startThread } from '@/app/actions/messages'
-import { errorMessage } from '@omniwell/core/errors'
+import { errorMessage } from '@rajs8952/core/errors'
 import { MAX_MESSAGE_LENGTH, TEAMS, validateMessage, type Team, type TherapistThread, type ThreadMessage } from '@/lib/messages'
 import { usePolling } from '@/lib/usePolling'
 import { WELLNESS_BY_ID, telHref } from '@/lib/wellness-team'

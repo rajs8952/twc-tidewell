@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import { Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { BEVERAGE_ORDER, BEVERAGES, PRESETS, type BeverageId } from '@omniwell/core/hydration'
+import { BEVERAGE_ORDER, BEVERAGES, PRESETS, type BeverageId } from '@rajs8952/core/hydration'
 import { BeverageIcon } from './BeverageIcon'
 
 function MiniGlass({ ml, color }: { ml: number; color: string }) {

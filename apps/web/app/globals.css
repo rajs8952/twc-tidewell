@@ -25,7 +25,7 @@
 }
 
 @layer components {
-  /* The app's names for the shared component styles in @omniwell/tailwind-preset. */
+  /* The app's names for the shared component styles in @rajs8952/config-tailwind. */
   .label {
     @apply omni-label;
   }

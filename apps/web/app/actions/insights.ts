@@ -1,10 +1,10 @@
 'use server'
 
-import { effectiveGoal, type Activity, type Gender } from '@omniwell/core/hydration'
+import { effectiveGoal, type Activity, type Gender } from '@rajs8952/core/hydration'
 import { analyzeRollup, shiftDate, type Insights } from '@/lib/insights/analyze'
 import { buildHeadline } from '@/lib/insights/headline'
 import { SIGNED_OUT, signedIn } from '@/lib/supabase/actions'
-import type { ActionResult } from '@omniwell/core/types'
+import type { ActionResult } from '@rajs8952/core/types'
 
 /*
  * Insights Engine, phase 2: fetches the last N days from daily_wellness_rollup

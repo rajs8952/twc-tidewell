@@ -1,13 +1,13 @@
-import { bmi, bmiBand } from '@omniwell/core/biometrics'
-import { MOOD_BY_ID, type MoodLog, type MoodState } from '@omniwell/core/mood'
-import type { SleepLog } from '@omniwell/core/sleep'
-import type { WeightLog } from '@omniwell/core/weight'
-import type { WellnessContact } from './wellness-team'
+import { bmi, bmiBand } from '@rajs8952/core/biometrics'
+import { MOOD_BY_ID, type MoodLog, type MoodState } from '@rajs8952/core/mood'
+import type { SleepLog } from '@rajs8952/core/sleep'
+import type { WeightLog } from '@rajs8952/core/weight'
 
 /* ------------------------------------------------------------------
  * Intervention engine: turns one logged metric into a nudge, from
  * "nice work" up to "please reach out now", pointing at the company's
- * wellness team (lib/wellness-team.ts) where it helps.
+ * wellness team where it helps. Actions name a ContactRole; the host app
+ * maps each role to its real contact details.
  *
  * Pure and synchronous: no React, Supabase or browser APIs, so it can
  * run in a server action, a client component or a test alike.
@@ -18,6 +18,9 @@ import type { WellnessContact } from './wellness-team'
  *   weight BMI 25+ (needs height)  → SUGGESTION talk to the dietitian
  *   anything else                  → NORMAL     positive reinforcement
  * ------------------------------------------------------------------ */
+
+/** Who an action points at; the host supplies the actual contact for each. */
+export type ContactRole = 'eap' | 'therapist' | 'dietitian'
 
 export type Severity = 'CRITICAL' | 'WARNING' | 'SUGGESTION' | 'NORMAL'
 
@@ -56,7 +59,7 @@ export interface InterventionAction {
   /** call: dial the contact; chat: message them; book: open their booking link. */
   kind: 'call' | 'chat' | 'book'
   label: string
-  contact: WellnessContact['id']
+  contact: ContactRole
 }
 
 export interface Intervention {

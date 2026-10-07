@@ -3,10 +3,9 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useTrackerStorage } from '@omniwell/ui'
-import { useSaving } from '@omniwell/ui'
-import { useInitialLoad } from '@omniwell/ui'
-import { addDays, dayKey, startOfWeek } from '@omniwell/core/dates'
+import type { TrackerStorage } from '@rajs8952/core/storage'
+import { useInitialLoad, useSaving, useStore } from '@rajs8952/ui'
+import { addDays, dayKey, startOfWeek } from '@rajs8952/core/dates'
 import {
   EMOTIONS,
   LEVEL_LABELS,
@@ -17,7 +16,7 @@ import {
   type MoodState,
   moodRange,
   type ActionResult,
-} from '@omniwell/core/mood'
+} from '@rajs8952/core/mood'
 
 /** Simple drawn face; the mouth curves from frown (1) to grin (5). */
 export function MoodFace({ mood, className = 'h-10 w-10' }: { mood: MoodState; className?: string }) {
@@ -97,10 +96,13 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: 'nume
 
 /** The Mood tracker module: quick check-in, this week at a glance, today's entries. */
 export function MoodTracker({
+  adapter,
   initialData,
   onCheckIn,
   banner,
 }: {
+  /** Where this tracker reads and writes; defaults to the <TrackerStorageProvider>'s storage. */
+  adapter?: TrackerStorage['mood']
   /** Prefetched by the dashboard; omit to load standalone. */
   initialData?: ActionResult<MoodLog[]> | null
   /**
@@ -111,7 +113,7 @@ export function MoodTracker({
   /** Rendered above the check-in form: the host's slot for alerts. */
   banner?: React.ReactNode
 } = {}) {
-  const store = useTrackerStorage().mood
+  const store = useStore('mood', adapter)
   const [logs, setLogs] = useState<Row[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)

@@ -1,5 +1,5 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "@rajs8952/config-typescript/library.json",
   "include": [
     "src",
     "tsup.config.ts"

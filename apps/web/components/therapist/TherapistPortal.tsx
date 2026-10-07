@@ -4,7 +4,7 @@ import { ArrowLeft, CheckCircle2, Clock, Inbox, Loader2, Lock, LockOpen, RotateC
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { getConversation, getQueue, replyToThread, setThreadStatus } from '@/app/actions/therapist'
 import { Bubble } from '@/components/messages/Bubble'
-import { errorMessage } from '@omniwell/core/errors'
+import { errorMessage } from '@rajs8952/core/errors'
 import { MAX_MESSAGE_LENGTH, REPLY_TARGET_HOURS, TEAMS, validateMessage, type QueueItem, type StaffThreadMessage, type Team } from '@/lib/messages'
 import { usePolling } from '@/lib/usePolling'
 import { trackProgress } from '@/lib/progress'

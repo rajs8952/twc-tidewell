@@ -3,9 +3,9 @@
   "private": true,
   "packageManager": "pnpm@9.15.9",
   "scripts": {
-    "dev": "turbo run dev --filter=@omniwell/web",
+    "dev": "turbo run dev --filter=@rajs8952/web",
     "build": "turbo run build",
-    "start": "pnpm --filter @omniwell/web start",
+    "start": "pnpm --filter @rajs8952/web start",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "lint": "turbo run lint",

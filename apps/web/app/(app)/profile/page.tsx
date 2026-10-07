@@ -5,18 +5,19 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AvatarPicker } from '@/components/AvatarPicker'
 import { InstallCard } from '@/components/pwa/InstallCard'
 import { NotificationSettings } from '@/components/notifications/NotificationSettings'
-import { ActivityPicker, GenderPicker, GoalPreview, HeightInput, WeightInput } from '@omniwell/ui'
-import { BmiReadout } from '@omniwell/tracker-bmi'
+import { ActivityPicker, GenderPicker, GoalPreview, HeightInput, WeightInput } from '@rajs8952/ui'
+import { BmiReadout } from '@rajs8952/tracker-bmi'
 import { LogoutButton } from '@/components/profile/LogoutButton'
 import { ProfileSection } from '@/components/profile/ProfileSection'
 import { uploadAvatar } from '@/lib/avatar'
-import { AGE, HEIGHT_CM, ageFromBirthYear, birthYearFromAge } from '@omniwell/core/biometrics'
+import { AGE, HEIGHT_CM, ageFromBirthYear, birthYearFromAge } from '@rajs8952/core/biometrics'
 import { PILLAR_COLORS } from '@/lib/brand'
-import { getProfile, updateProfile } from '@/lib/data'
-import { errorMessage } from '@omniwell/core/errors'
-import { calculateDailyGoal } from '@omniwell/core/hydration'
+import { getProfile } from '@/lib/data'
+import { updateProfileRow } from '@rajs8952/storage/supabase'
+import { errorMessage } from '@rajs8952/core/errors'
+import { calculateDailyGoal } from '@rajs8952/core/hydration'
 import { createClient } from '@/lib/supabase/client'
-import type { Profile } from '@omniwell/core/types'
+import type { Profile } from '@rajs8952/core/types'
 import { trackProgress } from '@/lib/progress'
 
 /*
@@ -90,7 +91,7 @@ export default function ProfilePage() {
       if (avatar) avatarUrl = await uploadAvatar(supabase, form.id, avatar.blob)
       // Keep the stored birth year when the age shown hasn't changed, so saving doesn't nudge it.
       const birthYear = age == null ? null : age === ageFromBirthYear(form.birth_year) ? form.birth_year : birthYearFromAge(age)
-      const next = await updateProfile(supabase, form.id, {
+      const next = await updateProfileRow(supabase, form.id, {
         full_name: form.full_name.trim(),
         weight_kg: form.weight_kg,
         height_cm: form.height_cm,

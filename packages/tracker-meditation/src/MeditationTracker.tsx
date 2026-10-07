@@ -3,10 +3,9 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Pause, Play, Square, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useTrackerStorage } from '@omniwell/ui'
-import { useSaving } from '@omniwell/ui'
-import { useInitialLoad } from '@omniwell/ui'
-import { addDays, dayKey, startOfWeek } from '@omniwell/core/dates'
+import type { TrackerStorage } from '@rajs8952/core/storage'
+import { useInitialLoad, useSaving, useStore } from '@rajs8952/ui'
+import { addDays, dayKey, startOfWeek } from '@rajs8952/core/dates'
 import {
   BREATH_SECONDS,
   CALM_LABELS,
@@ -21,7 +20,7 @@ import {
   type SessionType,
   meditationRange,
   type ActionResult,
-} from '@omniwell/core/meditation'
+} from '@rajs8952/core/meditation'
 
 const ACCENT = '#7C6BD6'
 /** `_key` keeps a row's React key stable when the server copy replaces the optimistic one. */
@@ -129,8 +128,16 @@ function CalmPicker({ label, value, onChange }: { label: string; value: number |
 type Phase = 'setup' | 'running' | 'paused' | 'done'
 
 /** The Meditation tracker module: guided timer, quick log, week summary, today's sessions. */
-export function MeditationTracker({ initialData }: { initialData?: ActionResult<MeditationLog[]> | null } = {}) {
-  const store = useTrackerStorage().meditation
+export function MeditationTracker({
+  adapter,
+  initialData,
+}: {
+  /** Where this tracker reads and writes; defaults to the <TrackerStorageProvider>'s storage. */
+  adapter?: TrackerStorage['meditation']
+  /** Prefetched by the dashboard; omit to load standalone. */
+  initialData?: ActionResult<MeditationLog[]> | null
+} = {}) {
+  const store = useStore('meditation', adapter)
   const reduce = useReducedMotion()
   const [logs, setLogs] = useState<Row[]>([])
   const [loaded, setLoaded] = useState(false)

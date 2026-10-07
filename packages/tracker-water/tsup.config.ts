@@ -5,6 +5,7 @@ export default defineConfig({
   entry: ['src/index.ts', 'src/WaterTracker.tsx', 'src/WaterGarden.tsx', 'src/WaterStats.tsx'],
   format: ['esm', 'cjs'],
   dts: true,
+  sourcemap: true,
   clean: true,
   // Every module here is a React client component or hook.
   banner: { js: "'use client'" },

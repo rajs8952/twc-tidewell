@@ -6,7 +6,7 @@
  * Tables and row-level security: supabase/therapist-messaging.sql.
  * ------------------------------------------------------------------ */
 
-export type { ActionResult } from '@omniwell/core/types'
+export type { ActionResult } from '@rajs8952/core/types'
 
 /** 'therapist' here means "wellness staff"; the thread's team says which kind. */
 export type SenderRole = 'user' | 'therapist'

@@ -1,16 +1,23 @@
 {
-  "name": "@omniwell/trackers",
+  "name": "@rajs8952/trackers",
   "version": "0.0.0",
-  "description": "The full OmniWell tracker suite: re-exports @omniwell/ui and every @omniwell/tracker-* package.",
+  "description": "The full OmniWell tracker suite: every @rajs8952/tracker-* package, @rajs8952/ui, the tracker registry and the Hub summaries.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rajs8952/twc-tidewell.git",
+    "directory": "packages/trackers"
+  },
   "sideEffects": false,
   "files": [
     "dist"
   ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./registry": "./src/registry.ts",
+    "./hub": "./src/hub.ts"
   },
   "publishConfig": {
-    "access": "restricted",
+    "registry": "https://npm.pkg.github.com",
     "main": "./dist/index.js",
     "module": "./dist/index.mjs",
     "types": "./dist/index.d.ts",
@@ -24,27 +31,55 @@
           "types": "./dist/index.d.ts",
           "default": "./dist/index.js"
         }
+      },
+      "./registry": {
+        "import": {
+          "types": "./dist/registry.d.mts",
+          "default": "./dist/registry.mjs"
+        },
+        "require": {
+          "types": "./dist/registry.d.ts",
+          "default": "./dist/registry.js"
+        }
+      },
+      "./hub": {
+        "import": {
+          "types": "./dist/hub.d.mts",
+          "default": "./dist/hub.mjs"
+        },
+        "require": {
+          "types": "./dist/hub.d.ts",
+          "default": "./dist/hub.js"
+        }
       }
     }
   },
   "scripts": {
     "build": "tsup",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --max-warnings 0",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@omniwell/tracker-bmi": "workspace:*",
-    "@omniwell/tracker-exercise": "workspace:*",
-    "@omniwell/tracker-meditation": "workspace:*",
-    "@omniwell/tracker-mood": "workspace:*",
-    "@omniwell/tracker-sleep": "workspace:*",
-    "@omniwell/tracker-water": "workspace:*",
-    "@omniwell/tracker-weight": "workspace:*",
-    "@omniwell/ui": "workspace:*"
+    "@rajs8952/core": "workspace:*",
+    "@rajs8952/tracker-bmi": "workspace:*",
+    "@rajs8952/tracker-exercise": "workspace:*",
+    "@rajs8952/tracker-meditation": "workspace:*",
+    "@rajs8952/tracker-mood": "workspace:*",
+    "@rajs8952/tracker-sleep": "workspace:*",
+    "@rajs8952/tracker-water": "workspace:*",
+    "@rajs8952/tracker-weight": "workspace:*",
+    "@rajs8952/ui": "workspace:*",
+    "lucide-react": "^0.451.0"
   },
   "devDependencies": {
+    "@rajs8952/config-eslint": "workspace:*",
+    "@rajs8952/config-typescript": "workspace:*",
     "@types/react": "^18.3.11",
+    "eslint": "^8.57.1",
     "react": "18.3.1",
     "tsup": "^8.5.0",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "vitest": "^3.2.7"
   }
 }

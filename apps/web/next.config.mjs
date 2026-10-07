@@ -19,15 +19,18 @@ const nextConfig = {
   reactStrictMode: true,
   // Workspace packages ship TypeScript source; Next compiles them with the app.
   transpilePackages: [
-    '@omniwell/core',
-    '@omniwell/ui',
-    '@omniwell/tracker-bmi',
-    '@omniwell/tracker-exercise',
-    '@omniwell/tracker-meditation',
-    '@omniwell/tracker-mood',
-    '@omniwell/tracker-sleep',
-    '@omniwell/tracker-water',
-    '@omniwell/tracker-weight',
+    '@rajs8952/core',
+    '@rajs8952/interventions',
+    '@rajs8952/storage',
+    '@rajs8952/ui',
+    '@rajs8952/tracker-bmi',
+    '@rajs8952/tracker-exercise',
+    '@rajs8952/tracker-meditation',
+    '@rajs8952/tracker-mood',
+    '@rajs8952/tracker-sleep',
+    '@rajs8952/tracker-water',
+    '@rajs8952/tracker-weight',
+    '@rajs8952/trackers',
   ],
   async headers() {
     return [

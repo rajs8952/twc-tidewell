@@ -1,0 +1,52 @@
+{
+  "name": "@rajs8952/interventions",
+  "version": "0.0.0",
+  "description": "Wellness intervention engine: turns a logged mood, sleep or weight into a nudge, a suggestion or a crisis prompt. Pure TypeScript.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rajs8952/twc-tidewell.git",
+    "directory": "packages/interventions"
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "main": "./dist/index.js",
+    "module": "./dist/index.mjs",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "import": {
+          "types": "./dist/index.d.mts",
+          "default": "./dist/index.mjs"
+        },
+        "require": {
+          "types": "./dist/index.d.ts",
+          "default": "./dist/index.js"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "lint": "eslint src --max-warnings 0",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@rajs8952/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@rajs8952/config-eslint": "workspace:*",
+    "@rajs8952/config-typescript": "workspace:*",
+    "eslint": "^8.57.1",
+    "tsup": "^8.5.0",
+    "typescript": "^5.6.2",
+    "vitest": "^3.2.7"
+  }
+}

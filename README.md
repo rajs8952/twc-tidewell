@@ -60,48 +60,62 @@ apps/web/                          The OmniWell Next.js 14 app (App Router), pri
   app/                             Routes: auth, dashboard, trackers, insights, messages, staff portals, cron
   components/OmniWellStorage.tsx   The trackers' data layer: server actions + Supabase
   components/MoodWithSupport.tsx   Mood tracker plus the crisis prompt
-  lib/supabase/tables.ts           Which table and columns each tracker reads
-packages/core/                     @omniwell/core: pure TypeScript, no React or I/O
-  src/dates.ts                     Local-time day keys, week maths, streaks
-  src/hydration.ts, mood.ts, …     Each tracker's model, constants and input validators
-  src/storage.ts                   TrackerStorage: the interfaces trackers read and write through
-packages/ui/                       @omniwell/ui: <TrackerStorageProvider>, error boundary, load/save hooks, profile inputs
-packages/tracker-water/            @omniwell/tracker-water: glass, quick log, streaks, stats, garden
+  lib/wellness-team.ts             The company's EAP, therapist and dietitian contacts
+packages/core/                     @rajs8952/core: dates, streaks, each tracker's model and validators, storage interfaces
+packages/storage/                  @rajs8952/storage: memory, localStorage and REST adapters; Supabase on /supabase
+packages/interventions/            @rajs8952/interventions: turns a logged metric into a nudge or crisis prompt
+packages/ui/                       @rajs8952/ui: storage provider, CompletionRing, StreakCard, profile inputs, hooks
+packages/tracker-water/            @rajs8952/tracker-water: glass, quick log, streaks, stats, garden
 packages/tracker-mood/, -sleep/, -weight/, -exercise/, -meditation/, -bmi/
-packages/trackers/                 @omniwell/trackers: re-exports ui and every tracker
-packages/tailwind-preset/          @omniwell/tailwind-preset: --omni-* colour variables, omni-* component classes
+packages/trackers/                 @rajs8952/trackers: every tracker, plus the registry and Hub summaries
+packages/config-tailwind/          @rajs8952/config-tailwind: --omni-* colour variables, omni-* component classes
+packages/config-typescript/        Shared tsconfig bases (private)
+packages/config-eslint/            Shared ESLint configs (private)
 supabase/                          SQL: schema, wellness, insights, notifications, messaging
 ```
 
 Inside the workspace the packages resolve to their TypeScript source, which the app compiles
 (`transpilePackages`). In a server component, import a tracker by file, e.g.
-`@omniwell/tracker-water/WaterGarden`: importing a package root there bundles every component it exports.
+`@rajs8952/tracker-water/WaterGarden`: importing a package root there bundles every component it exports.
 
 ## Using the trackers in another app
 
 ```bash
-pnpm add @omniwell/tracker-mood @omniwell/ui framer-motion
-pnpm add -D @omniwell/tailwind-preset
+pnpm add @rajs8952/tracker-mood @rajs8952/ui @rajs8952/storage framer-motion
+pnpm add -D @rajs8952/config-tailwind
 ```
+
+Each tracker reads and writes through a storage adapter. Pass one to a single tracker:
 
 ```tsx
-import { TrackerStorageProvider, type TrackerStorage } from '@omniwell/ui'
-import { MoodTracker } from '@omniwell/tracker-mood'
+import { createLocalStorage } from '@rajs8952/storage'
+import { MoodTracker } from '@rajs8952/tracker-mood'
 
-const storage: TrackerStorage = { /* your API: list, create and remove per tracker */ }
+const storage = createLocalStorage() // saved in this browser
 
-<TrackerStorageProvider storage={storage}>
-  <MoodTracker />
-</TrackerStorageProvider>
+<MoodTracker adapter={storage.mood} />
 ```
+
+or give every tracker below a provider the same storage:
+
+```tsx
+import { TrackerStorageProvider } from '@rajs8952/ui'
+
+<TrackerStorageProvider storage={storage}>…</TrackerStorageProvider>
+```
+
+`@rajs8952/storage` has `createMemoryStorage` (demos and tests), `createLocalStorage`,
+`createRestStorage` (your own API; the routes are listed in `packages/storage/src/rest.ts`) and,
+on `@rajs8952/storage/supabase`, `createSupabaseStorage` for the OmniWell database schema.
+Anything that implements `TrackerStorage` (exported by `@rajs8952/ui`) works too.
 
 Styling needs Tailwind CSS 3: add the preset and let Tailwind scan the packages.
 
 ```js
 // tailwind.config.js
 module.exports = {
-  presets: [require('@omniwell/tailwind-preset')],
-  content: ['./src/**/*.{ts,tsx}', './node_modules/@omniwell/*/dist/*.mjs'],
+  presets: [require('@rajs8952/config-tailwind')],
+  content: ['./src/**/*.{ts,tsx}', './node_modules/@rajs8952/*/dist/*.mjs'],
 }
 ```
 
@@ -110,9 +124,27 @@ The trackers run on React 18 and 19 and need `framer-motion` 11.
 
 ## Releasing packages
 
-Add a changeset with each package change (`pnpm changeset`). To release: `pnpm version-packages`,
-commit, then `pnpm release`, which builds every package (ESM, CommonJS and types, via tsup) and
-publishes the new versions with restricted access. See `.changeset/README.md`.
+Packages publish to GitHub Packages under `@rajs8952`, linked to this repo.
+
+1. **One-time setup.** Create a GitHub personal access token (classic) with `write:packages`
+   and add it to `~/.npmrc` in your home folder (the repo ignores `.npmrc` files so tokens can't be committed):
+   ```
+   //npm.pkg.github.com/:_authToken=YOUR_TOKEN
+   ```
+2. **With each package change,** add a changeset: `pnpm changeset`, pick the packages and the bump.
+3. **To release:** `pnpm version-packages`, commit, then `pnpm release`. It builds every package
+   (ESM, CommonJS, types and sourcemaps via tsup) and publishes the new versions. See `.changeset/README.md`.
+
+### Installing in another app
+
+GitHub's registry needs a token even for public packages (`read:packages` is enough). In the app:
+
+```
+# .npmrc
+@rajs8952:registry=https://npm.pkg.github.com
+```
+
+with the token in `~/.npmrc` as above (or `//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}` in CI).
 
 ## Notes
 

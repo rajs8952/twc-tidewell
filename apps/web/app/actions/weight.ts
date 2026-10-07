@@ -1,9 +1,8 @@
 'use server'
 
+import { fetchRange, WEIGHT_QUERY } from '@rajs8952/storage/supabase'
 import { SIGNED_OUT, friendlyDbError, isUuid, signedIn, signedInClient } from '@/lib/supabase/actions'
-import { fetchRange } from '@/lib/supabase/queries'
-import { WEIGHT_QUERY } from '@/lib/supabase/tables'
-import { toWeightLog, validateWeightInput, type ActionResult, type WeightLog } from '@omniwell/core/weight'
+import { toWeightLog, validateWeightInput, type ActionResult, type WeightLog } from '@rajs8952/core/weight'
 
 /*
  * Server actions for the Weight tracker. They run with the caller's session

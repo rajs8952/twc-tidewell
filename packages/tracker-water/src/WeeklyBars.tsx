@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, useReducedMotion } from 'framer-motion'
-import { BEVERAGES, type BeverageId } from '@omniwell/core/hydration'
+import { BEVERAGES, type BeverageId } from '@rajs8952/core/hydration'
 
 export interface BarDay {
   key: string

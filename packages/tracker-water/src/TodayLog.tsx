@@ -3,8 +3,8 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { BEVERAGES } from '@omniwell/core/hydration'
-import type { DrinkLog } from '@omniwell/core/types'
+import { BEVERAGES } from '@rajs8952/core/hydration'
+import type { DrinkLog } from '@rajs8952/core/types'
 import { BeverageIcon } from './BeverageIcon'
 
 /** Long days collapse to the latest few entries so the page stays short. */

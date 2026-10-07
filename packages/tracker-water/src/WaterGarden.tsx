@@ -3,13 +3,14 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { Droplet, Sparkles, Sprout } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ProfileStore, WaterStore } from '@rajs8952/core/storage'
+import { useStore } from '@rajs8952/ui'
 import { PlantArt } from './PlantArt'
-import { useTrackerStorage } from '@omniwell/ui'
-import { errorMessage } from '@omniwell/core/errors'
-import { BUD_AT, GROW_TARGET, MOOD_LABEL, SPECIES, computeGarden, plantLine, type Mood } from '@omniwell/core/garden'
-import { addDays, dayKey, parseDayKey, startOfDay } from '@omniwell/core/dates'
-import { BEVERAGES, effectiveGoal } from '@omniwell/core/hydration'
-import type { DrinkLog, Profile } from '@omniwell/core/types'
+import { errorMessage } from '@rajs8952/core/errors'
+import { BUD_AT, GROW_TARGET, MOOD_LABEL, SPECIES, computeGarden, plantLine, type Mood } from '@rajs8952/core/garden'
+import { addDays, dayKey, parseDayKey, startOfDay } from '@rajs8952/core/dates'
+import { BEVERAGES, effectiveGoal } from '@rajs8952/core/hydration'
+import type { DrinkLog, Profile } from '@rajs8952/core/types'
 
 const WATER_AMOUNTS = [150, 250, 500]
 
@@ -23,8 +24,9 @@ const MOOD_STYLE: Record<Mood, string> = {
 const shortDate = (key: string) => parseDayKey(key).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
 /** Water › Garden: a plant that grows as you hit your water goal. */
-export function WaterGarden() {
-  const storage = useTrackerStorage()
+export function WaterGarden({ adapter, profileAdapter }: { adapter?: WaterStore; profileAdapter?: ProfileStore } = {}) {
+  const drinks = useStore('water', adapter)
+  const profiles = useStore('profile', profileAdapter)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [logs, setLogs] = useState<DrinkLog[]>([])
   const [history, setHistory] = useState<Record<string, number>>({})
@@ -39,9 +41,9 @@ export function WaterGarden() {
       try {
         const today = startOfDay(new Date())
         const [p, l, h] = await Promise.all([
-          storage.profile.get(),
-          storage.water.list(today, addDays(today, 1)),
-          storage.water.dailyTotals(),
+          profiles.get(),
+          drinks.list(today, addDays(today, 1)),
+          drinks.dailyTotals(),
         ])
         if (!alive) return
         setProfile(p)
@@ -54,7 +56,7 @@ export function WaterGarden() {
     return () => {
       alive = false
     }
-  }, [storage])
+  }, [drinks, profiles])
 
   const now = new Date()
   const todayKey = dayKey(now)
@@ -90,7 +92,7 @@ export function WaterGarden() {
     setLogs((prev) => [temp, ...prev])
     setWaterKey(Date.now())
     try {
-      const saved = await storage.water.add('water', ml)
+      const saved = await drinks.add('water', ml)
       setLogs((prev) => prev.map((x) => (x.id === temp.id ? saved : x)))
     } catch (e) {
       setLogs((prev) => prev.filter((x) => x.id !== temp.id))

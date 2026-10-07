@@ -31,4 +31,4 @@ export const PILLAR_ORDER = Object.keys(PILLAR_COLORS) as (keyof typeof PILLAR_C
 /** The brand gradient, for backgrounds and accents. */
 export const BRAND_GRADIENT = `linear-gradient(120deg, ${PILLAR_ORDER.map((k) => PILLAR_COLORS[k]).join(', ')})`
 
-export { STORAGE_PREFIX, storageKey } from '@omniwell/core/persist'
+export { STORAGE_PREFIX, storageKey } from '@rajs8952/core/persist'

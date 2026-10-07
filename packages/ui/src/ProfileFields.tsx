@@ -2,8 +2,8 @@
 
 import { motion } from 'framer-motion'
 import { useState } from 'react'
-import { HEIGHT_CM, cmToFeetInches, feetInchesToCm } from '@omniwell/core/biometrics'
-import { ACTIVITY_LEVELS, GENDERS, goalBreakdown, type Activity, type Gender } from '@omniwell/core/hydration'
+import { HEIGHT_CM, cmToFeetInches, feetInchesToCm } from '@rajs8952/core/biometrics'
+import { ACTIVITY_LEVELS, GENDERS, goalBreakdown, type Activity, type Gender } from '@rajs8952/core/hydration'
 
 const LB_PER_KG = 2.20462
 const round1 = (n: number) => Math.round(n * 10) / 10

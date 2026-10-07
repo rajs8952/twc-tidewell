@@ -1,98 +1,18 @@
-import { Calculator, Droplets, Dumbbell, Moon, Scale, Smile, Wind, type LucideIcon } from 'lucide-react'
+import {
+  BMI_TOOL as BMI_TOOL_DEFINITION,
+  TRACKERS as REGISTRY,
+  type TrackerModule as TrackerDefinition,
+} from '@rajs8952/trackers/registry'
 
-/* ------------------------------------------------------------------
- * Tracker registry: the one place a wellness module is declared.
- * The Hub, the navigation and the landing page all list trackers in this
- * order. A module stays 'soon' (a placeholder) until its UI ships.
- * ------------------------------------------------------------------ */
+export type { TrackerId } from '@rajs8952/trackers/registry'
 
-export type TrackerId = 'water' | 'mood' | 'meditation' | 'weight' | 'sleep' | 'exercise'
+/* The shared tracker registry plus OmniWell's routes: each tracker lives at /<id>. */
 
-export interface TrackerModule {
-  id: TrackerId
-  name: string
-  description: string
-  icon: LucideIcon
-  /** Accent colour for the card's icon tile. */
-  accent: string
-  /** Supabase table holding this tracker's entries (see supabase/*.sql). */
-  table: string
+export interface TrackerModule extends TrackerDefinition {
   /** The tracker's own page. */
   href: string
-  status: 'live' | 'soon'
 }
 
-export const TRACKERS: TrackerModule[] = [
-  {
-    id: 'water',
-    name: 'Water',
-    description: 'Daily hydration toward your personal goal.',
-    icon: Droplets,
-    accent: '#2189D6',
-    table: 'drink_logs',
-    href: '/water',
-    status: 'live',
-  },
-  {
-    id: 'mood',
-    name: 'Mood',
-    description: 'Check in on how you feel, your energy and your stress.',
-    icon: Smile,
-    accent: '#E8628A',
-    table: 'mood_logs',
-    href: '/mood',
-    status: 'live',
-  },
-  {
-    id: 'meditation',
-    name: 'Meditation',
-    description: 'Log mindful minutes and how calm you feel afterwards.',
-    icon: Wind,
-    accent: '#7C6BD6',
-    table: 'meditation_logs',
-    href: '/meditation',
-    status: 'live',
-  },
-  {
-    id: 'sleep',
-    name: 'Sleep',
-    description: 'Bedtime, wake time and how well you slept.',
-    icon: Moon,
-    accent: '#4A5BC4',
-    table: 'sleep_logs',
-    href: '/sleep',
-    status: 'live',
-  },
-  {
-    id: 'weight',
-    name: 'Weight',
-    description: 'Track your weight trend over weeks, not days.',
-    icon: Scale,
-    accent: '#2E9C8F',
-    table: 'weight_logs',
-    href: '/weight',
-    status: 'live',
-  },
-  {
-    id: 'exercise',
-    name: 'Exercise',
-    description: 'Workouts, duration and intensity in one place.',
-    icon: Dumbbell,
-    accent: '#E9851F',
-    table: 'exercise_logs',
-    href: '/exercise',
-    status: 'live',
-  },
-]
+export const TRACKERS: TrackerModule[] = REGISTRY.map((t) => ({ ...t, href: `/${t.id}` }))
 
-/**
- * Tools listed in the Trackers menu after the six trackers. Not trackers:
- * they log nothing, so they're left out of the Hub cards and "done" count.
- */
-export const BMI_TOOL = {
-  name: 'BMI calculator',
-  description: 'Enter your height and weight to see your body-mass index.',
-  icon: Calculator,
-  accent: '#237A70',
-  href: '/bmi',
-} as const
+export const BMI_TOOL = { ...BMI_TOOL_DEFINITION, href: '/bmi' } as const

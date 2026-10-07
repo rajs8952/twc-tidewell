@@ -1,9 +1,8 @@
 'use server'
 
-import { validateMoodInput, type ActionResult, type MoodLog } from '@omniwell/core/mood'
+import { validateMoodInput, type ActionResult, type MoodLog } from '@rajs8952/core/mood'
+import { fetchRange, MOOD_QUERY } from '@rajs8952/storage/supabase'
 import { SIGNED_OUT, friendlyDbError, isUuid, signedInClient } from '@/lib/supabase/actions'
-import { MOOD_QUERY } from '@/lib/supabase/tables'
-import { fetchRange } from '@/lib/supabase/queries'
 
 /*
  * Server actions for the Mood tracker. They run on the server with the

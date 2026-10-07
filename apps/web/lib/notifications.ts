@@ -7,7 +7,7 @@
 
 import type { TrackerId } from './trackers'
 
-export type { ActionResult } from '@omniwell/core/types'
+export type { ActionResult } from '@rajs8952/core/types'
 
 /** Mirrors the tracker_type enum in supabase/notifications.sql. */
 export type TrackerType = TrackerId

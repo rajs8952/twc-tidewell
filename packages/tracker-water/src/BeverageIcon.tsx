@@ -1,5 +1,5 @@
 import { Citrus, Coffee, GlassWater, Leaf, Milk, Sparkles, type LucideProps } from 'lucide-react'
-import type { BeverageId } from '@omniwell/core/hydration'
+import type { BeverageId } from '@rajs8952/core/hydration'
 
 const ICONS: Record<BeverageId, React.ComponentType<LucideProps>> = {
   water: GlassWater,

@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { InterventionBanner } from '@/components/interventions/InterventionBanner'
-import { MoodTracker } from '@omniwell/tracker-mood'
-import { evaluateMetric, moodInterventionKey, type Intervention } from '@/lib/intervention-engine'
+import { MoodTracker } from '@rajs8952/tracker-mood'
+import { evaluateMetric, moodInterventionKey, type Intervention } from '@rajs8952/interventions'
 import { useDismissed } from '@/lib/useDismissed'
 
 /** The Mood tracker plus OmniWell's crisis prompt, which opens as soon as a check-in calls for it. */

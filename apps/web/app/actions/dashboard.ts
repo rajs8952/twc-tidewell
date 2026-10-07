@@ -1,14 +1,9 @@
 'use server'
 
-import type { ExerciseLog } from '@omniwell/core/exercise'
-import type { MeditationLog } from '@omniwell/core/meditation'
-import type { MoodLog } from '@omniwell/core/mood'
-import type { SleepLog } from '@omniwell/core/sleep'
+import { EXERCISE_QUERY, fetchRange, MEDITATION_QUERY, MOOD_QUERY, SLEEP_QUERY, WEIGHT_QUERY } from '@rajs8952/storage/supabase'
 import { SIGNED_OUT, signedInClient } from '@/lib/supabase/actions'
-import { fetchRange } from '@/lib/supabase/queries'
-import type { ActionResult, DateRange } from '@omniwell/core/types'
-import { EXERCISE_QUERY, MEDITATION_QUERY, MOOD_QUERY, SLEEP_QUERY, WEIGHT_QUERY } from '@/lib/supabase/tables'
-import type { WeightLog } from '@omniwell/core/weight'
+import type { ActionResult, DateRange } from '@rajs8952/core/types'
+import type { TrackerData } from '@rajs8952/trackers/hub'
 
 export interface TrackerRanges {
   mood: DateRange
@@ -18,13 +13,7 @@ export interface TrackerRanges {
   exercise: DateRange
 }
 
-export interface TrackerData {
-  mood: ActionResult<MoodLog[]>
-  meditation: ActionResult<MeditationLog[]>
-  sleep: ActionResult<SleepLog[]>
-  weight: ActionResult<WeightLog[]>
-  exercise: ActionResult<ExerciseLog[]>
-}
+export type { TrackerData }
 
 /**
  * Every tracker's first screen of data in one round trip. Next.js runs a

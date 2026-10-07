@@ -1,4 +1,6 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Strict TypeScript for bundler-resolved ESM",
   "compilerOptions": {
     "target": "ES2020",
     "lib": [
@@ -13,7 +15,6 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "jsx": "react-jsx"
+    "skipLibCheck": true
   }
 }
