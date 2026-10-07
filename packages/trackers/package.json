@@ -1,0 +1,50 @@
+{
+  "name": "@omniwell/trackers",
+  "version": "0.0.0",
+  "description": "The full OmniWell tracker suite: re-exports @omniwell/ui and every @omniwell/tracker-* package.",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "access": "restricted",
+    "main": "./dist/index.js",
+    "module": "./dist/index.mjs",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "import": {
+          "types": "./dist/index.d.mts",
+          "default": "./dist/index.mjs"
+        },
+        "require": {
+          "types": "./dist/index.d.ts",
+          "default": "./dist/index.js"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@omniwell/tracker-bmi": "workspace:*",
+    "@omniwell/tracker-exercise": "workspace:*",
+    "@omniwell/tracker-meditation": "workspace:*",
+    "@omniwell/tracker-mood": "workspace:*",
+    "@omniwell/tracker-sleep": "workspace:*",
+    "@omniwell/tracker-water": "workspace:*",
+    "@omniwell/tracker-weight": "workspace:*",
+    "@omniwell/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.11",
+    "react": "18.3.1",
+    "tsup": "^8.5.0",
+    "typescript": "^5.6.2"
+  }
+}
