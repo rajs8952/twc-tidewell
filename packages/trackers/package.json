@@ -1,6 +1,6 @@
 {
   "name": "@rajs8952/trackers",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "The full OmniWell tracker suite: every @rajs8952/tracker-* package, @rajs8952/ui, the tracker registry and the Hub summaries.",
   "repository": {
     "type": "git",

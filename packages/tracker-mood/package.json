@@ -1,6 +1,6 @@
 {
   "name": "@rajs8952/tracker-mood",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "Mood tracker: face check-in, energy, stress and emotion tags.",
   "repository": {
     "type": "git",

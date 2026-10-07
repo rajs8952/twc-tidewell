@@ -1,6 +1,6 @@
 {
   "name": "@rajs8952/tracker-sleep",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "Sleep tracker: bed and wake times, duration and quality.",
   "repository": {
     "type": "git",

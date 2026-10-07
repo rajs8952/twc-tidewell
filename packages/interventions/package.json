@@ -1,6 +1,6 @@
 {
   "name": "@rajs8952/interventions",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Wellness intervention engine: turns a logged mood, sleep or weight into a nudge, a suggestion or a crisis prompt. Pure TypeScript.",
   "repository": {
     "type": "git",

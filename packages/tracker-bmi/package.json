@@ -1,6 +1,6 @@
 {
   "name": "@rajs8952/tracker-bmi",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "BMI calculator with WHO bands and the healthy weight range.",
   "repository": {
     "type": "git",

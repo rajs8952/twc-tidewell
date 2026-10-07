@@ -1,6 +1,6 @@
 {
   "name": "@rajs8952/tracker-weight",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "Weight tracker: kg/lb weigh-ins, body fat and trend.",
   "repository": {
     "type": "git",

@@ -1,5 +1,11 @@
 # @rajs8952/tracker-bmi
 
+## 0.1.0
+
+### Minor Changes
+
+- First release of the remaining trackers (BMI, exercise, meditation, mood, sleep and weight), the intervention engine and the `@rajs8952/trackers` package that bundles every tracker with the registry and Hub summaries.
+
 ## 0.0.2
 
 ### Patch Changes
