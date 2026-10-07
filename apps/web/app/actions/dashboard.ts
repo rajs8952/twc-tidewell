@@ -13,8 +13,6 @@ export interface TrackerRanges {
   exercise: DateRange
 }
 
-export type { TrackerData }
-
 /**
  * Every tracker's first screen of data in one round trip. Next.js runs a
  * page's server actions one at a time, so five separate loads queued up;
