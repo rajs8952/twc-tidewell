@@ -1,5 +1,13 @@
 # @rajs8952/tracker-water
 
+## 0.1.1
+
+### Patch Changes
+
+- Accept framer-motion 12 as well as 11, so apps already on framer-motion 12 can install the trackers without a peer conflict.
+- Updated dependencies
+  - @rajs8952/ui@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes
