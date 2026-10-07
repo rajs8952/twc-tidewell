@@ -1,6 +1,6 @@
 {
   "name": "@rajs8952/config-tailwind",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Tailwind preset for the OmniWell trackers: theme tokens as --omni-* CSS variables and omni-* component classes.",
   "repository": {
     "type": "git",

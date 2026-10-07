@@ -1,6 +1,6 @@
 {
   "name": "@rajs8952/tracker-exercise",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Exercise tracker: activities, intensity and MET-based calorie estimates.",
   "repository": {
     "type": "git",

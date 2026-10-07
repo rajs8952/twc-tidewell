@@ -1,6 +1,6 @@
 {
   "name": "@rajs8952/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "OmniWell domain logic: date and streak math, tracker models, validators and the storage interfaces. No React, no I/O.",
   "repository": {
     "type": "git",

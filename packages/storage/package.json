@@ -1,6 +1,6 @@
 {
   "name": "@rajs8952/storage",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "TrackerStorage adapters for the OmniWell trackers: in-memory, localStorage, REST and Supabase.",
   "repository": {
     "type": "git",
