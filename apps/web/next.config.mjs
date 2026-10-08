@@ -17,6 +17,11 @@ const withSerwist = withSerwistInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    // Chat images go through a server action (app/actions/chat-media.ts). The browser shrinks
+    // photos first; 4 MB leaves headroom under Vercel's 4.5 MB request limit (the default is 1 MB).
+    serverActions: { bodySizeLimit: '4mb' },
+  },
   // Workspace packages ship TypeScript source; Next compiles them with the app.
   transpilePackages: [
     '@rajs8952/core',

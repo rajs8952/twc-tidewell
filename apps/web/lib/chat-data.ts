@@ -12,6 +12,7 @@ import {
   type TherapistThread,
   type ThreadMessage,
   type ThreadStatus,
+  CHAT_IMAGE_LINK_SECONDS,
 } from './messages'
 
 /* ------------------------------------------------------------------
@@ -55,7 +56,7 @@ export function mergeMessages<T extends ThreadMessage>(current: T[], incoming: T
 /* ---------- Employees ---------- */
 
 export interface ChatSummary extends TherapistThread {
-  last: Pick<ThreadMessage, 'sender_role' | 'content' | 'created_at'> | null
+  last: Pick<ThreadMessage, 'sender_role' | 'content' | 'created_at' | 'media_url'> | null
 }
 
 /** All the employee's conversations (both teams), newest activity first, with their last message. */
@@ -65,14 +66,14 @@ export async function listMyChats(supabase: SupabaseClient): Promise<ChatSummary
   if (!threads?.length) return []
   const { data: recent, error: msgError } = await supabase
     .from('thread_messages')
-    .select('thread_id, sender_role, content, created_at')
+    .select('thread_id, sender_role, content, created_at, media_url')
     .in('thread_id', threads.map((t) => t.id))
     .order('created_at', { ascending: false })
     .limit(300)
     .returns<(ThreadMessage & { thread_id: string })[]>()
   if (msgError) fail(msgError, 'load')
   const last = new Map<string, ChatSummary['last']>()
-  for (const m of recent ?? []) if (!last.has(m.thread_id)) last.set(m.thread_id, { sender_role: m.sender_role, content: m.content, created_at: m.created_at })
+  for (const m of recent ?? []) if (!last.has(m.thread_id)) last.set(m.thread_id, { sender_role: m.sender_role, content: m.content, created_at: m.created_at, media_url: m.media_url })
   return threads
     .map((t) => ({ ...t, last: last.get(t.id) ?? null }))
     .sort((a, b) => (b.last?.created_at ?? b.created_at).localeCompare(a.last?.created_at ?? a.created_at))
@@ -103,9 +104,15 @@ export async function pollThread(supabase: SupabaseClient, threadId: string, new
   return { messages: msgs.data ?? [], status: thread.data?.status ?? null }
 }
 
-/** Sends the employee's message (row-level security only allows 'user' into their own open threads). */
-export async function sendUserMessage(supabase: SupabaseClient, threadId: string, content: string): Promise<ThreadMessage> {
-  const { data, error } = await supabase.from('thread_messages').insert({ thread_id: threadId, sender_role: 'user', content }).select(MESSAGE_COLUMNS).single<ThreadMessage>()
+/** An uploaded image's path (from app/actions/chat-media.ts) as message columns. */
+const mediaColumns = (imagePath?: string | null) => (imagePath ? { media_url: imagePath, media_type: 'image' as const } : {})
+
+/**
+ * Sends the employee's message, optionally with an uploaded image (row-level
+ * security only allows 'user' into their own open threads).
+ */
+export async function sendUserMessage(supabase: SupabaseClient, threadId: string, content: string, imagePath?: string | null): Promise<ThreadMessage> {
+  const { data, error } = await supabase.from('thread_messages').insert({ thread_id: threadId, sender_role: 'user', content, ...mediaColumns(imagePath) }).select(MESSAGE_COLUMNS).single<ThreadMessage>()
   if (error) fail(error, 'send')
   return data
 }
@@ -149,9 +156,9 @@ export async function pollStaffThread(supabase: SupabaseClient, threadId: string
   return { messages: msgs.data ?? [], status: thread.data?.status ?? null }
 }
 
-/** A staff reply ('therapist' means wellness staff; row-level security checks the team and that it's open). */
-export async function sendStaffReply(supabase: SupabaseClient, threadId: string, content: string): Promise<StaffThreadMessage> {
-  const { data, error } = await supabase.from('thread_messages').insert({ thread_id: threadId, sender_role: 'therapist', content }).select(STAFF_MESSAGE_COLUMNS).single<StaffThreadMessage>()
+/** A staff reply, optionally with an image ('therapist' means wellness staff; row-level security checks the team and that it's open). */
+export async function sendStaffReply(supabase: SupabaseClient, threadId: string, content: string, imagePath?: string | null): Promise<StaffThreadMessage> {
+  const { data, error } = await supabase.from('thread_messages').insert({ thread_id: threadId, sender_role: 'therapist', content, ...mediaColumns(imagePath) }).select(STAFF_MESSAGE_COLUMNS).single<StaffThreadMessage>()
   if (error) fail(error, 'send')
   return data
 }
@@ -161,4 +168,20 @@ export async function setChatStatus(supabase: SupabaseClient, threadId: string, 
   if (error) fail(error, 'send')
   if (!data) throw new ChatError('That conversation wasn’t found.')
   return data.status
+}
+
+/* ---------- Images ---------- */
+
+/**
+ * Short-lived viewing links for chat images, in one request. The bucket is
+ * private: storage's row-level security only signs images in threads the
+ * caller belongs to. Paths it won't sign come back missing.
+ */
+export async function signImageUrls(supabase: SupabaseClient, paths: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (!paths.length) return out
+  const { data, error } = await supabase.storage.from('chat_media').createSignedUrls(paths, CHAT_IMAGE_LINK_SECONDS)
+  if (error) return out
+  for (const r of data ?? []) if (r.path && r.signedUrl && !r.error) out.set(r.path, r.signedUrl)
+  return out
 }

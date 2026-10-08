@@ -18,14 +18,17 @@ import {
   timeLabel,
   type ChatMessageView,
 } from '@/components/chat/ChatUI'
+import { uploadChatImage } from '@/app/actions/chat-media'
 import { errorMessage } from '@rajs8952/core/errors'
+import { ChatImageError, prepareChatImage } from '@/lib/chat-image'
 import { storageKey } from '@/lib/brand'
 import { listMyChats, loadMessages, mergeMessages, pollThread, sendUserMessage, startChat, type ChatSummary } from '@/lib/chat-data'
-import { MAX_MESSAGE_LENGTH, TEAMS, validateMessage, type Team, type ThreadMessage } from '@/lib/messages'
+import { MAX_MESSAGE_LENGTH, PHOTO_PREVIEW, TEAMS, validateMessage, type Team, type ThreadMessage } from '@/lib/messages'
 import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
 import { usePolling } from '@/lib/usePolling'
 import { useLivePolling } from '@/lib/useLivePolling'
+import { useSignedImages } from '@/lib/useSignedImages'
 import { WELLNESS_BY_ID, telHref } from '@/lib/wellness-team'
 
 /* ------------------------------------------------------------------
@@ -52,6 +55,10 @@ interface Pending {
   createdAt: string
   state: 'sending' | 'failed'
   error?: string
+  /** A prepared image to upload with it (kept so Retry can resend it). */
+  image?: { blob: Blob; previewUrl: string }
+  /** Set once the image is uploaded, so a retry doesn't upload it twice. */
+  imagePath?: string
 }
 
 type Filter = 'all' | Team
@@ -106,6 +113,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
   const [loadingThread, setLoadingThread] = useState(false)
   const [pending, setPending] = useState<Pending[]>([])
   const [draft, setDraft] = useState('')
+  const [attachment, setAttachment] = useState<{ blob: Blob; previewUrl: string } | { preparing: true } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
@@ -113,6 +121,9 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
   const [seen, setSeen] = useState<Record<string, string>>({})
   const [announcement, setAnnouncement] = useState('')
   const activeIdRef = useRef<string | null>(null)
+
+  // Private images in the open conversation get short-lived signed links.
+  const imageUrls = useSignedImages(supabase, messages.flatMap((m) => (m.media_url ? [m.media_url] : [])))
 
   const activeChat = active?.kind === 'thread' ? (chats?.find((c) => c.id === active.id) ?? null) : null
   const activeTeam: Team | null = active?.kind === 'new' ? active.team : (activeChat?.team ?? null)
@@ -180,7 +191,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
     const id = activeIdRef.current
     const last = messages[messages.length - 1]
     if (!id || !last) return
-    setChats((cs) => cs?.map((c) => (c.id === id && c.last?.created_at !== last.created_at ? { ...c, last: { sender_role: last.sender_role, content: last.content, created_at: last.created_at } } : c)) ?? cs)
+    setChats((cs) => cs?.map((c) => (c.id === id && c.last?.created_at !== last.created_at ? { ...c, last: { sender_role: last.sender_role, content: last.content, created_at: last.created_at, media_url: last.media_url } } : c)) ?? cs)
     setSeen((s) => {
       if (s[id] === last.created_at) return s
       const next = { ...s, [id]: last.created_at }
@@ -200,6 +211,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
     setMobileShowChat(true)
     setNotice(null)
     setDraft('')
+    clearAttachment()
     setMenuOpen(false)
     const team = next?.kind === 'new' ? next.team : chats?.find((c) => next?.kind === 'thread' && c.id === next.id)?.team
     if (team && team !== routeTeam) window.history.replaceState(null, '', TEAMS[team].inboxPath)
@@ -217,7 +229,19 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
         setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, threadId } : x)))
         setActive({ kind: 'thread', id: thread.id })
       }
-      const saved = await sendUserMessage(supabase, threadId, p.content)
+      // Upload the image first (once), then send the message pointing at it.
+      let imagePath = p.imagePath
+      if (p.image && !imagePath) {
+        const form = new FormData()
+        form.append('file', new File([p.image.blob], 'image', { type: p.image.blob.type }))
+        form.append('threadId', threadId)
+        const up = await uploadChatImage(form)
+        if (!up.ok) throw new Error(up.error)
+        imagePath = up.data.path
+        setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, imagePath } : x)))
+      }
+      const saved = await sendUserMessage(supabase, threadId, p.content, imagePath)
+      if (p.image) URL.revokeObjectURL(p.image.previewUrl)
       setPending((ps) => ps.filter((x) => x.key !== p.key))
       if (activeIdRef.current === threadId) setMessages((cur) => mergeMessages(cur, [saved]))
       bump()
@@ -226,9 +250,32 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
     }
   }
 
+  function clearAttachment() {
+    setAttachment((a) => {
+      if (a && 'previewUrl' in a) URL.revokeObjectURL(a.previewUrl)
+      return null
+    })
+  }
+
+  /** Images only: shrinks and re-encodes it in the browser, then shows it ready to send. */
+  async function attach(file: File) {
+    setNotice(null)
+    clearAttachment()
+    setAttachment({ preparing: true })
+    try {
+      const img = await prepareChatImage(file)
+      setAttachment({ blob: img.blob, previewUrl: img.previewUrl })
+      bump()
+    } catch (e) {
+      setAttachment(null)
+      setNotice(e instanceof ChatImageError ? e.message : 'Couldn’t read that image. Try another one.')
+    }
+  }
+
   function send() {
     if (!activeTeam) return
-    const parsed = validateMessage(draft)
+    const image = attachment && 'previewUrl' in attachment ? attachment : undefined
+    const parsed = validateMessage(draft, !!image)
     if (!parsed.ok) return setNotice(parsed.error)
     setNotice(null)
     const p: Pending = {
@@ -238,9 +285,11 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
       content: parsed.value,
       createdAt: new Date().toISOString(),
       state: 'sending',
+      image,
     }
     setPending((ps) => [...ps, p])
     setDraft('')
+    setAttachment(null) // the pending message now owns the preview URL
     deliver(p)
   }
 
@@ -254,10 +303,17 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
 
   const threadId = active?.kind === 'thread' ? active.id : null
   const views: ChatMessageView[] = [
-    ...messages.map((m) => ({ id: m.id, mine: m.sender_role === 'user', content: m.content, createdAt: m.created_at, state: 'sent' as const })),
+    ...messages.map((m) => ({
+      id: m.id,
+      mine: m.sender_role === 'user',
+      content: m.content,
+      createdAt: m.created_at,
+      state: 'sent' as const,
+      image: m.media_url ? { src: imageUrls.get(m.media_url) ?? null } : undefined,
+    })),
     ...pending
       .filter((p) => (threadId ? p.threadId === threadId : active?.kind === 'new' && !p.threadId && p.team === activeTeam))
-      .map((p) => ({ id: p.key, mine: true, content: p.content, createdAt: p.createdAt, state: p.state, error: p.error, onRetry: () => deliver(p) })),
+      .map((p) => ({ id: p.key, mine: true, content: p.content, createdAt: p.createdAt, state: p.state, error: p.error, onRetry: () => deliver(p), image: p.image ? { src: p.image.previewUrl } : undefined })),
   ]
   const closed = activeChat?.status === 'closed'
   const look = activeTeam ? TEAM_LOOK[activeTeam] : null
@@ -323,7 +379,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
                 preview={
                   <>
                     {c.status === 'closed' && <span className="font-semibold">Closed · </span>}
-                    {c.last ? `${c.last.sender_role === 'user' ? 'You: ' : ''}${c.last.content}` : 'No messages yet'}
+                    {c.last ? `${c.last.sender_role === 'user' ? 'You: ' : ''}${c.last.media_url ? (c.last.content ? `📷 ${c.last.content}` : PHOTO_PREVIEW) : c.last.content}` : 'No messages yet'}
                   </>
                 }
                 badge={unread ? <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#25D366] ring-2 ring-white" aria-label="New reply" /> : undefined}
@@ -382,7 +438,19 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
             </button>
           </div>
         ) : (
-          <Composer value={draft} onChange={(v) => { setDraft(v); bump() }} onSend={send} maxLength={MAX_MESSAGE_LENGTH} disabled={chats === null} />
+          <Composer
+            value={draft}
+            onChange={(v) => {
+              setDraft(v)
+              bump()
+            }}
+            onSend={send}
+            maxLength={MAX_MESSAGE_LENGTH}
+            disabled={chats === null}
+            onAttach={attach}
+            onRemoveAttachment={clearAttachment}
+            attachment={attachment ? ('previewUrl' in attachment ? { previewUrl: attachment.previewUrl } : { previewUrl: '', preparing: true }) : null}
+          />
         )}
       </>
     )

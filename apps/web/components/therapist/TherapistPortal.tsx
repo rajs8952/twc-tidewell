@@ -19,13 +19,16 @@ import {
   timeLabel,
   type ChatMessageView,
 } from '@/components/chat/ChatUI'
+import { uploadChatImage } from '@/app/actions/chat-media'
 import { errorMessage } from '@rajs8952/core/errors'
+import { ChatImageError, prepareChatImage } from '@/lib/chat-image'
 import { loadQueue, loadStaffMessages, mergeMessages, myUserId, pollStaffThread, sendStaffReply, setChatStatus } from '@/lib/chat-data'
-import { MAX_MESSAGE_LENGTH, REPLY_TARGET_HOURS, TEAMS, validateMessage, type QueueItem, type StaffThreadMessage, type Team } from '@/lib/messages'
+import { MAX_MESSAGE_LENGTH, PHOTO_PREVIEW, REPLY_TARGET_HOURS, TEAMS, validateMessage, type QueueItem, type StaffThreadMessage, type Team } from '@/lib/messages'
 import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
 import { usePolling } from '@/lib/usePolling'
 import { useLivePolling } from '@/lib/useLivePolling'
+import { useSignedImages } from '@/lib/useSignedImages'
 
 /* ------------------------------------------------------------------
  * Wellness-team portal (therapists or dietitians), laid out like
@@ -97,6 +100,8 @@ interface Pending {
   createdAt: string
   state: 'sending' | 'failed'
   error?: string
+  image?: { blob: Blob; previewUrl: string }
+  imagePath?: string
 }
 
 export function TherapistPortal({ team }: { team: Team }) {
@@ -111,6 +116,7 @@ export function TherapistPortal({ team }: { team: Team }) {
   const [loadingThread, setLoadingThread] = useState(false)
   const [pending, setPending] = useState<Pending[]>([])
   const [draft, setDraft] = useState('')
+  const [attachment, setAttachment] = useState<{ blob: Blob; previewUrl: string } | { preparing: true } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [statusBusy, setStatusBusy] = useState(false)
   const [me, setMe] = useState<string | null>(null)
@@ -119,6 +125,7 @@ export function TherapistPortal({ team }: { team: Team }) {
   activeRef.current = activeId
 
   const item = queue?.find((q) => q.thread_id === activeId) ?? null
+  const imageUrls = useSignedImages(supabase, messages.flatMap((m) => (m.media_url ? [m.media_url] : [])))
 
   /* ----- queue ----- */
 
@@ -143,6 +150,10 @@ export function TherapistPortal({ team }: { team: Team }) {
     setMessages([])
     setNotice(null)
     setDraft('')
+    setAttachment((a) => {
+      if (a && 'previewUrl' in a) URL.revokeObjectURL(a.previewUrl)
+      return null
+    })
     if (!activeId) return
     const id = activeId
     setLoadingThread(true)
@@ -188,7 +199,18 @@ export function TherapistPortal({ team }: { team: Team }) {
   async function deliver(p: Pending) {
     setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, state: 'sending', error: undefined } : x)))
     try {
-      const saved = await sendStaffReply(supabase, p.threadId, p.content)
+      let imagePath = p.imagePath
+      if (p.image && !imagePath) {
+        const form = new FormData()
+        form.append('file', new File([p.image.blob], 'image', { type: p.image.blob.type }))
+        form.append('threadId', p.threadId)
+        const up = await uploadChatImage(form)
+        if (!up.ok) throw new Error(up.error)
+        imagePath = up.data.path
+        setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, imagePath } : x)))
+      }
+      const saved = await sendStaffReply(supabase, p.threadId, p.content, imagePath)
+      if (p.image) URL.revokeObjectURL(p.image.previewUrl)
       setPending((ps) => ps.filter((x) => x.key !== p.key))
       if (activeRef.current === p.threadId) setMessages((cur) => mergeMessages(cur, [saved]))
       patchItem(p.threadId, { waiting_since: null, last_sender_role: 'therapist', last_message: saved.content.slice(0, 160), last_message_at: saved.created_at })
@@ -198,14 +220,37 @@ export function TherapistPortal({ team }: { team: Team }) {
     }
   }
 
+  function clearAttachment() {
+    setAttachment((a) => {
+      if (a && 'previewUrl' in a) URL.revokeObjectURL(a.previewUrl)
+      return null
+    })
+  }
+
+  async function attach(file: File) {
+    setNotice(null)
+    clearAttachment()
+    setAttachment({ preparing: true })
+    try {
+      const img = await prepareChatImage(file)
+      setAttachment({ blob: img.blob, previewUrl: img.previewUrl })
+      bump()
+    } catch (e) {
+      setAttachment(null)
+      setNotice(e instanceof ChatImageError ? e.message : 'Couldn’t read that image. Try another one.')
+    }
+  }
+
   function send() {
     if (!activeId) return
-    const parsed = validateMessage(draft)
+    const image = attachment && 'previewUrl' in attachment ? attachment : undefined
+    const parsed = validateMessage(draft, !!image)
     if (!parsed.ok) return setNotice(parsed.error)
     setNotice(null)
-    const p: Pending = { key: `p-${Date.now()}`, threadId: activeId, content: parsed.value, createdAt: new Date().toISOString(), state: 'sending' }
+    const p: Pending = { key: `p-${Date.now()}`, threadId: activeId, content: parsed.value, createdAt: new Date().toISOString(), state: 'sending', image }
     setPending((ps) => [...ps, p])
     setDraft('')
+    setAttachment(null)
     deliver(p)
   }
 
@@ -240,9 +285,19 @@ export function TherapistPortal({ team }: { team: Team }) {
   const views: ChatMessageView[] = [
     ...messages.map((m) => {
       const mine = m.sender_role === 'therapist'
-      return { id: m.id, mine, content: m.content, createdAt: m.created_at, state: 'sent' as const, author: mine && m.sender_id && me && m.sender_id !== me ? colleague : undefined }
+      return {
+        id: m.id,
+        mine,
+        content: m.content,
+        createdAt: m.created_at,
+        state: 'sent' as const,
+        author: mine && m.sender_id && me && m.sender_id !== me ? colleague : undefined,
+        image: m.media_url ? { src: imageUrls.get(m.media_url) ?? null } : undefined,
+      }
     }),
-    ...pending.filter((p) => p.threadId === activeId).map((p) => ({ id: p.key, mine: true, content: p.content, createdAt: p.createdAt, state: p.state, error: p.error, onRetry: () => deliver(p) })),
+    ...pending
+      .filter((p) => p.threadId === activeId)
+      .map((p) => ({ id: p.key, mine: true, content: p.content, createdAt: p.createdAt, state: p.state, error: p.error, onRetry: () => deliver(p), image: p.image ? { src: p.image.previewUrl } : undefined })),
   ]
 
   const sidebar = (
@@ -290,7 +345,7 @@ export function TherapistPortal({ team }: { team: Team }) {
               avatar={<ChatAvatar color={colorFor(x.user_id)} initials={initialsOf(x.user_name)} />}
               title={x.user_name}
               time={x.last_message_at ? listTime(x.last_message_at) : undefined}
-              preview={x.last_message ? `${x.last_sender_role === 'therapist' ? 'You: ' : ''}${x.last_message}` : 'No messages yet'}
+              preview={x.last_message_at ? `${x.last_sender_role === 'therapist' ? 'You: ' : ''}${x.last_message || PHOTO_PREVIEW}` : 'No messages yet'}
               badge={<StatusBadge item={x} />}
             />
           ))
@@ -344,7 +399,20 @@ export function TherapistPortal({ team }: { team: Team }) {
           This conversation is closed. Reopen it to reply.
         </div>
       ) : (
-        <Composer value={draft} onChange={(v) => { setDraft(v); bump() }} onSend={send} placeholder={`Reply to ${item?.user_name ?? 'employee'}`} maxLength={MAX_MESSAGE_LENGTH} disabled={!item} />
+        <Composer
+          value={draft}
+          onChange={(v) => {
+            setDraft(v)
+            bump()
+          }}
+          onSend={send}
+          placeholder={`Reply to ${item?.user_name ?? 'employee'}`}
+          maxLength={MAX_MESSAGE_LENGTH}
+          disabled={!item}
+          onAttach={attach}
+          onRemoveAttachment={clearAttachment}
+          attachment={attachment ? ('previewUrl' in attachment ? { previewUrl: attachment.previewUrl } : { previewUrl: '', preparing: true }) : null}
+        />
       )}
     </>
   )

@@ -1,7 +1,7 @@
 'use client'
 
-import { AlertCircle, ArrowLeft, Check, Clock, Lock, Search, SendHorizontal, type LucideIcon } from 'lucide-react'
-import { useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
+import { AlertCircle, ArrowLeft, Check, Clock, ImagePlus, Loader2, Lock, Search, SendHorizontal, X, type LucideIcon } from 'lucide-react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'
 
 /* ------------------------------------------------------------------
  * Chat building blocks in a WhatsApp Web style, shared by the employee
@@ -239,6 +239,8 @@ export interface ChatMessageView {
   state?: 'sent' | 'sending' | 'failed'
   error?: string
   onRetry?: () => void
+  /** An attached image; `src` is null while its signed link is loading. */
+  image?: { src: string | null }
 }
 
 const dayLabel = (iso: string) => {
@@ -278,6 +280,7 @@ export function MessageList({ messages, notice, empty, loading }: { messages: Ch
   const ref = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
   const lastCount = useRef(0)
+  const [viewing, setViewing] = useState<string | null>(null)
 
   // Jump to the bottom on first load and when new messages arrive while at the bottom.
   useLayoutEffect(() => {
@@ -335,7 +338,7 @@ export function MessageList({ messages, notice, empty, loading }: { messages: Ch
                 )}
                 <div className={`flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
                   <div
-                    className={`relative max-w-[85%] rounded-lg px-2.5 pb-1.5 pt-1.5 text-[14.5px] leading-[1.35] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] sm:max-w-[65%] ${first ? (m.mine ? 'rounded-tr-none' : 'rounded-tl-none') : ''}`}
+                    className={`relative max-w-[85%] rounded-lg text-[14.5px] leading-[1.35] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] sm:max-w-[65%] ${m.image ? 'p-1' : 'px-2.5 pb-1.5 pt-1.5'} ${first ? (m.mine ? 'rounded-tr-none' : 'rounded-tl-none') : ''}`}
                     style={{ background: m.mine ? C.outgoing : '#FFFFFF', color: C.text }}
                   >
                     {first && <Tail mine={m.mine} />}
@@ -345,10 +348,35 @@ export function MessageList({ messages, notice, empty, loading }: { messages: Ch
                       </p>
                     )}
                     <span className="sr-only">{m.mine ? 'You' : (m.author ?? 'They')}: </span>
-                    <span className="whitespace-pre-wrap break-words">{m.content}</span>
-                    {/* Invisible spacer so the time never overlaps the last line of text. */}
-                    <span className="inline-block w-[72px]" aria-hidden />
-                    <span className="absolute bottom-1 right-2 flex items-center gap-1 text-[11px]" style={{ color: C.meta }}>
+                    {m.image && (
+                      <button
+                        type="button"
+                        onClick={() => m.image?.src && setViewing(m.image.src)}
+                        disabled={!m.image.src}
+                        className="block overflow-hidden rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#008069]"
+                        aria-label="Open the attached image"
+                      >
+                        {m.image.src ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- signed links to a private bucket; next/image can't optimise them
+                          <img src={m.image.src} alt="Attached image" loading="lazy" className="block max-h-[320px] w-full min-w-[160px] max-w-[300px] bg-black/5 object-cover" />
+                        ) : (
+                          <span className="flex h-48 w-[240px] items-center justify-center bg-black/5" aria-label="Loading image">
+                            <Loader2 className="h-6 w-6 animate-spin text-[#54656F]" aria-hidden />
+                          </span>
+                        )}
+                      </button>
+                    )}
+                    {m.content && (
+                      <span className={m.image ? 'block px-1.5 pb-1 pt-1' : undefined}>
+                        <span className="whitespace-pre-wrap break-words">{m.content}</span>
+                        {/* Invisible spacer so the time never overlaps the last line of text. */}
+                        <span className="inline-block w-[72px]" aria-hidden />
+                      </span>
+                    )}
+                    <span
+                      className={`absolute flex items-center gap-1 text-[11px] ${m.image && !m.content ? 'bottom-2 right-2.5 rounded-full bg-black/45 px-1.5 py-0.5 text-white' : 'bottom-1 right-2'}`}
+                      style={m.image && !m.content ? undefined : { color: C.meta }}
+                    >
                       <time dateTime={m.createdAt}>{timeLabel(m.createdAt)}</time>
                       {m.mine && <Ticks state={m.state} />}
                     </span>
@@ -369,7 +397,38 @@ export function MessageList({ messages, notice, empty, loading }: { messages: Ch
           })}
         </ol>
       )}
+      <ImageViewer src={viewing} onClose={() => setViewing(null)} />
     </div>
+  )
+}
+
+/** Full-screen view of a chat image (native <dialog>: Esc and the ✕ close it). */
+function ImageViewer({ src, onClose }: { src: string | null; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const d = ref.current
+    if (!d) return
+    if (src && !d.open) d.showModal()
+    if (!src && d.open) d.close()
+  }, [src])
+  return (
+    <dialog
+      ref={ref}
+      onClose={onClose}
+      onClick={(e) => e.target === ref.current && onClose()}
+      aria-label="Image"
+      className="m-0 h-full max-h-none w-full max-w-none bg-[#0B141A]/95 p-0 backdrop:bg-black/60"
+    >
+      {src && (
+        <div className="flex h-full w-full items-center justify-center p-4" onClick={onClose}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- signed link to a private bucket */}
+          <img src={src} alt="Attached image, full size" className="max-h-full max-w-full rounded object-contain" onClick={(e) => e.stopPropagation()} />
+          <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20" aria-label="Close image">
+            <X className="h-6 w-6" aria-hidden />
+          </button>
+        </div>
+      )}
+    </dialog>
   )
 }
 
@@ -397,6 +456,9 @@ export function Composer({
   placeholder = 'Type a message',
   maxLength,
   footer,
+  attachment,
+  onAttach,
+  onRemoveAttachment,
 }: {
   value: string
   onChange: (v: string) => void
@@ -405,7 +467,13 @@ export function Composer({
   placeholder?: string
   maxLength: number
   footer?: ReactNode
+  /** A chosen image waiting to be sent (its text becomes the optional caption). */
+  attachment?: { previewUrl: string; preparing?: boolean } | null
+  /** Enables the attach button; called with the picked (or pasted) file. */
+  onAttach?: (file: File) => void
+  onRemoveAttachment?: () => void
 }) {
+  const fileRef = useRef<HTMLInputElement>(null)
   const ref = useRef<HTMLTextAreaElement>(null)
   const id = useId()
   const remaining = maxLength - value.trim().length
@@ -422,14 +490,75 @@ export function Composer({
     const touch = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
     if (e.key === 'Enter' && !e.shiftKey && !touch && !e.nativeEvent.isComposing) {
       e.preventDefault()
-      if (value.trim() && remaining >= 0 && !disabled) onSend()
+      if (canSend) onSend()
     }
   }
 
-  const canSend = !!value.trim() && remaining >= 0 && !disabled
+  // Pasting an image (e.g. a screenshot) attaches it.
+  function onPaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    if (!onAttach) return
+    const file = [...e.clipboardData.files].find((f) => f.type.startsWith('image/'))
+    if (file) {
+      e.preventDefault()
+      onAttach(file)
+    }
+  }
+
+  const hasImage = !!attachment && !attachment.preparing
+  const canSend = (!!value.trim() || hasImage) && remaining >= 0 && !disabled && !attachment?.preparing
   return (
     <div className="shrink-0 px-3 py-2.5" style={{ background: C.panel }}>
+      {attachment && (
+        <div className="mb-2 flex items-center gap-3 rounded-lg bg-white p-2 shadow-sm">
+          <span className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-black/5">
+            {attachment.preparing ? (
+              <span className="flex h-full w-full items-center justify-center" aria-label="Preparing image">
+                <Loader2 className="h-5 w-5 animate-spin" style={{ color: C.meta }} aria-hidden />
+              </span>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element -- local preview of the chosen file
+              <img src={attachment.previewUrl} alt="Image to send" className="h-full w-full object-cover" />
+            )}
+          </span>
+          <span className="min-w-0 flex-1 text-sm" style={{ color: C.meta }}>
+            {attachment.preparing ? 'Preparing image…' : 'Image ready. Add a caption if you like, then send.'}
+          </span>
+          {onRemoveAttachment && (
+            <button type="button" onClick={onRemoveAttachment} className="rounded-full p-2 hover:bg-black/5" style={{ color: C.meta }} aria-label="Remove image">
+              <X className="h-5 w-5" aria-hidden />
+            </button>
+          )}
+        </div>
+      )}
       <div className="flex items-end gap-2">
+        {onAttach && (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              tabIndex={-1}
+              aria-hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                e.target.value = ''
+                if (f) onAttach(f)
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={disabled}
+              className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full transition hover:bg-black/5 disabled:opacity-40"
+              style={{ color: C.meta }}
+              aria-label="Attach image"
+              title="🖼️ Attach image"
+            >
+              <ImagePlus className="h-6 w-6" aria-hidden />
+            </button>
+          </>
+        )}
         <label htmlFor={id} className="sr-only">
           {placeholder}
         </label>
@@ -440,7 +569,8 @@ export function Composer({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={placeholder}
+          onPaste={onPaste}
+          placeholder={attachment ? 'Add a caption (optional)' : placeholder}
           disabled={disabled}
           maxLength={maxLength + 200}
           className="max-h-[140px] min-h-[42px] flex-1 resize-none rounded-lg bg-white px-3 py-2.5 text-[15px] leading-snug outline-none placeholder:text-[#54656F] disabled:opacity-60"
