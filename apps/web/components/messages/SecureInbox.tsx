@@ -1,381 +1,404 @@
 'use client'
 
-import { Loader2, Lock, MessageCircleHeart, PenSquare, Phone, RotateCw, Send } from 'lucide-react'
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { getMyThreads, getThreadMessages, sendMessage, startThread } from '@/app/actions/messages'
+import { Apple, MessageCircleHeart, MessageSquarePlus, Phone, PenSquare } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  ChatAvatar,
+  ChatFilters,
+  ChatFrame,
+  ChatHeader,
+  ChatIconButton,
+  ChatListHeader,
+  ChatListItem,
+  ChatNotice,
+  ChatPlaceholder,
+  ChatSearch,
+  Composer,
+  MessageList,
+  timeLabel,
+  type ChatMessageView,
+} from '@/components/chat/ChatUI'
 import { errorMessage } from '@rajs8952/core/errors'
-import { MAX_MESSAGE_LENGTH, TEAMS, validateMessage, type Team, type TherapistThread, type ThreadMessage } from '@/lib/messages'
-import { usePolling } from '@/lib/usePolling'
-import { WELLNESS_BY_ID, telHref } from '@/lib/wellness-team'
-import { Bubble } from './Bubble'
+import { storageKey } from '@/lib/brand'
+import { listMyChats, loadMessages, mergeMessages, pollThread, sendUserMessage, startChat, type ChatSummary } from '@/lib/chat-data'
+import { MAX_MESSAGE_LENGTH, TEAMS, validateMessage, type Team, type ThreadMessage } from '@/lib/messages'
 import { trackProgress } from '@/lib/progress'
+import { createClient } from '@/lib/supabase/client'
+import { usePolling } from '@/lib/usePolling'
+import { useLivePolling } from '@/lib/useLivePolling'
+import { WELLNESS_BY_ID, telHref } from '@/lib/wellness-team'
 
 /* ------------------------------------------------------------------
- * Secure inbox for talking to a therapist or dietitian (one inbox per team;
- * each team only sees its own conversations). Asynchronous by design: no
- * WebSockets or Supabase Realtime. Messages load on mount and are polled
- * every 30 seconds while the tab is visible (lib/usePolling.ts).
+ * The employee's secure inbox, laid out like WhatsApp Web: their
+ * conversations with the therapist and dietitian teams on the left, the
+ * open conversation on the right. Asynchronous by design (no WebSockets
+ * or Realtime): the open chat is polled every few seconds while active
+ * (lib/useLivePolling.ts), and data goes straight to Supabase under
+ * row-level security (lib/chat-data.ts).
  * ------------------------------------------------------------------ */
 
-const POLL_MS = 30_000
+/** Avatar colours with white icons at 3:1 or more (the dietitian orange is a deeper step). */
+const TEAM_LOOK: Record<Team, { color: string; icon: typeof Apple }> = {
+  therapist: { color: '#6A55C9', icon: MessageCircleHeart },
+  dietitian: { color: '#B9650E', icon: Apple },
+}
 
-/** A message the user sent that the server hasn't confirmed yet. */
+/** A message being sent (or that failed), shown before the server confirms it. */
 interface Pending {
   key: string
+  threadId: string | null
+  team: Team
   content: string
-  status: 'sending' | 'failed'
+  createdAt: string
+  state: 'sending' | 'failed'
   error?: string
 }
 
-const dayLabel = (iso: string) => {
-  const d = new Date(iso)
-  const today = new Date()
-  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
-  if (d.toDateString() === today.toDateString()) return 'Today'
-  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday'
-  return d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
-}
-const timeLabel = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-const threadLabel = (t: TherapistThread) =>
-  `Started ${new Date(t.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })} · ${t.status === 'open' ? 'Open' : 'Closed'}`
+type Filter = 'all' | Team
 
-export function Disclaimer({ team }: { team: Team }) {
+const SEEN_KEY = storageKey('chat-seen')
+function readSeen(): Record<string, string> {
+  try {
+    return JSON.parse(localStorage.getItem(SEEN_KEY) ?? '{}')
+  } catch {
+    return {}
+  }
+}
+
+function listTime(iso: string) {
+  const d = new Date(iso)
+  const now = new Date()
+  if (d.toDateString() === now.toDateString()) return timeLabel(iso)
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday'
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+}
+
+function Disclaimer({ team }: { team: Team }) {
   const phone = WELLNESS_BY_ID.eap.phone
   return (
-    <div role="note" className="flex gap-3 rounded-2xl bg-[#FFF6E5] p-4 text-sm text-ink ring-1 ring-[#F2D49B]">
-      <Lock className="mt-0.5 h-4 w-4 shrink-0 text-[#8A5A00]" aria-hidden />
-      <p>
-        This is a secure asynchronous inbox. A {TEAMS[team].label.toLowerCase()} will reply within 24 business hours.{' '}
-        <strong className="font-bold">
-          If you are in crisis, call the EAP hotline immediately at{' '}
-          {phone ? (
-            <a href={telHref(phone)} className="whitespace-nowrap underline underline-offset-2">
-              {phone}
-            </a>
-          ) : (
-            'your local emergency number'
-          )}
-          .
-        </strong>
-      </p>
-    </div>
+    <ChatNotice>
+      This is a secure asynchronous inbox. A {TEAMS[team].label.toLowerCase()} will reply within 24 business hours.{' '}
+      <strong>
+        If you are in crisis, call the EAP hotline immediately at{' '}
+        {phone ? (
+          <a href={telHref(phone)} className="whitespace-nowrap underline underline-offset-2">
+            {phone}
+          </a>
+        ) : (
+          'your local emergency number'
+        )}
+        .
+      </strong>
+    </ChatNotice>
   )
 }
 
-export function SecureInbox({ team }: { team: Team }) {
-  const info = TEAMS[team]
-  const [threads, setThreads] = useState<TherapistThread[] | null>(null)
-  const [activeId, setActiveId] = useState<string | null>(null)
-  const [messages, setMessages] = useState<ThreadMessage[]>([])
-  const [pending, setPending] = useState<Pending[]>([])
-  const [composingNew, setComposingNew] = useState(false)
-  const [draft, setDraft] = useState('')
+export function SecureInbox({ team: routeTeam }: { team: Team }) {
+  const supabase = useMemo(() => createClient(), [])
+  const [chats, setChats] = useState<ChatSummary[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [sendError, setSendError] = useState<string | null>(null)
+  /** The open conversation, or a new one being started with a team. */
+  const [active, setActive] = useState<{ kind: 'thread'; id: string } | { kind: 'new'; team: Team } | null>(null)
+  // Arriving from "Talk to Therapist/Dietitian" opens the chat itself on phones; Back shows the list.
+  const [mobileShowChat, setMobileShowChat] = useState(true)
+  const [messages, setMessages] = useState<ThreadMessage[]>([])
   const [loadingThread, setLoadingThread] = useState(false)
+  const [pending, setPending] = useState<Pending[]>([])
+  const [draft, setDraft] = useState('')
+  const [notice, setNotice] = useState<string | null>(null)
+  const [filter, setFilter] = useState<Filter>('all')
+  const [query, setQuery] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [seen, setSeen] = useState<Record<string, string>>({})
   const [announcement, setAnnouncement] = useState('')
-  const listRef = useRef<HTMLDivElement>(null)
-  const stickToBottom = useRef(true)
-  const seenIds = useRef(new Set<string>())
-  const draftId = useId()
+  const activeIdRef = useRef<string | null>(null)
 
-  const active = threads?.find((t) => t.id === activeId) ?? null
-  const canWrite = composingNew || !active || active.status === 'open'
+  const activeChat = active?.kind === 'thread' ? (chats?.find((c) => c.id === active.id) ?? null) : null
+  const activeTeam: Team | null = active?.kind === 'new' ? active.team : (activeChat?.team ?? null)
+  activeIdRef.current = active?.kind === 'thread' ? active.id : null
 
-  // First load: the newest open conversation, else the newest one, else a blank composer.
+  /* ----- loading ----- */
+
+  const refreshChats = useCallback(async () => {
+    const list = await listMyChats(supabase)
+    setChats(list)
+    setLoadError(null)
+    return list
+  }, [supabase])
+
+  // First load: open the route team's newest open conversation, else start a new one with that team.
   useEffect(() => {
-    trackProgress(getMyThreads(team))
-      .then((res) => {
-        if (!res.ok) return setLoadError(res.error)
-        setThreads(res.data)
-        const first = res.data.find((t) => t.status === 'open') ?? res.data[0]
-        if (first) setActiveId(first.id)
-        else setComposingNew(true)
+    setSeen(readSeen())
+    trackProgress(refreshChats())
+      .then((list) => {
+        const mine = list.filter((c) => c.team === routeTeam)
+        const first = mine.find((c) => c.status === 'open') ?? mine[0]
+        setActive(first ? { kind: 'thread', id: first.id } : { kind: 'new', team: routeTeam })
       })
       .catch((e) => setLoadError(errorMessage(e)))
-  }, [team])
+  }, [refreshChats, routeTeam])
 
-  /** Loads (or refreshes) the active thread. Announces new staff replies to screen readers. */
-  const refresh = useCallback(
-    async (opts: { initial?: boolean } = {}) => {
-      if (!activeId) return
-      if (opts.initial) setLoadingThread(true)
-      try {
-        const res = await (opts.initial ? trackProgress(getThreadMessages(activeId)) : getThreadMessages(activeId))
-        if (!res.ok) return opts.initial ? setLoadError(res.error) : undefined
-        setLoadError(null)
-        setThreads((ts) => ts?.map((t) => (t.id === res.data.thread.id ? res.data.thread : t)) ?? ts)
-        const fresh = res.data.messages.filter((m) => !seenIds.current.has(m.id) && m.sender_role === 'therapist')
-        if (!opts.initial && fresh.length) {
-          setAnnouncement(fresh.length === 1 ? `New reply from your ${info.label.toLowerCase()}.` : `${fresh.length} new replies from your ${info.label.toLowerCase()}.`)
-        }
-        seenIds.current = new Set(res.data.messages.map((m) => m.id))
-        setMessages(res.data.messages)
-      } catch {
-        // A failed poll is retried on the next tick; keep what's on screen.
-      } finally {
-        if (opts.initial) setLoadingThread(false)
-      }
-    },
-    [activeId, info.label],
-  )
+  // The chat list (other conversations' previews) refreshes in the background.
+  usePolling(() => refreshChats().catch(() => {}), 30_000, chats !== null)
 
+  // Load the open conversation.
   useEffect(() => {
     setMessages([])
-    setPending([])
-    seenIds.current = new Set()
-    stickToBottom.current = true
-    if (activeId) refresh({ initial: true })
-  }, [activeId, refresh])
+    if (active?.kind !== 'thread') return
+    const id = active.id
+    setLoadingThread(true)
+    trackProgress(loadMessages(supabase, id))
+      // Merge rather than replace: a message sent while this was loading must stay.
+      .then((list) => {
+        if (activeIdRef.current === id) setMessages((cur) => mergeMessages(list, cur))
+      })
+      .catch((e) => setNotice(errorMessage(e)))
+      .finally(() => setLoadingThread(false))
+  }, [active, supabase])
 
-  usePolling(() => refresh(), POLL_MS, Boolean(activeId) && !composingNew)
+  // Poll the open conversation for replies: fast while active, slower when quiet.
+  const { bump } = useLivePolling(async () => {
+    const id = activeIdRef.current
+    if (!id) return
+    const newest = messages[messages.length - 1]?.created_at ?? null
+    const { messages: fresh, status } = await pollThread(supabase, id, newest)
+    if (activeIdRef.current !== id) return
+    const known = new Set(messages.map((m) => m.id))
+    const replies = fresh.filter((m) => !known.has(m.id) && m.sender_role === 'therapist')
+    if (fresh.some((m) => !known.has(m.id))) setMessages((cur) => mergeMessages(cur, fresh))
+    if (replies.length) {
+      bump()
+      const label = activeChat ? TEAMS[activeChat.team].label.toLowerCase() : 'wellness team'
+      setAnnouncement(replies.length === 1 ? `New reply from your ${label}.` : `${replies.length} new replies from your ${label}.`)
+    }
+    if (status && activeChat && status !== activeChat.status) setChats((cs) => cs?.map((c) => (c.id === id ? { ...c, status } : c)) ?? cs)
+  }, active?.kind === 'thread')
 
-  // Keep the newest message in view unless the user has scrolled up to read.
+  // Keep the list preview and "seen" marker in step with the open conversation.
   useEffect(() => {
-    const el = listRef.current
-    if (el && stickToBottom.current) el.scrollTop = el.scrollHeight
-  }, [messages, pending])
+    const id = activeIdRef.current
+    const last = messages[messages.length - 1]
+    if (!id || !last) return
+    setChats((cs) => cs?.map((c) => (c.id === id && c.last?.created_at !== last.created_at ? { ...c, last: { sender_role: last.sender_role, content: last.content, created_at: last.created_at } } : c)) ?? cs)
+    setSeen((s) => {
+      if (s[id] === last.created_at) return s
+      const next = { ...s, [id]: last.created_at }
+      try {
+        localStorage.setItem(SEEN_KEY, JSON.stringify(next))
+      } catch {
+        /* per-device convenience only */
+      }
+      return next
+    })
+  }, [messages])
 
-  function onScroll() {
-    const el = listRef.current
-    if (el) stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  /* ----- actions ----- */
+
+  function open(next: typeof active) {
+    setActive(next)
+    setMobileShowChat(true)
+    setNotice(null)
+    setDraft('')
+    setMenuOpen(false)
+    const team = next?.kind === 'new' ? next.team : chats?.find((c) => next?.kind === 'thread' && c.id === next.id)?.team
+    if (team && team !== routeTeam) window.history.replaceState(null, '', TEAMS[team].inboxPath)
   }
 
-  async function deliver(item: Pending) {
-    setPending((p) => p.map((x) => (x.key === item.key ? { ...x, status: 'sending', error: undefined } : x)))
-    const drop = () => setPending((p) => p.filter((x) => x.key !== item.key))
-    const fail = (error: string) => setPending((p) => p.map((x) => (x.key === item.key ? { ...x, status: 'failed', error } : x)))
-
+  async function deliver(p: Pending) {
+    setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, state: 'sending', error: undefined } : x)))
     try {
-      if (composingNew || !activeId) {
-        const res = await startThread(item.content, team)
-        if (res.ok) {
-          setThreads((ts) => [res.data.thread, ...(ts ?? [])])
-          setComposingNew(false)
-          setActiveId(res.data.thread.id) // loads the new thread, including this first message
-          return
-        }
-        if ('thread' in res) {
-          // The conversation opened but the message didn't save: retry into that thread.
-          setThreads((ts) => [res.thread, ...(ts ?? [])])
-          setComposingNew(false)
-          setActiveId(res.thread.id)
-          setDraft(item.content)
-          setSendError(`Your message wasn’t sent: ${res.error} It’s back in the box below; try again.`)
-          return drop()
-        }
-        return fail(res.error)
+      let threadId = p.threadId
+      if (!threadId) {
+        // First message of a new conversation: open it, then send.
+        const thread = await startChat(supabase, p.team)
+        threadId = thread.id
+        setChats((cs) => [{ ...thread, last: null }, ...(cs ?? [])])
+        setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, threadId } : x)))
+        setActive({ kind: 'thread', id: thread.id })
       }
-      const res = await sendMessage(item.content, activeId)
-      if (!res.ok) return fail(res.error)
-      drop()
-      seenIds.current.add(res.data.id)
-      setMessages((m) => (m.some((x) => x.id === res.data.id) ? m : [...m, res.data]))
+      const saved = await sendUserMessage(supabase, threadId, p.content)
+      setPending((ps) => ps.filter((x) => x.key !== p.key))
+      if (activeIdRef.current === threadId) setMessages((cur) => mergeMessages(cur, [saved]))
+      bump()
     } catch (e) {
-      fail(errorMessage(e, 'Couldn’t reach the server. Check your connection.'))
+      setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, state: 'failed', error: errorMessage(e) } : x)))
     }
   }
 
-  function onSubmit(e?: FormEvent) {
-    e?.preventDefault()
-    setSendError(null)
+  function send() {
+    if (!activeTeam) return
     const parsed = validateMessage(draft)
-    if (!parsed.ok) return setSendError(parsed.error)
-    const item: Pending = { key: `p-${Date.now()}`, content: parsed.value, status: 'sending' }
-    setPending((p) => [...p, item])
+    if (!parsed.ok) return setNotice(parsed.error)
+    setNotice(null)
+    const p: Pending = {
+      key: `p-${Date.now()}`,
+      threadId: active?.kind === 'thread' ? active.id : null,
+      team: activeTeam,
+      content: parsed.value,
+      createdAt: new Date().toISOString(),
+      state: 'sending',
+    }
+    setPending((ps) => [...ps, p])
     setDraft('')
-    stickToBottom.current = true
-    deliver(item)
+    deliver(p)
   }
 
-  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    // Enter adds a new line (these are letters, not chat); Ctrl/⌘ + Enter sends.
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSubmit()
-  }
+  /* ----- view ----- */
 
-  function newConversation() {
-    setComposingNew(true)
-    setActiveId(null)
-    setMessages([])
-    setPending([])
-    setSendError(null)
-  }
+  const visibleChats = (chats ?? []).filter((c) => {
+    if (filter !== 'all' && c.team !== filter) return false
+    const q = query.trim().toLowerCase()
+    return !q || TEAMS[c.team].label.toLowerCase().includes(q) || (c.last?.content.toLowerCase().includes(q) ?? false)
+  })
 
-  if (loadError && threads === null) {
-    return (
-      <div className="space-y-4">
-        <Disclaimer team={team} />
-        <p role="alert" className="notice-error">{loadError}</p>
-      </div>
-    )
-  }
+  const threadId = active?.kind === 'thread' ? active.id : null
+  const views: ChatMessageView[] = [
+    ...messages.map((m) => ({ id: m.id, mine: m.sender_role === 'user', content: m.content, createdAt: m.created_at, state: 'sent' as const })),
+    ...pending
+      .filter((p) => (threadId ? p.threadId === threadId : active?.kind === 'new' && !p.threadId && p.team === activeTeam))
+      .map((p) => ({ id: p.key, mine: true, content: p.content, createdAt: p.createdAt, state: p.state, error: p.error, onRetry: () => deliver(p) })),
+  ]
+  const closed = activeChat?.status === 'closed'
+  const look = activeTeam ? TEAM_LOOK[activeTeam] : null
 
-  const sending = pending.some((p) => p.status === 'sending')
-  const remaining = MAX_MESSAGE_LENGTH - draft.trim().length
-  // Day separators between messages.
-  let lastDay = ''
-
-  return (
-    <div className="space-y-4">
-      <Disclaimer team={team} />
-
-      <section aria-label="Conversation" className="flex flex-col overflow-hidden rounded-3xl bg-white ring-1 ring-line">
-        {/* Conversation picker and "new" */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
-          {threads && threads.length > 0 && !composingNew ? (
-            <label className="flex min-w-0 items-center gap-2 text-sm">
-              <span className="font-bold">Conversation</span>
-              <select
-                value={activeId ?? ''}
-                onChange={(e) => setActiveId(e.target.value)}
-                className="min-w-0 rounded-xl border border-line bg-white px-2 py-1.5 text-sm font-semibold text-ink"
-              >
-                {threads.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {threadLabel(t)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <p className="text-sm font-bold">{threads === null ? 'Loading…' : 'New conversation'}</p>
-          )}
-          {threads && threads.length > 0 && !composingNew && (
-            <button type="button" onClick={newConversation} className="btn-secondary px-3.5 py-2 text-xs">
-              <PenSquare className="h-3.5 w-3.5" aria-hidden /> New conversation
-            </button>
-          )}
-          {composingNew && threads && threads.length > 0 && (
-            <button type="button" onClick={() => { setComposingNew(false); setActiveId(threads[0].id) }} className="text-sm font-bold text-muted underline-offset-2 hover:text-ink hover:underline">
-              Back to conversations
-            </button>
-          )}
-        </div>
-
-        {/* Messages */}
-        <div ref={listRef} onScroll={onScroll} className="h-[min(56vh,520px)] min-h-[280px] overflow-y-auto bg-mist/40 px-3 py-4 sm:px-5" aria-busy={loadingThread}>
-          {threads === null || loadingThread ? (
-            <div className="space-y-3" aria-label="Loading messages">
-              <div className="ml-auto h-12 w-2/3 animate-pulse rounded-3xl bg-white/80" />
-              <div className="h-16 w-3/4 animate-pulse rounded-3xl bg-white/80" />
-            </div>
-          ) : messages.length === 0 && pending.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center px-4 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl" style={{ background: `${info.accent}26`, color: info.accent }}>
-                <MessageCircleHeart className="h-6 w-6" aria-hidden />
-              </span>
-              <p className="mt-3 font-display text-lg font-extrabold">Write to a {info.label.toLowerCase()}</p>
-              <p className="mt-1 max-w-sm text-sm text-muted">
-                {info.intro}
-              </p>
-            </div>
-          ) : (
-            <ol className="space-y-3">
-              {messages.map((m) => {
-                const day = dayLabel(m.created_at)
-                const separator = day !== lastDay
-                lastDay = day
-                return (
-                  <li key={m.id}>
-                    {separator && <p className="my-3 text-center text-xs font-bold text-muted">{day}</p>}
-                    <Bubble side={m.sender_role === 'user' ? 'mine' : 'theirs'} label={m.sender_role === 'user' ? 'You' : info.label} accent={info.accent} meta={<time dateTime={m.created_at}>{timeLabel(m.created_at)}</time>}>
-                      {m.content}
-                    </Bubble>
+  const sidebar = (
+    <>
+      <ChatListHeader
+        title="Chats"
+        actions={
+          <div className="relative">
+            <ChatIconButton label="New chat" onClick={() => setMenuOpen((o) => !o)}>
+              <MessageSquarePlus className="h-5 w-5" aria-hidden />
+            </ChatIconButton>
+            {menuOpen && (
+              <ul role="menu" className="absolute right-0 top-11 z-20 w-56 overflow-hidden rounded-lg bg-white py-2 shadow-xl ring-1 ring-black/5">
+                {(Object.keys(TEAMS) as Team[]).map((t) => (
+                  <li key={t}>
+                    <button type="button" role="menuitem" onClick={() => open({ kind: 'new', team: t })} className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-[#F5F6F6]">
+                      <ChatAvatar color={TEAM_LOOK[t].color} icon={TEAM_LOOK[t].icon} size="sm" />
+                      New chat with {TEAMS[t].label.toLowerCase()}
+                    </button>
                   </li>
-                )
-              })}
-              {pending.map((p) => (
-                <li key={p.key}>
-                    <Bubble
-                      side="mine"
-                      label="You"
-                      meta={
-                        p.status === 'sending' ? (
-                          <span className="inline-flex items-center gap-1">
-                            <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> Sending…
-                          </span>
-                        ) : (
-                          <span className="inline-flex flex-wrap items-center justify-end gap-x-2 font-semibold text-alert" role="alert">
-                            Not sent{p.error ? `: ${p.error}` : ''}
-                            <button type="button" onClick={() => deliver(p)} className="inline-flex items-center gap-1 underline underline-offset-2">
-                              <RotateCw className="h-3 w-3" aria-hidden /> Retry
-                            </button>
-                          </span>
-                        )
-                      }
-                    >
-                      {p.content}
-                    </Bubble>
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
+                ))}
+              </ul>
+            )}
+          </div>
+        }
+      />
+      <ChatSearch value={query} onChange={setQuery} placeholder="Search chats" />
+      <ChatFilters<Filter>
+        value={filter}
+        onChange={setFilter}
+        options={[
+          { id: 'all', label: 'All' },
+          { id: 'therapist', label: 'Therapist' },
+          { id: 'dietitian', label: 'Dietitian' },
+        ]}
+      />
+      <ul className="flex-1 overflow-y-auto" aria-label="Your conversations">
+        {chats === null ? (
+          Array.from({ length: 3 }, (_, i) => (
+            <li key={i} className="flex items-center gap-3 px-3 py-3">
+              <span className="h-12 w-12 rounded-full bg-[#F0F2F5] motion-safe:animate-pulse" />
+              <span className="flex-1 space-y-2">
+                <span className="block h-3.5 w-24 rounded bg-[#F0F2F5] motion-safe:animate-pulse" />
+                <span className="block h-3 w-40 rounded bg-[#F0F2F5] motion-safe:animate-pulse" />
+              </span>
+            </li>
+          ))
+        ) : visibleChats.length === 0 ? (
+          <li className="px-6 py-10 text-center text-sm text-[#54656F]">{query ? 'No chats match your search.' : 'No conversations yet. Start one with the button above.'}</li>
+        ) : (
+          visibleChats.map((c) => {
+            const unread = !!c.last && c.last.sender_role === 'therapist' && (!seen[c.id] || seen[c.id] < c.last.created_at) && threadId !== c.id
+            return (
+              <ChatListItem
+                key={c.id}
+                active={threadId === c.id}
+                onClick={() => open({ kind: 'thread', id: c.id })}
+                avatar={<ChatAvatar color={TEAM_LOOK[c.team].color} icon={TEAM_LOOK[c.team].icon} />}
+                title={TEAMS[c.team].label}
+                time={listTime(c.last?.created_at ?? c.created_at)}
+                preview={
+                  <>
+                    {c.status === 'closed' && <span className="font-semibold">Closed · </span>}
+                    {c.last ? `${c.last.sender_role === 'user' ? 'You: ' : ''}${c.last.content}` : 'No messages yet'}
+                  </>
+                }
+                badge={unread ? <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#25D366] ring-2 ring-white" aria-label="New reply" /> : undefined}
+              />
+            )
+          })
+        )}
+      </ul>
+    </>
+  )
+
+  const main =
+    !active || !activeTeam || !look ? (
+      <ChatPlaceholder icon={MessageCircleHeart} title="OmniWell Messages">
+        Choose a chat on the left, or start a new one with a therapist or dietitian.
+      </ChatPlaceholder>
+    ) : (
+      <>
+        <ChatHeader
+          onBack={() => setMobileShowChat(false)}
+          avatar={<ChatAvatar color={look.color} icon={look.icon} size="sm" />}
+          title={TEAMS[activeTeam].label}
+          subtitle={closed ? 'Conversation closed' : 'OmniWell wellness team · replies within 24 business hours'}
+          actions={
+            WELLNESS_BY_ID.eap.phone ? (
+              <ChatIconButton label={`Call the EAP on ${WELLNESS_BY_ID.eap.phone}`} href={telHref(WELLNESS_BY_ID.eap.phone)}>
+                <Phone className="h-5 w-5" aria-hidden />
+              </ChatIconButton>
+            ) : undefined
+          }
+        />
+        <MessageList
+          messages={views}
+          loading={loadingThread}
+          notice={<Disclaimer team={activeTeam} />}
+          empty={
+            <div className="mx-auto mt-6 max-w-sm rounded-lg bg-white/90 px-4 py-3 text-center text-sm text-[#3B4A54] shadow-sm">
+              <p className="font-semibold">Write to a {TEAMS[activeTeam].label.toLowerCase()}</p>
+              <p className="mt-1">{TEAMS[activeTeam].intro}</p>
+            </div>
+          }
+        />
         <p className="sr-only" aria-live="polite">
           {announcement}
         </p>
-
-        {/* Composer, or a closed-thread notice */}
-        {canWrite ? (
-          <form onSubmit={onSubmit} className="border-t border-line p-3 sm:p-4">
-            <label htmlFor={draftId} className="sr-only">
-              Your message
-            </label>
-            <textarea
-              id={draftId}
-              rows={3}
-              value={draft}
-              onChange={(e) => {
-                setDraft(e.target.value)
-                setSendError(null)
-              }}
-              onKeyDown={onKeyDown}
-              maxLength={MAX_MESSAGE_LENGTH + 200}
-              placeholder="Write your message…"
-              disabled={threads === null}
-              className="input min-h-[88px] resize-y"
-            />
-            {sendError && (
-              <p role="alert" className="notice-error mt-2">
-                {sendError}
-              </p>
-            )}
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <p className="text-xs text-muted">
-                {remaining < 300 ? (
-                  <span className={remaining < 0 ? 'font-bold text-alert' : ''}>{remaining.toLocaleString()} characters left</span>
-                ) : (
-                  <span className="hidden sm:inline">Press Ctrl + Enter to send</span>
-                )}
-              </p>
-              <button type="submit" disabled={threads === null || !draft.trim() || remaining < 0 || sending} className="btn-primary px-5 py-2.5">
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Send className="h-4 w-4" aria-hidden />}
-                Send
-              </button>
-            </div>
-          </form>
-        ) : (
-          <div className="flex flex-col gap-3 border-t border-line p-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted">This conversation has been closed. You can still read it.</p>
-            <button type="button" onClick={newConversation} className="btn-primary shrink-0 px-4 py-2.5">
-              <PenSquare className="h-4 w-4" aria-hidden /> Start a new conversation
+        {notice && (
+          <p role="alert" className="shrink-0 bg-[#FDECEA] px-4 py-2 text-sm font-semibold text-[#8C1D13]">
+            {notice}
+          </p>
+        )}
+        {closed ? (
+          <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 px-4 py-3 text-sm text-[#54656F]" style={{ background: '#F0F2F5' }}>
+            This conversation has been closed. You can still read it.
+            <button type="button" onClick={() => open({ kind: 'new', team: activeTeam })} className="inline-flex items-center gap-1.5 rounded-full bg-[#008069] px-4 py-2 font-semibold text-white">
+              <PenSquare className="h-4 w-4" aria-hidden /> Start a new chat
             </button>
           </div>
+        ) : (
+          <Composer value={draft} onChange={(v) => { setDraft(v); bump() }} onSend={send} maxLength={MAX_MESSAGE_LENGTH} disabled={chats === null} />
         )}
-      </section>
+      </>
+    )
 
-      {WELLNESS_BY_ID.eap.phone && (
-        <p className="flex items-center gap-2 text-sm text-muted">
-          <Phone className="h-4 w-4 shrink-0" aria-hidden />
-          <span>
-            Prefer to talk? Call the EAP on{' '}
-            <a href={telHref(WELLNESS_BY_ID.eap.phone)} className="font-bold text-ink underline underline-offset-2">
-              {WELLNESS_BY_ID.eap.phone}
-            </a>
-            .
-          </span>
-        </p>
-      )}
-    </div>
+  if (loadError && chats === null) {
+    return <p role="alert" className="notice-error">{loadError}</p>
+  }
+
+  return (
+    <ChatFrame
+      sidebar={sidebar}
+      main={main}
+      showMain={mobileShowChat}
+      // Phones: full screen above the bottom navigation (58px + safe area), like the WhatsApp app.
+      // Larger screens: a card filling the page, like WhatsApp Web.
+      className="fixed inset-x-0 top-0 bottom-[calc(3.625rem+env(safe-area-inset-bottom))] z-30 max-md:rounded-none max-md:shadow-none max-md:ring-0 md:static md:h-[calc(100dvh-5rem)] md:min-h-[480px]"
+    />
   )
 }

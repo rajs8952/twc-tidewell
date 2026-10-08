@@ -1,7 +1,5 @@
 import type { Metadata } from 'next'
-import { MessageCircleHeart } from 'lucide-react'
 import { notFound } from 'next/navigation'
-import { PageHeader } from '@/components/PageHeader'
 import { SecureInbox } from '@/components/messages/SecureInbox'
 import { TEAMS, isTeam } from '@/lib/messages'
 
@@ -12,19 +10,17 @@ export function generateMetadata({ params }: { params: { team: string } }): Meta
   return { title: isTeam(params.team) ? `Talk to ${TEAMS[params.team].label}` : 'Messages' }
 }
 
-/** One inbox per wellness team: /messages/therapist and /messages/dietitian. */
+/**
+ * The secure inbox, opened on one team's chat: /messages/therapist or
+ * /messages/dietitian. The chat window fills the page like WhatsApp Web,
+ * with both teams' conversations in its list.
+ */
 export default function TeamMessagesPage({ params }: { params: { team: string } }) {
   if (!isTeam(params.team)) notFound()
-  const info = TEAMS[params.team]
   return (
-    <div className="mx-auto max-w-3xl">
-      <PageHeader
-        title={`Talk to ${info.label}`}
-        description={`Write to a ${info.label.toLowerCase()} from your company’s wellness team.`}
-        icon={MessageCircleHeart}
-        accent={info.accent}
-      />
+    <>
+      <h1 className="sr-only">Talk to {TEAMS[params.team].label}</h1>
       <SecureInbox key={params.team} team={params.team} />
-    </div>
+    </>
   )
 }
