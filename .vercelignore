@@ -1,0 +1,8 @@
+# Deploys upload from the repo root (Vercel's Root Directory is apps/web).
+# These patterns match at any depth. Never upload local secrets.
+.env*.local
+node_modules
+.next
+.turbo
+.claude
+**/public/sw*.js
