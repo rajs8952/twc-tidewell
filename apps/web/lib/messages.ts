@@ -10,7 +10,15 @@ export type { ActionResult } from '@rajs8952/core/types'
 
 /** 'therapist' here means "wellness staff"; the thread's team says which kind. */
 export type SenderRole = 'user' | 'therapist'
-export type ThreadStatus = 'open' | 'closed'
+/**
+ * Thread status. The Sticky Queue (supabase/sticky-queue.sql) uses
+ * unassigned / in_progress / resolved; before it's run, threads are
+ * open / closed. The app understands both.
+ */
+export type ThreadStatus = 'unassigned' | 'in_progress' | 'resolved' | 'open' | 'closed'
+
+/** Whether a conversation can still receive messages. */
+export const isOpenStatus = (s: ThreadStatus | null | undefined) => s !== 'resolved' && s !== 'closed'
 
 /** Which wellness team a conversation is with. Each team only sees its own. */
 export type Team = 'therapist' | 'dietitian'
@@ -92,6 +100,8 @@ export interface QueueItem {
   thread_id: string
   team: Team
   status: ThreadStatus
+  /** The coach working on it (Sticky Queue); absent before supabase/sticky-queue.sql. */
+  assigned_coach_id?: string | null
   created_at: string
   user_id: string
   user_name: string
@@ -116,6 +126,8 @@ export type ChatImageType = keyof typeof CHAT_IMAGE_TYPES
 export const CHAT_IMAGE_MAX_BYTES = 3.5 * 1024 * 1024
 /** Longest side, in pixels, photos are scaled down to before uploading. */
 export const CHAT_IMAGE_MAX_SIDE = 1600
+/** What compression aims for: small enough to send quickly on mobile data, still sharp on a phone. */
+export const CHAT_IMAGE_TARGET_BYTES = 300 * 1024
 /** How long a signed viewing link lasts. */
 export const CHAT_IMAGE_LINK_SECONDS = 60 * 60
 

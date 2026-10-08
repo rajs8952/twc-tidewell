@@ -21,9 +21,9 @@ import {
 } from '@/components/chat/ChatUI'
 import { uploadChatImage } from '@/app/actions/chat-media'
 import { errorMessage } from '@rajs8952/core/errors'
-import { ChatImageError, prepareChatImage } from '@/lib/chat-image'
-import { loadQueue, loadStaffMessages, mergeMessages, myUserId, pollStaffThread, sendStaffReply, setChatStatus } from '@/lib/chat-data'
-import { MAX_MESSAGE_LENGTH, PHOTO_PREVIEW, REPLY_TARGET_HOURS, TEAMS, validateMessage, type QueueItem, type StaffThreadMessage, type Team } from '@/lib/messages'
+import { ChatImageError, formatBytes, prepareChatImage } from '@/lib/chat-image'
+import { loadQueue, loadStaffMessages, mergeMessages, myUserId, pollStaffThread, sendStaffReply, setChatResolved } from '@/lib/chat-data'
+import { MAX_MESSAGE_LENGTH, PHOTO_PREVIEW, REPLY_TARGET_HOURS, TEAMS, isOpenStatus, validateMessage, type QueueItem, type StaffThreadMessage, type Team } from '@/lib/messages'
 import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
 import { usePolling } from '@/lib/usePolling'
@@ -69,7 +69,7 @@ function listTime(iso: string) {
 
 /** Where a conversation stands, in words plus colour (never colour alone). */
 function StatusBadge({ item }: { item: QueueItem }) {
-  if (item.status === 'closed') {
+  if (!isOpenStatus(item.status)) {
     return (
       <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[#54656F]">
         <Lock className="h-3 w-3" aria-hidden /> Closed
@@ -116,7 +116,7 @@ export function TherapistPortal({ team }: { team: Team }) {
   const [loadingThread, setLoadingThread] = useState(false)
   const [pending, setPending] = useState<Pending[]>([])
   const [draft, setDraft] = useState('')
-  const [attachment, setAttachment] = useState<{ blob: Blob; previewUrl: string } | { preparing: true } | null>(null)
+  const [attachment, setAttachment] = useState<{ blob: Blob; previewUrl: string; note: string } | { preparing: true } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [statusBusy, setStatusBusy] = useState(false)
   const [me, setMe] = useState<string | null>(null)
@@ -233,7 +233,7 @@ export function TherapistPortal({ team }: { team: Team }) {
     setAttachment({ preparing: true })
     try {
       const img = await prepareChatImage(file)
-      setAttachment({ blob: img.blob, previewUrl: img.previewUrl })
+      setAttachment({ blob: img.blob, previewUrl: img.previewUrl, note: `Compressed: ${formatBytes(img.originalBytes)} → ${formatBytes(img.blob.size)}` })
       bump()
     } catch (e) {
       setAttachment(null)
@@ -256,11 +256,11 @@ export function TherapistPortal({ team }: { team: Team }) {
 
   async function toggleStatus() {
     if (!item) return
-    const next = item.status === 'open' ? 'closed' : 'open'
-    if (next === 'closed' && !window.confirm(`Close this conversation with ${item.user_name}? They can still read it and can start a new one.`)) return
+    const resolve = isOpenStatus(item.status)
+    if (resolve && !window.confirm(`Close this conversation with ${item.user_name}? They can still read it and can start a new one.`)) return
     setStatusBusy(true)
     try {
-      patchItem(item.thread_id, { status: await setChatStatus(supabase, item.thread_id, next) })
+      patchItem(item.thread_id, { status: await setChatResolved(supabase, item.thread_id, resolve) })
     } catch (e) {
       setNotice(errorMessage(e))
     } finally {
@@ -271,13 +271,13 @@ export function TherapistPortal({ team }: { team: Team }) {
   /* ----- view ----- */
 
   const counts = {
-    waiting: queue?.filter((q) => q.status === 'open' && q.waiting_since).length ?? 0,
-    open: queue?.filter((q) => q.status === 'open').length ?? 0,
-    closed: queue?.filter((q) => q.status === 'closed').length ?? 0,
+    waiting: queue?.filter((q) => isOpenStatus(q.status) && q.waiting_since).length ?? 0,
+    open: queue?.filter((q) => isOpenStatus(q.status)).length ?? 0,
+    closed: queue?.filter((q) => !isOpenStatus(q.status)).length ?? 0,
   }
   const q = query.trim().toLowerCase()
   const shown = (queue ?? []).filter((x) => {
-    const inFilter = filter === 'closed' ? x.status === 'closed' : x.status === 'open' && (filter === 'open' || x.waiting_since)
+    const inFilter = filter === 'closed' ? !isOpenStatus(x.status) : isOpenStatus(x.status) && (filter === 'open' || x.waiting_since)
     return inFilter && (!q || x.user_name.toLowerCase().includes(q) || (x.user_email ?? '').toLowerCase().includes(q) || (x.last_message ?? '').toLowerCase().includes(q))
   })
 
@@ -354,7 +354,7 @@ export function TherapistPortal({ team }: { team: Team }) {
     </>
   )
 
-  const open = item?.status === 'open'
+  const open = !!item && isOpenStatus(item.status)
   const main = !activeId ? (
     <ChatPlaceholder icon={Inbox} title={`${label} inbox`}>
       Choose a conversation on the left. The longest-waiting are at the top of <strong>Waiting</strong>. Reply target: {REPLY_TARGET_HOURS} business hours.
@@ -411,7 +411,7 @@ export function TherapistPortal({ team }: { team: Team }) {
           disabled={!item}
           onAttach={attach}
           onRemoveAttachment={clearAttachment}
-          attachment={attachment ? ('previewUrl' in attachment ? { previewUrl: attachment.previewUrl } : { previewUrl: '', preparing: true }) : null}
+          attachment={attachment ? ('previewUrl' in attachment ? { previewUrl: attachment.previewUrl, note: attachment.note } : { previewUrl: '', preparing: true }) : null}
         />
       )}
     </>

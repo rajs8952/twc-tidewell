@@ -20,10 +20,10 @@ import {
 } from '@/components/chat/ChatUI'
 import { uploadChatImage } from '@/app/actions/chat-media'
 import { errorMessage } from '@rajs8952/core/errors'
-import { ChatImageError, prepareChatImage } from '@/lib/chat-image'
+import { ChatImageError, formatBytes, prepareChatImage } from '@/lib/chat-image'
 import { storageKey } from '@/lib/brand'
 import { listMyChats, loadMessages, mergeMessages, pollThread, sendUserMessage, startChat, type ChatSummary } from '@/lib/chat-data'
-import { MAX_MESSAGE_LENGTH, PHOTO_PREVIEW, TEAMS, validateMessage, type Team, type ThreadMessage } from '@/lib/messages'
+import { MAX_MESSAGE_LENGTH, PHOTO_PREVIEW, TEAMS, isOpenStatus, validateMessage, type Team, type ThreadMessage } from '@/lib/messages'
 import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
 import { usePolling } from '@/lib/usePolling'
@@ -113,7 +113,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
   const [loadingThread, setLoadingThread] = useState(false)
   const [pending, setPending] = useState<Pending[]>([])
   const [draft, setDraft] = useState('')
-  const [attachment, setAttachment] = useState<{ blob: Blob; previewUrl: string } | { preparing: true } | null>(null)
+  const [attachment, setAttachment] = useState<{ blob: Blob; previewUrl: string; note: string } | { preparing: true } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
@@ -144,7 +144,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
     trackProgress(refreshChats())
       .then((list) => {
         const mine = list.filter((c) => c.team === routeTeam)
-        const first = mine.find((c) => c.status === 'open') ?? mine[0]
+        const first = mine.find((c) => isOpenStatus(c.status)) ?? mine[0]
         setActive(first ? { kind: 'thread', id: first.id } : { kind: 'new', team: routeTeam })
       })
       .catch((e) => setLoadError(errorMessage(e)))
@@ -264,7 +264,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
     setAttachment({ preparing: true })
     try {
       const img = await prepareChatImage(file)
-      setAttachment({ blob: img.blob, previewUrl: img.previewUrl })
+      setAttachment({ blob: img.blob, previewUrl: img.previewUrl, note: `Compressed: ${formatBytes(img.originalBytes)} → ${formatBytes(img.blob.size)}` })
       bump()
     } catch (e) {
       setAttachment(null)
@@ -315,7 +315,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
       .filter((p) => (threadId ? p.threadId === threadId : active?.kind === 'new' && !p.threadId && p.team === activeTeam))
       .map((p) => ({ id: p.key, mine: true, content: p.content, createdAt: p.createdAt, state: p.state, error: p.error, onRetry: () => deliver(p), image: p.image ? { src: p.image.previewUrl } : undefined })),
   ]
-  const closed = activeChat?.status === 'closed'
+  const closed = !!activeChat && !isOpenStatus(activeChat.status)
   const look = activeTeam ? TEAM_LOOK[activeTeam] : null
 
   const sidebar = (
@@ -378,7 +378,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
                 time={listTime(c.last?.created_at ?? c.created_at)}
                 preview={
                   <>
-                    {c.status === 'closed' && <span className="font-semibold">Closed · </span>}
+                    {!isOpenStatus(c.status) && <span className="font-semibold">Closed · </span>}
                     {c.last ? `${c.last.sender_role === 'user' ? 'You: ' : ''}${c.last.media_url ? (c.last.content ? `📷 ${c.last.content}` : PHOTO_PREVIEW) : c.last.content}` : 'No messages yet'}
                   </>
                 }
@@ -449,7 +449,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
             disabled={chats === null}
             onAttach={attach}
             onRemoveAttachment={clearAttachment}
-            attachment={attachment ? ('previewUrl' in attachment ? { previewUrl: attachment.previewUrl } : { previewUrl: '', preparing: true }) : null}
+            attachment={attachment ? ('previewUrl' in attachment ? { previewUrl: attachment.previewUrl, note: attachment.note } : { previewUrl: '', preparing: true }) : null}
           />
         )}
       </>

@@ -163,8 +163,16 @@ export async function sendStaffReply(supabase: SupabaseClient, threadId: string,
   return data
 }
 
-export async function setChatStatus(supabase: SupabaseClient, threadId: string, status: ThreadStatus): Promise<ThreadStatus> {
-  const { data, error } = await supabase.from('therapist_threads').update({ status }).eq('id', threadId).select('status').maybeSingle<{ status: ThreadStatus }>()
+/**
+ * Resolves (closes) or reopens a conversation. Uses set_thread_resolved()
+ * from supabase/sticky-queue.sql, which reopens to in_progress or the
+ * unassigned pool; before that's installed, falls back to open/closed.
+ */
+export async function setChatResolved(supabase: SupabaseClient, threadId: string, resolved: boolean): Promise<ThreadStatus> {
+  const rpc = await supabase.rpc('set_thread_resolved', { p_thread: threadId, p_resolved: resolved })
+  if (!rpc.error) return rpc.data as ThreadStatus
+  if (rpc.error.code !== 'PGRST202') fail(rpc.error, 'send')
+  const { data, error } = await supabase.from('therapist_threads').update({ status: resolved ? 'closed' : 'open' }).eq('id', threadId).select('status').maybeSingle<{ status: ThreadStatus }>()
   if (error) fail(error, 'send')
   if (!data) throw new ChatError('That conversation wasn’t found.')
   return data.status

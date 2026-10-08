@@ -468,7 +468,7 @@ export function Composer({
   maxLength: number
   footer?: ReactNode
   /** A chosen image waiting to be sent (its text becomes the optional caption). */
-  attachment?: { previewUrl: string; preparing?: boolean } | null
+  attachment?: { previewUrl: string; preparing?: boolean; note?: string } | null
   /** Enables the attach button; called with the picked (or pasted) file. */
   onAttach?: (file: File) => void
   onRemoveAttachment?: () => void
@@ -521,7 +521,14 @@ export function Composer({
             )}
           </span>
           <span className="min-w-0 flex-1 text-sm" style={{ color: C.meta }}>
-            {attachment.preparing ? 'Preparing image…' : 'Image ready. Add a caption if you like, then send.'}
+            {attachment.preparing ? (
+              'Compressing image…'
+            ) : (
+              <>
+                {attachment.note && <span className="block font-semibold text-[#0A5C4A]">{attachment.note}</span>}
+                Add a caption if you like, then send.
+              </>
+            )}
           </span>
           {onRemoveAttachment && (
             <button type="button" onClick={onRemoveAttachment} className="rounded-full p-2 hover:bg-black/5" style={{ color: C.meta }} aria-label="Remove image">
