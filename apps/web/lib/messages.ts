@@ -114,6 +114,15 @@ export interface QueueItem {
   waiting_since: string | null
 }
 
+/** A coach's routing settings (coach_profiles). current_load is kept by the database. */
+export interface CoachProfile {
+  user_id: string
+  category: Team
+  is_accepting_new: boolean
+  max_capacity: number
+  current_load: number
+}
+
 /** The reply-time promise shown to employees, in hours. */
 export const REPLY_TARGET_HOURS = 24
 

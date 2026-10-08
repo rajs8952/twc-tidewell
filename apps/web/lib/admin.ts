@@ -34,11 +34,16 @@ export interface AdminUser {
   role: AppRole
   /** Coaches only: their team. */
   team: Team | null
+  /** Coaches only: conversations in progress, the most they take on, and whether new chats route straight to them. */
+  coach: { load: number; max: number; accepting: boolean } | null
   created_at: string
   last_sign_in_at: string | null
   email_confirmed: boolean
   deactivated: boolean
 }
+
+/** Mirrors the CHECK on coach_profiles.max_capacity. */
+export const COACH_CAPACITY_MAX = 500
 
 export const PASSWORD_MIN = 8
 /** Supabase (bcrypt) ignores anything past 72 bytes; refuse rather than silently truncate. */

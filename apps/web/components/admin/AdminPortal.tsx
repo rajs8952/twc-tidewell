@@ -1,6 +1,6 @@
 'use client'
 
-import { Ban, KeyRound, RotateCw, Search, ShieldCheck, UserCog, UserPlus, Users, UserCheck } from 'lucide-react'
+import { Ban, Gauge, KeyRound, RotateCw, Search, ShieldCheck, UserCog, UserPlus, Users, UserCheck } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { adminGetUsers } from '@/app/actions/admin'
 import { errorMessage } from '@rajs8952/core/errors'
@@ -8,7 +8,7 @@ import type { AdminUser, AppRole } from '@/lib/admin'
 import { TEAMS } from '@/lib/messages'
 import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
-import { ActivationDialog, AddUserDialog, ROLE_LABEL, ResetPasswordDialog, RoleDialog } from './UserDialogs'
+import { ActivationDialog, AddUserDialog, CapacityDialog, ROLE_LABEL, ResetPasswordDialog, RoleDialog } from './UserDialogs'
 
 /* ------------------------------------------------------------------
  * Admin portal: everyone's account, role and status, with add user,
@@ -38,6 +38,19 @@ function RoleBadge({ user }: { user: AdminUser }) {
   )
 }
 
+/** A coach's load against capacity, with "not accepting new" when they've paused direct routing. */
+function LoadNote({ user }: { user: AdminUser }) {
+  if (user.role !== 'coach' || !user.coach) return null
+  const { load, max, accepting } = user.coach
+  return (
+    <p className="mt-1 text-xs text-muted">
+      Load <span className="tabular-nums font-semibold text-ink">{load} / {max}</span>
+      {load >= max && <span className="font-semibold text-alert"> · Full</span>}
+      {!accepting && ' · Not accepting new'}
+    </p>
+  )
+}
+
 function StatusBadge({ user }: { user: AdminUser }) {
   if (user.deactivated) return <span className="inline-flex items-center gap-1 rounded-full bg-alert/10 px-2.5 py-0.5 text-xs font-bold text-alert"><Ban className="h-3 w-3" aria-hidden />Deactivated</span>
   if (!user.email_confirmed) return <span className="inline-flex rounded-full bg-[#FFF1D6] px-2.5 py-0.5 text-xs font-bold text-[#8A5A00]">Unconfirmed</span>
@@ -55,7 +68,7 @@ function Initials({ user }: { user: AdminUser }) {
 }
 
 /** The row's actions as small labelled buttons (no hidden menus, easy to reach by keyboard). */
-function RowActions({ user, isMe, onRole, onPassword, onActivation }: { user: AdminUser; isMe: boolean; onRole: () => void; onPassword: () => void; onActivation: () => void }) {
+function RowActions({ user, isMe, onRole, onPassword, onActivation, onCapacity }: { user: AdminUser; isMe: boolean; onRole: () => void; onPassword: () => void; onActivation: () => void; onCapacity: () => void }) {
   const btn = 'inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold ring-1 ring-line transition hover:bg-mist'
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -65,6 +78,11 @@ function RowActions({ user, isMe, onRole, onPassword, onActivation }: { user: Ad
       <button type="button" onClick={onPassword} className={btn} aria-label={`Reset password for ${user.full_name || user.email}`}>
         <KeyRound className="h-3.5 w-3.5" aria-hidden /> Password
       </button>
+      {user.role === 'coach' && user.coach && (
+        <button type="button" onClick={onCapacity} className={btn} aria-label={`Change capacity for ${user.full_name || user.email}`}>
+          <Gauge className="h-3.5 w-3.5" aria-hidden /> Capacity
+        </button>
+      )}
       {!isMe && (
         <button
           type="button"
@@ -89,6 +107,7 @@ export function AdminPortal() {
   const [roleFor, setRoleFor] = useState<AdminUser | null>(null)
   const [passwordFor, setPasswordFor] = useState<AdminUser | null>(null)
   const [activationFor, setActivationFor] = useState<AdminUser | null>(null)
+  const [capacityFor, setCapacityFor] = useState<AdminUser | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [me, setMe] = useState<string | null>(null)
 
@@ -244,12 +263,12 @@ export function AdminPortal() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3"><RoleBadge user={u} /></td>
+                    <td className="px-4 py-3"><RoleBadge user={u} /><LoadNote user={u} /></td>
                     <td className="px-4 py-3"><StatusBadge user={u} /></td>
                     <td className="whitespace-nowrap px-4 py-3 text-muted">{dateLabel(u.created_at)}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-muted">{dateLabel(u.last_sign_in_at)}</td>
                     <td className="px-4 py-3">
-                      <RowActions user={u} isMe={u.id === me} onRole={() => setRoleFor(u)} onPassword={() => setPasswordFor(u)} onActivation={() => setActivationFor(u)} />
+                      <RowActions user={u} isMe={u.id === me} onRole={() => setRoleFor(u)} onPassword={() => setPasswordFor(u)} onActivation={() => setActivationFor(u)} onCapacity={() => setCapacityFor(u)} />
                     </td>
                   </tr>
                 ))}
@@ -271,12 +290,13 @@ export function AdminPortal() {
                         <RoleBadge user={u} />
                         <StatusBadge user={u} />
                       </div>
+                      <LoadNote user={u} />
                       <p className="mt-1.5 text-xs text-muted">
                         Joined {dateLabel(u.created_at)} · Last login {dateLabel(u.last_sign_in_at)}
                       </p>
                     </div>
                   </div>
-                  <RowActions user={u} isMe={u.id === me} onRole={() => setRoleFor(u)} onPassword={() => setPasswordFor(u)} onActivation={() => setActivationFor(u)} />
+                  <RowActions user={u} isMe={u.id === me} onRole={() => setRoleFor(u)} onPassword={() => setPasswordFor(u)} onActivation={() => setActivationFor(u)} onCapacity={() => setCapacityFor(u)} />
                 </li>
               ))}
             </ul>
@@ -295,6 +315,7 @@ export function AdminPortal() {
       />
       <RoleDialog user={roleFor} onClose={() => setRoleFor(null)} onDone={(u, msg) => { replace(u); setToast(msg) }} />
       <ResetPasswordDialog user={passwordFor} onClose={() => setPasswordFor(null)} onDone={setToast} />
+      <CapacityDialog user={capacityFor} onClose={() => setCapacityFor(null)} onDone={(u, msg) => { replace(u); setToast(msg) }} />
       <ActivationDialog user={activationFor} onClose={() => setActivationFor(null)} onDone={(u, msg) => { replace(u); setToast(msg) }} />
 
       {toast && (

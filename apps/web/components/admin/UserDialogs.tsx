@@ -2,9 +2,9 @@
 
 import { Check, Copy, Eye, EyeOff, Loader2, Wand2 } from 'lucide-react'
 import { useId, useState, type ReactNode } from 'react'
-import { adminCreateUser, adminDeactivateUser, adminReactivateUser, adminSetUserRole, adminUpdateUserPassword } from '@/app/actions/admin'
+import { adminCreateUser, adminDeactivateUser, adminReactivateUser, adminSetCoachCapacity, adminSetUserRole, adminUpdateUserPassword } from '@/app/actions/admin'
 import { ACTIVITY_LEVELS, GENDERS, type Activity, type Gender } from '@rajs8952/core/hydration'
-import { PASSWORD_MAX, PASSWORD_MIN, validateNewUser, validatePassword, type AdminUser, type AppRole } from '@/lib/admin'
+import { COACH_CAPACITY_MAX, PASSWORD_MAX, PASSWORD_MIN, validateNewUser, validatePassword, type AdminUser, type AppRole } from '@/lib/admin'
 import { TEAMS, type Team } from '@/lib/messages'
 import { Dialog } from './Dialog'
 
@@ -440,6 +440,85 @@ export function ActivationDialog({ user, onClose, onDone }: { user: AdminUser | 
       ) : (
         <p className="text-sm text-ink/80">They’ll be able to log in again with their existing password. Reminders resume once they turn notifications back on.</p>
       )}
+      <ErrorNote error={error} />
+    </Dialog>
+  )
+}
+
+/** How many conversations a coach takes on at once (Sticky Queue). */
+export function CapacityDialog({ user, onClose, onDone }: { user: AdminUser | null; onClose: () => void; onDone: (u: AdminUser, msg: string) => void }) {
+  const id = useId()
+  const [value, setValue] = useState('')
+  const [forId, setForId] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (user && forId !== user.id) {
+    setForId(user.id)
+    setValue(String(user.coach?.max ?? 10))
+    setError(null)
+  }
+
+  const n = Number(value)
+  const valid = value.trim() !== '' && Number.isInteger(n) && n >= 0 && n <= COACH_CAPACITY_MAX
+  const load = user?.coach?.load ?? 0
+
+  async function submit() {
+    if (!user?.coach) return
+    if (!valid) return setError(`Enter a whole number from 0 to ${COACH_CAPACITY_MAX}.`)
+    setBusy(true)
+    try {
+      const res = await adminSetCoachCapacity(user.id, n)
+      if (!res.ok) return setError(res.error)
+      onDone({ ...user, coach: { ...user.coach, max: n } }, `${user.full_name || user.email} can now take up to ${n} conversation${n === 1 ? '' : 's'} at once.`)
+      setForId(null)
+      onClose()
+    } catch {
+      setError('Couldn’t reach the server. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open={!!user}
+      busy={busy}
+      onClose={() => {
+        setForId(null)
+        onClose()
+      }}
+      title="Coach capacity"
+      description={user ? <>For <strong className="text-ink">{user.full_name || user.email}</strong>{user.team ? ` · ${TEAMS[user.team].label}` : ''}</> : null}
+      footer={
+        <>
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button type="button" className="btn-primary" onClick={submit} disabled={busy || !valid || n === user?.coach?.max}>
+            {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+            Save capacity
+          </button>
+        </>
+      }
+    >
+      <Field label="Most conversations at once" htmlFor={id} hint={`Currently working on ${load}. New chats beyond this wait in the pool for another coach.`}>
+        <input
+          id={id}
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={COACH_CAPACITY_MAX}
+          step={1}
+          className="input w-32"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value)
+            setError(null)
+          }}
+        />
+      </Field>
+      {valid && n < load && <p className="mt-3 text-sm text-muted">That’s below their current {load}. They keep those conversations but can’t claim more until they’re under {n}.</p>}
       <ErrorNote error={error} />
     </Dialog>
   )

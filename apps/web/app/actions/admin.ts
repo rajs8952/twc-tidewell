@@ -2,7 +2,7 @@
 
 import { birthYearFromAge } from '@rajs8952/core/biometrics'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { isAppRole, validateNewUser, validatePassword, type ActionResult, type AdminProfileDetails, type AdminUser, type AppRole } from '@/lib/admin'
+import { COACH_CAPACITY_MAX, isAppRole, validateNewUser, validatePassword, type ActionResult, type AdminProfileDetails, type AdminUser, type AppRole } from '@/lib/admin'
 import { isTeam, type Team } from '@/lib/messages'
 import { SIGNED_OUT, isUuid, signedIn } from '@/lib/supabase/actions'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -119,6 +119,8 @@ export async function adminCreateUser(email: string, password: string, role: App
       full_name: profile.full_name,
       role: parsed.value.role,
       team: parsed.value.role === 'coach' ? (profile.coach_team ?? null) : null,
+      // A new coach starts with the database defaults (sticky-queue.sql).
+      coach: parsed.value.role === 'coach' ? { load: 0, max: 10, accepting: true } : null,
       created_at: user.created_at,
       last_sign_in_at: null,
       email_confirmed: true,
@@ -158,6 +160,27 @@ export async function adminSetUserRole(userId: string, role: AppRole, team?: Tea
     return { ok: false, error: (e as Error).message }
   }
   audit(ctx, 'set role', userId, role === 'coach' ? `coach/${team}` : role)
+  return { ok: true, data: null }
+}
+
+/* ---------- Coach capacity (Sticky Queue) ---------- */
+
+/**
+ * Sets the most conversations a coach takes on at once. Lowering it below
+ * their current load is allowed: they keep those chats but can't claim more.
+ */
+export async function adminSetCoachCapacity(userId: string, maxCapacity: number): Promise<ActionResult<null>> {
+  if (!isUuid(userId)) return { ok: false, error: 'Unknown user.' }
+  if (!Number.isInteger(maxCapacity) || maxCapacity < 0 || maxCapacity > COACH_CAPACITY_MAX) {
+    return { ok: false, error: `Capacity must be a whole number from 0 to ${COACH_CAPACITY_MAX}.` }
+  }
+  const ctx = await requireAdmin()
+  if ('error' in ctx) return { ok: false, error: ctx.error }
+
+  const { data, error } = await ctx.admin.from('coach_profiles').update({ max_capacity: maxCapacity }).eq('user_id', userId).select('user_id').maybeSingle()
+  if (error) return { ok: false, error: error.code === 'PGRST205' ? 'Coach capacity isn’t set up yet. Run supabase/sticky-queue.sql first.' : error.message }
+  if (!data) return { ok: false, error: 'That account isn’t a coach.' }
+  audit(ctx, 'set capacity', userId, String(maxCapacity))
   return { ok: true, data: null }
 }
 
@@ -224,17 +247,23 @@ export async function adminGetUsers(): Promise<ActionResult<AdminUser[]>> {
   const roles = new Map<string, AppRole>()
   const names = new Map<string, string>()
   const teams = new Map<string, Team>()
+  const coaches = new Map<string, AdminUser['coach']>()
   for (let i = 0; i < users.length; i += ID_CHUNK) {
     const ids = users.slice(i, i + ID_CHUNK).map((u) => u.id)
-    const [r, p, t] = await Promise.all([
+    const [r, p, t, c] = await Promise.all([
       admin.from('user_roles').select('user_id, role').in('user_id', ids),
       admin.from('profiles').select('id, full_name').in('id', ids),
       admin.from('therapists').select('user_id, team').in('user_id', ids),
+      admin.from('coach_profiles').select('user_id, current_load, max_capacity, is_accepting_new').in('user_id', ids),
     ])
     if (r.error || p.error || t.error) return { ok: false, error: (r.error ?? p.error ?? t.error)!.message }
     for (const x of r.data as { user_id: string; role: AppRole }[]) roles.set(x.user_id, x.role)
     for (const x of p.data as { id: string; full_name: string }[]) names.set(x.id, x.full_name)
     for (const x of t.data as { user_id: string; team: Team }[]) teams.set(x.user_id, x.team)
+    // Optional: absent before supabase/sticky-queue.sql.
+    for (const x of (c.data ?? []) as { user_id: string; current_load: number; max_capacity: number; is_accepting_new: boolean }[]) {
+      coaches.set(x.user_id, { load: x.current_load, max: x.max_capacity, accepting: x.is_accepting_new })
+    }
   }
 
   const now = Date.now()
@@ -247,6 +276,7 @@ export async function adminGetUsers(): Promise<ActionResult<AdminUser[]>> {
         full_name: names.get(u.id) ?? '',
         role: roles.get(u.id) ?? 'user',
         team: teams.get(u.id) ?? null,
+        coach: coaches.get(u.id) ?? null,
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at ?? null,
         email_confirmed: !!u.email_confirmed_at,

@@ -6,9 +6,9 @@ import {
   MESSAGE_COLUMNS,
   STAFF_MESSAGE_COLUMNS,
   THREAD_COLUMNS,
+  type CoachProfile,
   type QueueItem,
   type StaffThreadMessage,
-  type Team,
   type TherapistThread,
   type ThreadMessage,
   type ThreadStatus,
@@ -117,13 +117,6 @@ export async function sendUserMessage(supabase: SupabaseClient, threadId: string
   return data
 }
 
-/** Opens a conversation with a team. */
-export async function startChat(supabase: SupabaseClient, team: Team): Promise<TherapistThread> {
-  const { data, error } = await supabase.from('therapist_threads').insert({ team }).select(THREAD_COLUMNS).single<TherapistThread>()
-  if (error) fail(error, 'send')
-  return data
-}
-
 /* ---------- Staff (therapists and dietitians) ---------- */
 
 /** The caller's team queue (therapist_queue() only returns their own team). */
@@ -176,6 +169,28 @@ export async function setChatResolved(supabase: SupabaseClient, threadId: string
   if (error) fail(error, 'send')
   if (!data) throw new ChatError('That conversation wasn’t found.')
   return data.status
+}
+
+/* ---------- Coach capacity (supabase/sticky-queue.sql) ---------- */
+
+const COACH_COLUMNS = 'user_id, category, is_accepting_new, max_capacity, current_load'
+
+/** The signed-in coach's capacity settings and live load; null if they aren't a coach (or before sticky-queue.sql). */
+export async function loadMyCoachProfile(supabase: SupabaseClient): Promise<CoachProfile | null> {
+  const me = await myUserId(supabase)
+  if (!me) return null
+  const { data, error } = await supabase.from('coach_profiles').select(COACH_COLUMNS).eq('user_id', me).maybeSingle<CoachProfile>()
+  if (error) return null
+  return data
+}
+
+/** Turns "accepting new" on or off for the signed-in coach (row-level security limits it to their own row). */
+export async function setAcceptingNew(supabase: SupabaseClient, accepting: boolean): Promise<CoachProfile> {
+  const me = await myUserId(supabase)
+  const { data, error } = await supabase.from('coach_profiles').update({ is_accepting_new: accepting }).eq('user_id', me ?? '').select(COACH_COLUMNS).maybeSingle<CoachProfile>()
+  if (error) fail(error, 'send')
+  if (!data) throw new ChatError('Your coach profile wasn’t found.')
+  return data
 }
 
 /* ---------- Images ---------- */

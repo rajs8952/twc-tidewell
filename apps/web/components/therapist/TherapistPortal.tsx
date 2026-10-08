@@ -1,6 +1,6 @@
 'use client'
 
-import { CheckCheck, Clock, Inbox, Lock, LockOpen, Loader2, RotateCw } from 'lucide-react'
+import { CheckCheck, Clock, Hand, Inbox, Lock, LockOpen, Loader2, RotateCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChatAvatar,
@@ -20,10 +20,11 @@ import {
   type ChatMessageView,
 } from '@/components/chat/ChatUI'
 import { uploadChatImage } from '@/app/actions/chat-media'
+import { claimTicket } from '@/app/actions/routing'
 import { errorMessage } from '@rajs8952/core/errors'
 import { ChatImageError, formatBytes, prepareChatImage } from '@/lib/chat-image'
-import { loadQueue, loadStaffMessages, mergeMessages, myUserId, pollStaffThread, sendStaffReply, setChatResolved } from '@/lib/chat-data'
-import { MAX_MESSAGE_LENGTH, PHOTO_PREVIEW, REPLY_TARGET_HOURS, TEAMS, isOpenStatus, validateMessage, type QueueItem, type StaffThreadMessage, type Team } from '@/lib/messages'
+import { loadMyCoachProfile, loadQueue, loadStaffMessages, mergeMessages, myUserId, pollStaffThread, sendStaffReply, setAcceptingNew, setChatResolved } from '@/lib/chat-data'
+import { MAX_MESSAGE_LENGTH, PHOTO_PREVIEW, REPLY_TARGET_HOURS, TEAMS, isOpenStatus, validateMessage, type CoachProfile, type QueueItem, type StaffThreadMessage, type Team } from '@/lib/messages'
 import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
 import { usePolling } from '@/lib/usePolling'
@@ -33,7 +34,9 @@ import { useSignedImages } from '@/lib/useSignedImages'
 /* ------------------------------------------------------------------
  * Wellness-team portal (therapists or dietitians), laid out like
  * WhatsApp Web: the team's queue of employee conversations on the left,
- * the open conversation on the right. Row-level security only ever
+ * the open conversation on the right. Sticky Queue: "Mine" holds the
+ * coach's own conversations; "Pool" holds unassigned ones any coach of
+ * the team can claim, up to their capacity (app/actions/routing.ts). Row-level security only ever
  * returns the signed-in staff member's own team. No WebSockets: the
  * queue refreshes every 15 s and the open chat every few seconds while
  * active (lib/useLivePolling.ts); data goes straight to Supabase
@@ -41,7 +44,7 @@ import { useSignedImages } from '@/lib/useSignedImages'
  * ------------------------------------------------------------------ */
 
 const QUEUE_POLL_MS = 15_000
-type Filter = 'waiting' | 'open' | 'closed'
+type Filter = 'mine' | 'pool' | 'open' | 'closed'
 
 /** Avatar colours for employees' initials; all give white text 4.5:1 or more. */
 const AVATAR_COLORS = ['#6A55C9', '#1A6DB5', '#237A70', '#A85A0B', '#4A5BC4', '#B4345C']
@@ -76,6 +79,14 @@ function StatusBadge({ item }: { item: QueueItem }) {
       </span>
     )
   }
+  if (item.status === 'unassigned') {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#1A6DB5] px-2 py-0.5 text-[11px] font-bold text-white">
+        <Hand className="h-3 w-3" aria-hidden />
+        Unclaimed {waitLabel(item.created_at)}
+      </span>
+    )
+  }
   if (item.waiting_since) {
     const overdue = hoursSince(item.waiting_since) >= REPLY_TARGET_HOURS
     return (
@@ -90,6 +101,38 @@ function StatusBadge({ item }: { item: QueueItem }) {
     <span className="inline-flex shrink-0 items-center gap-0.5 text-xs font-semibold text-[#0A5C4A]">
       <CheckCheck className="h-3.5 w-3.5" aria-hidden /> Replied
     </span>
+  )
+}
+
+/** The coach's load against capacity, and their "accepting new" switch. */
+function CapacityBar({ coach, busy, onToggle }: { coach: CoachProfile; busy: boolean; onToggle: () => void }) {
+  const full = coach.current_load >= coach.max_capacity
+  const pct = coach.max_capacity ? Math.min(100, (coach.current_load / coach.max_capacity) * 100) : 100
+  return (
+    <div className="flex shrink-0 items-center gap-3 border-b border-[#E9EDEF] px-4 py-2 text-xs text-[#3B4A54]">
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold">
+          Your load <span className="tabular-nums">{coach.current_load} / {coach.max_capacity}</span>
+          {full && <span className="ml-1.5 text-[#8C1D13]">· Full</span>}
+        </p>
+        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#E9EDEF]" role="meter" aria-label="Conversations in progress" aria-valuemin={0} aria-valuemax={coach.max_capacity} aria-valuenow={coach.current_load}>
+          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: full ? '#C42B1C' : '#008069' }} />
+        </div>
+      </div>
+      <label className="flex shrink-0 cursor-pointer items-center gap-2 font-semibold" title="When off, returning employees' new chats go to the pool instead of straight to you.">
+        Accepting new
+        <button
+          type="button"
+          role="switch"
+          aria-checked={coach.is_accepting_new}
+          disabled={busy}
+          onClick={onToggle}
+          className={`relative h-5 w-9 rounded-full transition disabled:opacity-50 ${coach.is_accepting_new ? 'bg-[#008069]' : 'bg-[#8696A0]'}`}
+        >
+          <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${coach.is_accepting_new ? 'left-[18px]' : 'left-0.5'}`} />
+        </button>
+      </label>
+    </div>
   )
 }
 
@@ -109,7 +152,10 @@ export function TherapistPortal({ team }: { team: Team }) {
   const label = TEAMS[team].label
   const [queue, setQueue] = useState<QueueItem[] | null>(null)
   const [queueError, setQueueError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<Filter>('waiting')
+  const [filter, setFilter] = useState<Filter>('mine')
+  const [coach, setCoach] = useState<CoachProfile | null>(null)
+  const [coachBusy, setCoachBusy] = useState(false)
+  const [claiming, setClaiming] = useState(false)
   const [query, setQuery] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<StaffThreadMessage[]>([])
@@ -131,7 +177,9 @@ export function TherapistPortal({ team }: { team: Team }) {
 
   const refreshQueue = useCallback(async () => {
     try {
-      setQueue(await loadQueue(supabase))
+      const [list, profile] = await Promise.all([loadQueue(supabase), loadMyCoachProfile(supabase)])
+      setQueue(list)
+      setCoach(profile)
       setQueueError(null)
     } catch (e) {
       setQueueError(errorMessage(e))
@@ -254,6 +302,38 @@ export function TherapistPortal({ team }: { team: Team }) {
     deliver(p)
   }
 
+  /** Takes an unassigned conversation from the pool (race-safe in the database). */
+  async function claim() {
+    if (!item) return
+    setClaiming(true)
+    setNotice(null)
+    try {
+      const res = await claimTicket(item.thread_id)
+      if (!res.ok) {
+        setNotice(res.error)
+        await refreshQueue() // someone else may have taken it
+        return
+      }
+      patchItem(item.thread_id, { status: 'in_progress', assigned_coach_id: me })
+      setCoach(await loadMyCoachProfile(supabase))
+      setAnnouncement(`You claimed the conversation with ${item.user_name}.`)
+    } finally {
+      setClaiming(false)
+    }
+  }
+
+  async function toggleAccepting() {
+    if (!coach) return
+    setCoachBusy(true)
+    try {
+      setCoach(await setAcceptingNew(supabase, !coach.is_accepting_new))
+    } catch (e) {
+      setQueueError(errorMessage(e))
+    } finally {
+      setCoachBusy(false)
+    }
+  }
+
   async function toggleStatus() {
     if (!item) return
     const resolve = isOpenStatus(item.status)
@@ -261,6 +341,7 @@ export function TherapistPortal({ team }: { team: Team }) {
     setStatusBusy(true)
     try {
       patchItem(item.thread_id, { status: await setChatResolved(supabase, item.thread_id, resolve) })
+      setCoach(await loadMyCoachProfile(supabase)) // closing or reopening changes the load
     } catch (e) {
       setNotice(errorMessage(e))
     } finally {
@@ -270,16 +351,23 @@ export function TherapistPortal({ team }: { team: Team }) {
 
   /* ----- view ----- */
 
+  const isMine = (x: QueueItem) => isOpenStatus(x.status) && x.status !== 'unassigned' && x.assigned_coach_id === me
+  const inFilter: Record<Filter, (x: QueueItem) => boolean> = {
+    mine: isMine,
+    pool: (x) => x.status === 'unassigned',
+    open: (x) => isOpenStatus(x.status),
+    closed: (x) => !isOpenStatus(x.status),
+  }
   const counts = {
-    waiting: queue?.filter((q) => isOpenStatus(q.status) && q.waiting_since).length ?? 0,
-    open: queue?.filter((q) => isOpenStatus(q.status)).length ?? 0,
-    closed: queue?.filter((q) => !isOpenStatus(q.status)).length ?? 0,
+    mine: queue?.filter(isMine).length ?? 0,
+    pool: queue?.filter(inFilter.pool).length ?? 0,
+    open: queue?.filter(inFilter.open).length ?? 0,
+    closed: queue?.filter(inFilter.closed).length ?? 0,
   }
   const q = query.trim().toLowerCase()
-  const shown = (queue ?? []).filter((x) => {
-    const inFilter = filter === 'closed' ? !isOpenStatus(x.status) : isOpenStatus(x.status) && (filter === 'open' || x.waiting_since)
-    return inFilter && (!q || x.user_name.toLowerCase().includes(q) || (x.user_email ?? '').toLowerCase().includes(q) || (x.last_message ?? '').toLowerCase().includes(q))
-  })
+  const shown = (queue ?? []).filter((x) => inFilter[filter](x) && (!q || x.user_name.toLowerCase().includes(q) || (x.user_email ?? '').toLowerCase().includes(q) || (x.last_message ?? '').toLowerCase().includes(q)))
+  // The pool is first come, first served: oldest at the top.
+  if (filter === 'pool') shown.sort((a, b) => a.created_at.localeCompare(b.created_at))
 
   const colleague = `Another ${label.toLowerCase()}`
   const views: ChatMessageView[] = [
@@ -310,12 +398,14 @@ export function TherapistPortal({ team }: { team: Team }) {
           </ChatIconButton>
         }
       />
+      {coach && <CapacityBar coach={coach} busy={coachBusy} onToggle={toggleAccepting} />}
       <ChatSearch value={query} onChange={setQuery} placeholder="Search name, email or message" />
       <ChatFilters<Filter>
         value={filter}
         onChange={setFilter}
         options={[
-          { id: 'waiting', label: 'Waiting', count: counts.waiting },
+          { id: 'mine', label: 'Mine', count: counts.mine },
+          { id: 'pool', label: 'Pool', count: counts.pool },
           { id: 'open', label: 'All open', count: counts.open },
           { id: 'closed', label: 'Closed', count: counts.closed },
         ]}
@@ -334,7 +424,7 @@ export function TherapistPortal({ team }: { team: Team }) {
           ))
         ) : shown.length === 0 ? (
           <li className="px-6 py-10 text-center text-sm text-[#54656F]">
-            {q ? 'No conversations match your search.' : filter === 'waiting' ? 'Nobody is waiting for a reply.' : 'No conversations here.'}
+            {q ? 'No conversations match your search.' : filter === 'pool' ? 'The pool is empty. Nobody is waiting to be picked up.' : filter === 'mine' ? 'No conversations of yours are open. Claim one from the Pool.' : 'No conversations here.'}
           </li>
         ) : (
           shown.map((x) => (
@@ -355,9 +445,12 @@ export function TherapistPortal({ team }: { team: Team }) {
   )
 
   const open = !!item && isOpenStatus(item.status)
+  const unclaimed = item?.status === 'unassigned'
+  const full = !!coach && coach.current_load >= coach.max_capacity
+  const owner = !item || !open ? null : unclaimed ? `unclaimed for ${waitLabel(item.created_at)}` : item.assigned_coach_id && item.assigned_coach_id !== me ? `with ${colleague.toLowerCase()}` : null
   const main = !activeId ? (
     <ChatPlaceholder icon={Inbox} title={`${label} inbox`}>
-      Choose a conversation on the left. The longest-waiting are at the top of <strong>Waiting</strong>. Reply target: {REPLY_TARGET_HOURS} business hours.
+      <strong>Mine</strong> has your conversations, longest-waiting first. <strong>Pool</strong> has new ones nobody has claimed yet. Reply target: {REPLY_TARGET_HOURS} business hours.
     </ChatPlaceholder>
   ) : (
     <>
@@ -365,7 +458,7 @@ export function TherapistPortal({ team }: { team: Team }) {
         onBack={() => setActiveId(null)}
         avatar={item ? <ChatAvatar color={colorFor(item.user_id)} initials={initialsOf(item.user_name)} size="sm" /> : <ChatAvatar color="#54656F" initials="?" size="sm" />}
         title={item?.user_name ?? 'Conversation'}
-        subtitle={item ? `${item.user_email ?? ''}${item.user_email ? ' · ' : ''}${open ? (item.waiting_since ? `waiting ${waitLabel(item.waiting_since)}` : 'replied') : 'closed'}` : undefined}
+        subtitle={item ? [item.user_email, owner ?? (open ? (item.waiting_since ? `waiting ${waitLabel(item.waiting_since)}` : 'replied') : 'closed')].filter(Boolean).join(' · ') : undefined}
         actions={
           item && (
             <button
@@ -394,7 +487,24 @@ export function TherapistPortal({ team }: { team: Team }) {
           {notice}
         </p>
       )}
-      {item && !open ? (
+      {item && unclaimed ? (
+        <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 px-4 py-3 text-center text-sm text-[#3B4A54]" style={{ background: '#F0F2F5' }}>
+          <span>
+            {full
+              ? `You're at full capacity (${coach!.current_load} of ${coach!.max_capacity}). Close a conversation to claim more.`
+              : `Claim this to reply. It becomes yours, and ${item.user_name.split(' ')[0]}'s future ${label.toLowerCase()} chats come to you.`}
+          </span>
+          <button
+            type="button"
+            onClick={claim}
+            disabled={claiming || full}
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#008069] px-4 py-2 font-semibold text-white disabled:opacity-50"
+          >
+            {claiming ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Hand className="h-4 w-4" aria-hidden />}
+            Claim
+          </button>
+        </div>
+      ) : item && !open ? (
         <div className="shrink-0 px-4 py-3 text-center text-sm text-[#54656F]" style={{ background: '#F0F2F5' }}>
           This conversation is closed. Reopen it to reply.
         </div>

@@ -19,11 +19,12 @@ import {
   type ChatMessageView,
 } from '@/components/chat/ChatUI'
 import { uploadChatImage } from '@/app/actions/chat-media'
+import { submitUserQuery } from '@/app/actions/routing'
 import { errorMessage } from '@rajs8952/core/errors'
 import { ChatImageError, formatBytes, prepareChatImage } from '@/lib/chat-image'
 import { storageKey } from '@/lib/brand'
-import { listMyChats, loadMessages, mergeMessages, pollThread, sendUserMessage, startChat, type ChatSummary } from '@/lib/chat-data'
-import { MAX_MESSAGE_LENGTH, PHOTO_PREVIEW, TEAMS, isOpenStatus, validateMessage, type Team, type ThreadMessage } from '@/lib/messages'
+import { listMyChats, loadMessages, mergeMessages, pollThread, sendUserMessage, type ChatSummary } from '@/lib/chat-data'
+import { MAX_MESSAGE_LENGTH, PHOTO_PREVIEW, TEAMS, isOpenStatus, validateMessage, type Team, type ThreadMessage, type ThreadStatus } from '@/lib/messages'
 import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
 import { usePolling } from '@/lib/usePolling'
@@ -59,6 +60,8 @@ interface Pending {
   image?: { blob: Blob; previewUrl: string }
   /** Set once the image is uploaded, so a retry doesn't upload it twice. */
   imagePath?: string
+  /** A new chat's text went out with the query itself; only the image is left to send. */
+  textSent?: boolean
 }
 
 type Filter = 'all' | Team
@@ -79,6 +82,14 @@ function listTime(iso: string) {
   const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)
   if (d.toDateString() === yesterday.toDateString()) return 'Yesterday'
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+}
+
+/** What the employee sees about who has their chat (Sticky Queue routing). */
+function routingLine(team: Team, status: ThreadStatus) {
+  const who = TEAMS[team].label.toLowerCase()
+  if (status === 'unassigned') return `Waiting for the next available ${who}`
+  if (status === 'in_progress') return `With your ${who} · replies within 24 business hours`
+  return 'OmniWell wellness team · replies within 24 business hours'
 }
 
 function Disclaimer({ team }: { team: Team }) {
@@ -221,13 +232,23 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
     setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, state: 'sending', error: undefined } : x)))
     try {
       let threadId = p.threadId
+      let textSent = !!p.textSent
       if (!threadId) {
-        // First message of a new conversation: open it, then send.
-        const thread = await startChat(supabase, p.team)
-        threadId = thread.id
-        setChats((cs) => [{ ...thread, last: null }, ...(cs ?? [])])
-        setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, threadId } : x)))
-        setActive({ kind: 'thread', id: thread.id })
+        // First message of a new conversation: the routing engine opens it with this
+        // message, straight to the employee's previous coach if they have room, else
+        // into the team's pool (supabase/sticky-routing.sql).
+        const res = await submitUserQuery(p.team, p.content)
+        if (!res.ok) throw new Error(res.error)
+        const id = res.data.threadId
+        threadId = id
+        textSent = true
+        const now = new Date().toISOString()
+        setChats((cs) => [{ id, team: p.team, status: res.data.status, created_at: now, last: { sender_role: 'user', content: p.content, created_at: now, media_url: null } }, ...(cs ?? [])])
+        setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, threadId: id, textSent } : x)))
+        activeIdRef.current = id
+        setActive({ kind: 'thread', id })
+        const who = TEAMS[p.team].label.toLowerCase()
+        setAnnouncement(res.data.assignedToPreferredCoach ? `Sent to your ${who}.` : `Sent. The next available ${who} will pick this up.`)
       }
       // Upload the image first (once), then send the message pointing at it.
       let imagePath = p.imagePath
@@ -240,10 +261,11 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
         imagePath = up.data.path
         setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, imagePath } : x)))
       }
-      const saved = await sendUserMessage(supabase, threadId, p.content, imagePath)
+      // A new chat's text is already saved; its image (if any) follows as its own message.
+      const saved = textSent ? (imagePath ? [await sendUserMessage(supabase, threadId, '', imagePath)] : await loadMessages(supabase, threadId)) : [await sendUserMessage(supabase, threadId, p.content, imagePath)]
       if (p.image) URL.revokeObjectURL(p.image.previewUrl)
       setPending((ps) => ps.filter((x) => x.key !== p.key))
-      if (activeIdRef.current === threadId) setMessages((cur) => mergeMessages(cur, [saved]))
+      if (activeIdRef.current === threadId) setMessages((cur) => mergeMessages(cur, saved))
       bump()
     } catch (e) {
       setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, state: 'failed', error: errorMessage(e) } : x)))
@@ -275,8 +297,10 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
   function send() {
     if (!activeTeam) return
     const image = attachment && 'previewUrl' in attachment ? attachment : undefined
-    const parsed = validateMessage(draft, !!image)
-    if (!parsed.ok) return setNotice(parsed.error)
+    const isNew = active?.kind !== 'thread'
+    // A new chat starts with words, so the team knows what it's about; photos can follow.
+    const parsed = validateMessage(draft, !!image && !isNew)
+    if (!parsed.ok) return setNotice(isNew && image ? 'Add a short message to start the chat. Your photo will be sent with it.' : parsed.error)
     setNotice(null)
     const p: Pending = {
       key: `p-${Date.now()}`,
@@ -402,7 +426,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
           onBack={() => setMobileShowChat(false)}
           avatar={<ChatAvatar color={look.color} icon={look.icon} size="sm" />}
           title={TEAMS[activeTeam].label}
-          subtitle={closed ? 'Conversation closed' : 'OmniWell wellness team · replies within 24 business hours'}
+          subtitle={closed ? 'Conversation closed' : activeChat ? routingLine(activeTeam, activeChat.status) : 'OmniWell wellness team · replies within 24 business hours'}
           actions={
             WELLNESS_BY_ID.eap.phone ? (
               <ChatIconButton label={`Call the EAP on ${WELLNESS_BY_ID.eap.phone}`} href={telHref(WELLNESS_BY_ID.eap.phone)}>
