@@ -119,7 +119,7 @@ function CapacityBar({ coach, busy, onToggle }: { coach: CoachProfile; busy: boo
           <div className="h-full rounded-full" style={{ width: `${pct}%`, background: full ? '#C42B1C' : '#008069' }} />
         </div>
       </div>
-      <label className="flex shrink-0 cursor-pointer items-center gap-2 font-semibold" title="When off, returning employees' new chats go to the pool instead of straight to you.">
+      <label className="flex shrink-0 cursor-pointer items-center gap-2 font-semibold" title="When off, you get no new conversations: returning employees' new chats go to the pool, and you can't claim from it.">
         Accepting new
         <button
           type="button"
@@ -447,6 +447,7 @@ export function TherapistPortal({ team }: { team: Team }) {
   const open = !!item && isOpenStatus(item.status)
   const unclaimed = item?.status === 'unassigned'
   const full = !!coach && coach.current_load >= coach.max_capacity
+  const paused = !!coach && !coach.is_accepting_new
   const owner = !item || !open ? null : unclaimed ? `unclaimed for ${waitLabel(item.created_at)}` : item.assigned_coach_id && item.assigned_coach_id !== me ? `with ${colleague.toLowerCase()}` : null
   const main = !activeId ? (
     <ChatPlaceholder icon={Inbox} title={`${label} inbox`}>
@@ -490,14 +491,16 @@ export function TherapistPortal({ team }: { team: Team }) {
       {item && unclaimed ? (
         <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 px-4 py-3 text-center text-sm text-[#3B4A54]" style={{ background: '#F0F2F5' }}>
           <span>
-            {full
+            {paused
+              ? 'You’re not accepting new conversations. Switch on “Accepting new” to claim this.'
+              : full
               ? `You're at full capacity (${coach!.current_load} of ${coach!.max_capacity}). Close a conversation to claim more.`
               : `Claim this to reply. It becomes yours, and ${item.user_name.split(' ')[0]}'s future ${label.toLowerCase()} chats come to you.`}
           </span>
           <button
             type="button"
             onClick={claim}
-            disabled={claiming || full}
+            disabled={claiming || full || paused}
             className="inline-flex items-center gap-1.5 rounded-full bg-[#008069] px-4 py-2 font-semibold text-white disabled:opacity-50"
           >
             {claiming ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Hand className="h-4 w-4" aria-hidden />}

@@ -7,7 +7,8 @@
 --                                         their preferred coach if that coach has room
 --                                         and is accepting new, else to the pool
 --   unassigned_queue(category)            a coach's view of the pool, oldest first
---   claim_ticket(thread)                  a coach takes a query from the pool
+--   claim_ticket(thread)                  a coach takes a query from the pool (only while
+--                                         accepting new and below capacity)
 --
 -- They run as SECURITY DEFINER because routing must read coaches' capacity and
 -- assign coaches, which users can't do directly; each one checks the caller
@@ -120,6 +121,10 @@ begin
   select * into coach from public.coach_profiles c where c.user_id = me for update;
   if not found then
     raise exception 'Only coaches can claim queries.' using errcode = '42501';
+  end if;
+  -- "Accepting new" switched off: no new conversations at all, routed or claimed.
+  if not coach.is_accepting_new then
+    raise exception 'You''re not accepting new conversations. Switch "Accepting new" on to claim from the pool.' using errcode = '42501';
   end if;
   if coach.current_load >= coach.max_capacity then
     raise exception 'You''re at full capacity (% of %). Resolve a conversation first.', coach.current_load, coach.max_capacity using errcode = '23514';
