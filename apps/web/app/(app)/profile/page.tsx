@@ -4,6 +4,7 @@ import { Droplets, Loader2, Ruler, UserRound } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AvatarPicker } from '@/components/AvatarPicker'
 import { InstallCard } from '@/components/pwa/InstallCard'
+import { AdminCard } from '@/components/admin/AdminCard'
 import { NotificationSettings } from '@/components/notifications/NotificationSettings'
 import { ActivityPicker, GenderPicker, GoalPreview, HeightInput, WeightInput } from '@rajs8952/ui'
 import { BmiReadout } from '@rajs8952/tracker-bmi'
@@ -189,6 +190,7 @@ export default function ProfilePage() {
             </div>
           </ProfileSection>
 
+          <AdminCard />
           <InstallCard />
         </div>
 

@@ -1,12 +1,13 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { House, LayoutGrid, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react'
+import { House, LayoutGrid, ShieldCheck, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { Logo, LogoMark } from './Logo'
 import { BRAND } from '@/lib/brand'
+import { useMyRole } from '@/lib/useMyRole'
 import { BMI_TOOL, TRACKERS } from '@/lib/trackers'
 
 /* ------------------------------------------------------------------
@@ -21,6 +22,7 @@ import { BMI_TOOL, TRACKERS } from '@/lib/trackers'
 const HOME = { href: '/dashboard', label: 'Home', icon: House, accent: '#0F2F37' }
 const INSIGHTS = { href: '/insights', label: 'Insights', icon: Sparkles, accent: '#6A55C9' }
 const PROFILE = { href: '/profile', label: 'Profile', icon: UserRound, accent: '#0F2F37' }
+const ADMIN = { href: '/admin', label: 'Admin', icon: ShieldCheck, accent: '#0F2F37' }
 // The six trackers, then tools such as the BMI calculator (in the menu only, not on the Hub).
 const TRACKER_LINKS = [
   ...TRACKERS.map((t) => ({ href: t.href, label: t.name, icon: t.icon, accent: t.accent })),
@@ -66,6 +68,8 @@ function SideLink({ item, pathname }: { item: Item; pathname: string }) {
 }
 
 function Sidebar({ pathname }: { pathname: string }) {
+  // Admins get a link to the admin portal (which checks the role again on the server).
+  const role = useMyRole()
   return (
     <nav
       aria-label="Main"
@@ -91,6 +95,7 @@ function Sidebar({ pathname }: { pathname: string }) {
           <SideLink item={INSIGHTS} pathname={pathname} />
         </ul>
         <ul className="mt-auto space-y-1 pt-4">
+          {role === 'admin' && <SideLink item={ADMIN} pathname={pathname} />}
           <SideLink item={PROFILE} pathname={pathname} />
         </ul>
       </div>
