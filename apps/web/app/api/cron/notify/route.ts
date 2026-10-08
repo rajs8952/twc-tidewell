@@ -1,8 +1,8 @@
-import { createClient } from '@supabase/supabase-js'
 import { timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { reminderPayload, type TrackerType } from '@/lib/notifications'
 import { mapLimit, sendPush } from '@/lib/push-server'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 
 /* ------------------------------------------------------------------
  * Reminder delivery, called every 15 minutes by Supabase pg_cron
@@ -43,10 +43,8 @@ function authorized(req: Request) {
 export async function GET(req: Request) {
   if (!authorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !serviceKey) return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY is not configured.' }, { status: 500 })
-  const admin = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  const admin = supabaseAdmin()
+  if (!admin) return NextResponse.json({ error: 'SUPABASE_SERVICE_ROLE_KEY is not configured.' }, { status: 500 })
 
   const now = new Date()
   const { data, error } = await admin.rpc('claim_due_notifications', { p_now: now.toISOString(), p_window_minutes: WINDOW_MINUTES })
