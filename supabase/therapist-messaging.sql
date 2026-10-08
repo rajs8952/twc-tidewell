@@ -1,3 +1,6 @@
+-- ⚠️  SUPERSEDED BY sticky-queue.sql: once that has run, do NOT re-run this
+--     file. It would restore rules that use the old 'open'/'closed' statuses.
+--     (Fresh setup: run this, then the later files, in order.)
 -- ============================================================
 -- OmniWell "Chat with a therapist", phase 1: asynchronous secure
 -- messaging (an inbox, like a patient portal), not live chat.

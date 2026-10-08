@@ -1,3 +1,6 @@
+-- ⚠️  SUPERSEDED BY sticky-queue.sql: once that has run, do NOT re-run this
+--     file. It would restore rules that use the old 'open'/'closed' statuses.
+--     (Fresh setup: run this, then the later files, in order.)
 -- ============================================================
 -- OmniWell wellness-team portal: therapists and dietitians read the
 -- conversations for their team and reply.
