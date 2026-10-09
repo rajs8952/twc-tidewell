@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { myStaffTeam } from '@/app/actions/therapist'
 import { Logo } from '@/components/Logo'
 import { LogoutButton } from '@/components/profile/LogoutButton'
+import { CoachProfileButton } from './CoachProfileButton'
 import { NotificationBell } from './NotificationBell'
 import { TEAMS, type Team } from '@/lib/messages'
 
@@ -26,6 +27,7 @@ export async function StaffPortalShell({ team, children }: { team: Team; childre
           </div>
           <div className="flex items-center gap-2">
             {mine === team && <NotificationBell portalPath={info.portalPath} />}
+            {mine === team && <CoachProfileButton />}
             <LogoutButton compact />
           </div>
         </div>

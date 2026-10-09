@@ -50,7 +50,11 @@ async function applyRole(admin: SupabaseClient, userId: string, role: AppRole, t
   const { error } = await admin.from('user_roles').upsert({ user_id: userId, role }, { onConflict: 'user_id' })
   if (error) throw new Error(error.code === '23514' ? error.message : `Couldn’t save the role: ${error.message}`)
   if (role === 'coach') {
-    const { error: teamError } = await admin.from('therapists').upsert({ user_id: userId, team, display_name: displayName.slice(0, 120) }, { onConflict: 'user_id' })
+    // Keep a name the coach has chosen (My profile); only new coaches start from their profile name.
+    const { data: existing } = await admin.from('therapists').select('user_id').eq('user_id', userId).maybeSingle()
+    const { error: teamError } = existing
+      ? await admin.from('therapists').update({ team }).eq('user_id', userId)
+      : await admin.from('therapists').insert({ user_id: userId, team, display_name: displayName.slice(0, 120) })
     if (teamError) throw new Error(`Couldn’t set the coach’s team: ${teamError.message}`)
   } else {
     // No longer a coach: remove their access to the team's conversations.

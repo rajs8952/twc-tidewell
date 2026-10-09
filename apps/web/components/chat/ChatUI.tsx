@@ -59,11 +59,20 @@ export function ChatPlaceholder({ icon: Icon, title, children }: { icon: LucideI
 
 /* ---------- Avatars ---------- */
 
-export function ChatAvatar({ color, icon: Icon, initials, size = 'md' }: { color: string; icon?: LucideIcon; initials?: string; size?: 'sm' | 'md' }) {
+export function ChatAvatar({ color, icon: Icon, initials, size = 'md', src, online }: { color: string; icon?: LucideIcon; initials?: string; size?: 'sm' | 'md'; src?: string | null; online?: boolean }) {
   const box = size === 'sm' ? 'h-10 w-10 text-sm' : 'h-12 w-12 text-base'
   return (
-    <span className={`flex shrink-0 items-center justify-center rounded-full font-bold text-white ${box}`} style={{ background: color }} aria-hidden>
-      {Icon ? <Icon className={size === 'sm' ? 'h-5 w-5' : 'h-6 w-6'} /> : initials}
+    <span className={`relative flex shrink-0 ${box}`} aria-hidden>
+      {src ? (
+        // A coach's profile photo (public avatars bucket); a plain <img> keeps it simple and cacheable.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full rounded-full object-cover" loading="lazy" />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center rounded-full font-bold text-white" style={{ background: color }}>
+          {Icon ? <Icon className={size === 'sm' ? 'h-5 w-5' : 'h-6 w-6'} /> : initials}
+        </span>
+      )}
+      {online && <span className={`absolute bottom-0 right-0 rounded-full bg-[#25D366] ring-2 ring-white ${size === 'sm' ? 'h-2.5 w-2.5' : 'h-3 w-3'}`} />}
     </span>
   )
 }

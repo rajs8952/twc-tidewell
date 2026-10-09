@@ -59,8 +59,20 @@ export function mergeMessages<T extends ThreadMessage>(current: T[], incoming: T
 
 export interface ChatSummary extends TherapistThread {
   last: Pick<ThreadMessage, 'sender_role' | 'content' | 'created_at' | 'media_url'> | null
-  /** The assigned coach's display name; null while it's waiting in the pool. */
+  /** The assigned coach (null while it's waiting in the pool). */
   coach_name: string | null
+  coach_title?: string | null
+  coach_avatar_url?: string | null
+  /** Seen in the coach portal in the last couple of minutes. */
+  coach_online?: boolean
+}
+
+interface ChatCoach {
+  thread_id: string
+  coach_name: string
+  coach_title?: string
+  coach_avatar_url?: string | null
+  coach_online?: boolean
 }
 
 /* ---------- Receipts (supabase/chat-receipts-and-scoping.sql) ---------- */
@@ -90,7 +102,7 @@ export async function listMyChats(supabase: SupabaseClient): Promise<ChatSummary
   if (error) fail(error, 'load')
   if (!threads?.length) return []
   markDelivered(supabase)
-  const coachOf = new Map(((coaches.data ?? []) as { thread_id: string; coach_name: string }[]).map((c) => [c.thread_id, c.coach_name]))
+  const coachOf = new Map(((coaches.data ?? []) as ChatCoach[]).map((c) => [c.thread_id, c]))
   const { data: recent, error: msgError } = await supabase
     .from('thread_messages')
     .select('thread_id, sender_role, content, created_at, media_url')
@@ -102,7 +114,10 @@ export async function listMyChats(supabase: SupabaseClient): Promise<ChatSummary
   const last = new Map<string, ChatSummary['last']>()
   for (const m of recent ?? []) if (!last.has(m.thread_id)) last.set(m.thread_id, { sender_role: m.sender_role, content: m.content, created_at: m.created_at, media_url: m.media_url })
   return threads
-    .map((t) => ({ ...t, last: last.get(t.id) ?? null, coach_name: coachOf.get(t.id) ?? null }))
+    .map((t) => {
+      const c = coachOf.get(t.id)
+      return { ...t, last: last.get(t.id) ?? null, coach_name: c?.coach_name ?? null, coach_title: c?.coach_title || null, coach_avatar_url: c?.coach_avatar_url ?? null, coach_online: !!c?.coach_online }
+    })
     .sort((a, b) => (b.last?.created_at ?? b.created_at).localeCompare(a.last?.created_at ?? a.created_at))
 }
 
@@ -219,6 +234,35 @@ export async function setAcceptingNew(supabase: SupabaseClient, accepting: boole
   if (error) fail(error, 'send')
   if (!data) throw new ChatError('Your coach profile wasn’t found.')
   return data
+}
+
+/* ---------- Coach presence and profile (supabase/coach-profile-presence.sql) ---------- */
+
+/** "I'm here": keeps the coach shown as Online to their employees. */
+export function coachHeartbeat(supabase: SupabaseClient) {
+  supabase.rpc('coach_heartbeat').then(() => {}, () => {})
+}
+
+export interface MyCoachProfile {
+  display_name: string
+  title: string
+  avatar_url: string | null
+}
+
+export async function loadMyCoachCard(supabase: SupabaseClient): Promise<MyCoachProfile | null> {
+  const me = await myUserId(supabase)
+  if (!me) return null
+  const [th, p] = await Promise.all([
+    supabase.from('therapists').select('display_name, title').eq('user_id', me).maybeSingle<{ display_name: string; title: string }>(),
+    supabase.from('profiles').select('full_name, avatar_url').eq('id', me).maybeSingle<{ full_name: string; avatar_url: string | null }>(),
+  ])
+  if (!th.data) return null
+  return { display_name: th.data.display_name || p.data?.full_name || '', title: th.data.title ?? '', avatar_url: p.data?.avatar_url ?? null }
+}
+
+export async function saveMyCoachCard(supabase: SupabaseClient, displayName: string, title: string) {
+  const { error } = await supabase.rpc('update_my_coach_profile', { p_display_name: displayName, p_title: title })
+  if (error) throw new ChatError(error.code === 'PGRST202' ? 'Coach profiles aren’t set up yet.' : error.message)
 }
 
 /* ---------- Images ---------- */

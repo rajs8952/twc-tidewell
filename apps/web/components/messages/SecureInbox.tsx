@@ -419,7 +419,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
                 key={c.id}
                 active={threadId === c.id}
                 onClick={() => open({ kind: 'thread', id: c.id })}
-                avatar={<ChatAvatar color={TEAM_LOOK[c.team].color} icon={TEAM_LOOK[c.team].icon} />}
+                avatar={<ChatAvatar color={TEAM_LOOK[c.team].color} icon={TEAM_LOOK[c.team].icon} src={c.coach_avatar_url} online={c.coach_online && isOpenStatus(c.status)} />}
                 title={c.coach_name ?? TEAMS[c.team].label}
                 time={listTime(c.last?.created_at ?? c.created_at)}
                 preview={
@@ -446,9 +446,19 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
       <>
         <ChatHeader
           onBack={() => setMobileShowChat(false)}
-          avatar={<ChatAvatar color={look.color} icon={look.icon} size="sm" />}
+          avatar={<ChatAvatar color={look.color} icon={look.icon} size="sm" src={activeChat?.coach_avatar_url} online={!closed && activeChat?.coach_online} />}
           title={activeChat?.coach_name ?? TEAMS[activeTeam].label}
-          subtitle={closed ? 'Conversation closed' : activeChat ? routingLine(activeTeam, activeChat.status) : 'OmniWell wellness team · replies within 24 business hours'}
+          subtitle={
+            closed
+              ? 'Conversation closed'
+              : activeChat?.coach_online
+                ? <span className="font-semibold text-[#0A7C3E]">Online</span>
+                : activeChat?.coach_name
+                  ? [activeChat.coach_title || `Your ${TEAMS[activeTeam].label.toLowerCase()}`, 'replies within 24 business hours'].join(' · ')
+                  : activeChat
+                    ? routingLine(activeTeam, activeChat.status)
+                    : 'OmniWell wellness team · replies within 24 business hours'
+          }
           actions={
             WELLNESS_BY_ID.eap.phone ? (
               <ChatIconButton label={`Call the EAP on ${WELLNESS_BY_ID.eap.phone}`} href={telHref(WELLNESS_BY_ID.eap.phone)}>
