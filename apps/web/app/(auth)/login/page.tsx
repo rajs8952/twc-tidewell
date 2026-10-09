@@ -1,9 +1,10 @@
 'use client'
 
-import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, Loader2, MailCheck } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { requestPasswordReset } from '@/app/actions/password'
 import { AuthShell } from '@/components/AuthShell'
 import { flushPendingAvatar } from '@/lib/avatar'
 import { BRAND } from '@/lib/brand'
@@ -17,10 +18,12 @@ export default function LoginPage() {
   const [show, setShow] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** Logging in, asking for a reset link, or told the link is on its way. */
+  const [mode, setMode] = useState<'login' | 'forgot' | 'sent'>('login')
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('error') === 'confirm') {
-      setError('That confirmation link has expired or was already used. Log in, or sign up again for a new link.')
+      setError('That email link has expired or was already used. Log in, or ask for a new link.')
     }
   }, [])
 
@@ -46,6 +49,67 @@ export default function LoginPage() {
     router.refresh()
   }
 
+  async function onForgot(e: FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await requestPasswordReset(email)
+      if (!res.ok) return setError(res.error)
+      setMode('sent')
+    } catch {
+      setError('Couldn’t reach the server. Check your connection and try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function switchTo(next: typeof mode) {
+    setMode(next)
+    setError(null)
+  }
+
+  if (mode !== 'login') {
+    return (
+      <AuthShell>
+        <button type="button" onClick={() => switchTo('login')} className="flex w-fit items-center gap-1.5 text-sm font-bold text-tide-600 hover:underline">
+          <ArrowLeft className="h-4 w-4" aria-hidden /> Back to log in
+        </button>
+        {mode === 'sent' ? (
+          <div className="mt-6" role="status">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-tide-50 text-tide-600">
+              <MailCheck className="h-6 w-6" aria-hidden />
+            </span>
+            <h1 className="mt-4 text-3xl font-extrabold sm:text-4xl">Check your inbox</h1>
+            <p className="mt-2 text-muted">
+              If <strong className="text-ink">{email.trim()}</strong> has a {BRAND.name} account, we’ve sent it a link to choose a new password. It works once and expires in an hour.
+            </p>
+            <p className="mt-4 text-sm text-muted">No email after a few minutes? Check your spam folder, or ask your admin to reset it for you.</p>
+            <button type="button" onClick={() => switchTo('forgot')} className="btn-secondary mt-6">
+              Send another link
+            </button>
+          </div>
+        ) : (
+          <>
+            <h1 className="mt-6 text-3xl font-extrabold sm:text-4xl">Forgot your password?</h1>
+            <p className="mt-2 text-muted">Enter your email and we’ll send you a link to choose a new one.</p>
+            <form onSubmit={onForgot} className="mt-8 space-y-4">
+              <div>
+                <label htmlFor="reset-email" className="label">Email</label>
+                <input id="reset-email" type="email" autoComplete="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} className="input" />
+              </div>
+              {error && <p role="alert" className="notice-error">{error}</p>}
+              <button type="submit" disabled={loading} className="btn-primary w-full py-3.5 text-base">
+                {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+                Send reset link
+              </button>
+            </form>
+          </>
+        )}
+      </AuthShell>
+    )
+  }
+
   return (
     <AuthShell>
       <h1 className="text-3xl font-extrabold sm:text-4xl">Welcome back</h1>
@@ -57,7 +121,12 @@ export default function LoginPage() {
           <input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="input" />
         </div>
         <div>
-          <label htmlFor="password" className="label">Password</label>
+          <div className="flex items-baseline justify-between gap-3">
+            <label htmlFor="password" className="label">Password</label>
+            <button type="button" onClick={() => switchTo('forgot')} className="text-sm font-bold text-tide-600 hover:underline">
+              Forgot password?
+            </button>
+          </div>
           <div className="relative">
             <input
               id="password"

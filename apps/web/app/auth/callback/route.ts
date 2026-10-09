@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
   const tokenHash = searchParams.get('token_hash')
   const type = searchParams.get('type')
   const code = searchParams.get('code')
-  const next = safeNext(searchParams.get('next'))
+  // Password-reset links go on to choose a new password, even if the template doesn't say so.
+  const next = safeNext(searchParams.get('next') ?? (type === 'recovery' ? '/update-password' : null))
   const supabase = createClient()
 
   if (tokenHash && isOtpType(type)) {

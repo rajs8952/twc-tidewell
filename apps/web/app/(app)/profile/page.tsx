@@ -1,6 +1,7 @@
 'use client'
 
-import { Droplets, Loader2, Ruler, UserRound } from 'lucide-react'
+import { Droplets, KeyRound, Loader2, Ruler, UserRound } from 'lucide-react'
+import Link from 'next/link'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AvatarPicker } from '@/components/AvatarPicker'
 import { InstallCard } from '@/components/pwa/InstallCard'
@@ -142,6 +143,12 @@ export default function ProfilePage() {
               </div>
             </div>
             <div className="mt-6 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted">Change the password you log in with.</p>
+              <Link href="/update-password" className="btn-secondary">
+                <KeyRound className="h-4 w-4" aria-hidden /> Change password
+              </Link>
+            </div>
+            <div className="mt-4 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted">Log out of OmniWell on this device.</p>
               <LogoutButton />
             </div>
