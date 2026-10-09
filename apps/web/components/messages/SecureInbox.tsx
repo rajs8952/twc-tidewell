@@ -15,6 +15,7 @@ import {
   ChatSearch,
   Composer,
   MessageList,
+  receiptState,
   timeLabel,
   type ChatMessageView,
 } from '@/components/chat/ChatUI'
@@ -23,7 +24,7 @@ import { submitUserQuery } from '@/app/actions/routing'
 import { errorMessage } from '@rajs8952/core/errors'
 import { ChatImageError, formatBytes, prepareChatImage } from '@/lib/chat-image'
 import { storageKey } from '@/lib/brand'
-import { listMyChats, loadMessages, mergeMessages, pollThread, sendUserMessage, type ChatSummary } from '@/lib/chat-data'
+import { listMyChats, loadMessages, markRead, mergeMessages, pollThread, sendUserMessage, type ChatSummary } from '@/lib/chat-data'
 import { MAX_MESSAGE_LENGTH, PHOTO_PREVIEW, TEAMS, isOpenStatus, validateMessage, type Team, type ThreadMessage, type ThreadStatus } from '@/lib/messages'
 import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
@@ -88,7 +89,7 @@ function listTime(iso: string) {
 function routingLine(team: Team, status: ThreadStatus) {
   const who = TEAMS[team].label.toLowerCase()
   if (status === 'unassigned') return `Waiting for the next available ${who}`
-  if (status === 'in_progress') return `With your ${who} · replies within 24 business hours`
+  if (status === 'in_progress') return `Your ${who} · replies within 24 business hours`
   return 'OmniWell wellness team · replies within 24 business hours'
 }
 
@@ -184,18 +185,37 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
     const id = activeIdRef.current
     if (!id) return
     const newest = messages[messages.length - 1]?.created_at ?? null
-    const { messages: fresh, status } = await pollThread(supabase, id, newest)
+    const { messages: fresh, status, receipts } = await pollThread(supabase, id, newest)
     if (activeIdRef.current !== id) return
     const known = new Set(messages.map((m) => m.id))
     const replies = fresh.filter((m) => !known.has(m.id) && m.sender_role === 'therapist')
     if (fresh.some((m) => !known.has(m.id))) setMessages((cur) => mergeMessages(cur, fresh))
     if (replies.length) {
       bump()
-      const label = activeChat ? TEAMS[activeChat.team].label.toLowerCase() : 'wellness team'
-      setAnnouncement(replies.length === 1 ? `New reply from your ${label}.` : `${replies.length} new replies from your ${label}.`)
+      const label = activeChat?.coach_name ?? (activeChat ? `your ${TEAMS[activeChat.team].label.toLowerCase()}` : 'your wellness team')
+      setAnnouncement(replies.length === 1 ? `New reply from ${label}.` : `${replies.length} new replies from ${label}.`)
     }
-    if (status && activeChat && status !== activeChat.status) setChats((cs) => cs?.map((c) => (c.id === id ? { ...c, status } : c)) ?? cs)
+    if (status && activeChat && status !== activeChat.status) {
+      setChats((cs) => cs?.map((c) => (c.id === id ? { ...c, status } : c)) ?? cs)
+      // A coach just claimed it (or it was released): refresh for their name.
+      refreshChats().catch(() => {})
+    }
+    if (receipts && activeChat && (receipts.coach_delivered_at !== activeChat.coach_delivered_at || receipts.coach_read_at !== activeChat.coach_read_at)) {
+      setChats((cs) => cs?.map((c) => (c.id === id ? { ...c, coach_delivered_at: receipts.coach_delivered_at, coach_read_at: receipts.coach_read_at } : c)) ?? cs)
+    }
   }, active?.kind === 'thread')
+
+  // Read receipts: the open conversation counts as read while it's on screen
+  // (the database ignores calls with nothing new to mark).
+  const lastIncoming = [...messages].reverse().find((m) => m.sender_role === 'therapist')?.id
+  useEffect(() => {
+    const id = activeIdRef.current
+    if (!id || !mobileShowChat) return
+    const mark = () => document.visibilityState === 'visible' && markRead(supabase, id)
+    mark()
+    document.addEventListener('visibilitychange', mark)
+    return () => document.removeEventListener('visibilitychange', mark)
+  }, [lastIncoming, active, mobileShowChat, supabase])
 
   // Keep the list preview and "seen" marker in step with the open conversation.
   useEffect(() => {
@@ -243,7 +263,9 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
         threadId = id
         textSent = true
         const now = new Date().toISOString()
-        setChats((cs) => [{ id, team: p.team, status: res.data.status, created_at: now, last: { sender_role: 'user', content: p.content, created_at: now, media_url: null } }, ...(cs ?? [])])
+        setChats((cs) => [{ id, team: p.team, status: res.data.status, created_at: now, last: { sender_role: 'user', content: p.content, created_at: now, media_url: null }, coach_name: null }, ...(cs ?? [])])
+        // Routed straight to their coach: fetch the coach's name for the header.
+        if (res.data.assignedToPreferredCoach) refreshChats().catch(() => {})
         setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, threadId: id, textSent } : x)))
         activeIdRef.current = id
         setActive({ kind: 'thread', id })
@@ -322,7 +344,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
   const visibleChats = (chats ?? []).filter((c) => {
     if (filter !== 'all' && c.team !== filter) return false
     const q = query.trim().toLowerCase()
-    return !q || TEAMS[c.team].label.toLowerCase().includes(q) || (c.last?.content.toLowerCase().includes(q) ?? false)
+    return !q || TEAMS[c.team].label.toLowerCase().includes(q) || (c.coach_name?.toLowerCase().includes(q) ?? false) || (c.last?.content.toLowerCase().includes(q) ?? false)
   })
 
   const threadId = active?.kind === 'thread' ? active.id : null
@@ -332,7 +354,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
       mine: m.sender_role === 'user',
       content: m.content,
       createdAt: m.created_at,
-      state: 'sent' as const,
+      state: receiptState(m.created_at, activeChat?.coach_delivered_at, activeChat?.coach_read_at),
       image: m.media_url ? { src: imageUrls.get(m.media_url) ?? null } : undefined,
     })),
     ...pending
@@ -398,7 +420,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
                 active={threadId === c.id}
                 onClick={() => open({ kind: 'thread', id: c.id })}
                 avatar={<ChatAvatar color={TEAM_LOOK[c.team].color} icon={TEAM_LOOK[c.team].icon} />}
-                title={TEAMS[c.team].label}
+                title={c.coach_name ?? TEAMS[c.team].label}
                 time={listTime(c.last?.created_at ?? c.created_at)}
                 preview={
                   <>
@@ -425,7 +447,7 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
         <ChatHeader
           onBack={() => setMobileShowChat(false)}
           avatar={<ChatAvatar color={look.color} icon={look.icon} size="sm" />}
-          title={TEAMS[activeTeam].label}
+          title={activeChat?.coach_name ?? TEAMS[activeTeam].label}
           subtitle={closed ? 'Conversation closed' : activeChat ? routingLine(activeTeam, activeChat.status) : 'OmniWell wellness team · replies within 24 business hours'}
           actions={
             WELLNESS_BY_ID.eap.phone ? (

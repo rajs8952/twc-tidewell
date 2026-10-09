@@ -2,11 +2,11 @@
 
 import { Check, Copy, Eye, EyeOff, Loader2, Wand2 } from 'lucide-react'
 import { useId, useState, type ReactNode } from 'react'
-import { adminCreateUser, adminDeactivateUser, adminReactivateUser, adminSetCoachCapacity, adminSetUserRole, adminUpdateUserPassword } from '@/app/actions/admin'
+import { adminCreateUser, adminDeactivateUser, adminReactivateUser, adminReleaseCoachChats, adminSetCoachCapacity, adminSetUserRole, adminUpdateUserPassword } from '@/app/actions/admin'
 import { ACTIVITY_LEVELS, GENDERS, type Activity, type Gender } from '@rajs8952/core/hydration'
 import { COACH_CAPACITY_MAX, PASSWORD_MAX, PASSWORD_MIN, validateNewUser, validatePassword, type AdminUser, type AppRole } from '@/lib/admin'
 import { TEAMS, type Team } from '@/lib/messages'
-import { Dialog } from './Dialog'
+import { Dialog } from '@/components/Dialog'
 
 /* ------------------------------------------------------------------
  * The admin portal's dialogs. Each checks input with the same rules
@@ -436,6 +436,7 @@ export function ActivationDialog({ user, onClose, onDone }: { user: AdminUser | 
           <li>They can’t log in, and their devices stop getting reminders.</li>
           <li>If they’re logged in right now, that session ends within an hour.</li>
           <li>Their data is kept. You can reactivate them at any time.</li>
+          {user?.role === 'coach' && <li>Their open conversations go back to the {user.team ? TEAMS[user.team].label.toLowerCase() : 'team'} pool for another coach to claim.</li>}
         </ul>
       ) : (
         <p className="text-sm text-ink/80">They’ll be able to log in again with their existing password. Reminders resume once they turn notifications back on.</p>
@@ -519,6 +520,66 @@ export function CapacityDialog({ user, onClose, onDone }: { user: AdminUser | nu
         />
       </Field>
       {valid && n < load && <p className="mt-3 text-sm text-muted">That’s below their current {load}. They keep those conversations but can’t claim more until they’re under {n}.</p>}
+      <ErrorNote error={error} />
+    </Dialog>
+  )
+}
+
+/** Puts a coach's open conversations back in the pool, e.g. when they leave or are away. */
+export function ReleaseChatsDialog({ user, onClose, onDone }: { user: AdminUser | null; onClose: () => void; onDone: (u: AdminUser, msg: string) => void }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const load = user?.coach?.load ?? 0
+  const team = user?.team ? TEAMS[user.team].label.toLowerCase() : 'team'
+
+  async function submit() {
+    if (!user) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await adminReleaseCoachChats(user.id)
+      if (!res.ok) return setError(res.error)
+      const n = res.data.released
+      onDone(
+        { ...user, coach: user.coach ? { ...user.coach, load: 0, accepting: false } : null },
+        n ? `${n} conversation${n === 1 ? '' : 's'} from ${user.full_name || user.email} went back to the ${team} pool.` : `${user.full_name || user.email} had no open conversations. New chats are paused for them.`,
+      )
+      onClose()
+    } catch {
+      setError('Couldn’t reach the server. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open={!!user}
+      busy={busy}
+      onClose={() => {
+        setError(null)
+        onClose()
+      }}
+      title="Release their conversations?"
+      description={user ? <>For <strong className="text-ink">{user.full_name || user.email}</strong>{user.team ? ` · ${TEAMS[user.team].label}` : ''}</> : null}
+      footer={
+        <>
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button type="button" className="btn-primary" onClick={submit} disabled={busy}>
+            {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+            Release {load ? `${load} conversation${load === 1 ? '' : 's'}` : 'and pause'}
+          </button>
+        </>
+      }
+    >
+      <ul className="list-disc space-y-1.5 pl-5 text-sm text-ink">
+        <li>Their open conversations go back to the {team} pool, for another coach to claim. Employees keep their full history.</li>
+        <li>“Accepting new” is switched off for them, so no new chats are routed to them. They can switch it back on in their portal.</li>
+        <li>Closed conversations stay with them.</li>
+      </ul>
+      <p className="mt-3 text-sm text-muted">Deactivating a coach does this automatically.</p>
       <ErrorNote error={error} />
     </Dialog>
   )

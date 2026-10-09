@@ -17,15 +17,17 @@ import {
   Composer,
   MessageList,
   initialsOf,
+  receiptState,
   timeLabel,
   type ChatMessageView,
 } from '@/components/chat/ChatUI'
 import { uploadChatImage } from '@/app/actions/chat-media'
 import { claimTicket } from '@/app/actions/routing'
+import { Dialog } from '@/components/Dialog'
 import { errorMessage } from '@rajs8952/core/errors'
 import { ChatImageError, formatBytes, prepareChatImage } from '@/lib/chat-image'
-import { loadMyCoachProfile, loadQueue, loadStaffMessages, mergeMessages, myUserId, pollStaffThread, sendStaffReply, setAcceptingNew, setChatResolved } from '@/lib/chat-data'
-import { MAX_MESSAGE_LENGTH, PHOTO_PREVIEW, REPLY_TARGET_HOURS, TEAMS, isOpenStatus, validateMessage, type CoachProfile, type QueueItem, type StaffThreadMessage, type Team } from '@/lib/messages'
+import { loadMyCoachProfile, loadQueue, loadStaffMessages, markRead, mergeMessages, myUserId, pollStaffThread, sendStaffReply, setAcceptingNew, setChatResolved } from '@/lib/chat-data'
+import { MAX_MESSAGE_LENGTH, PHOTO_PREVIEW, REPLY_TARGET_HOURS, TEAMS, isOpenStatus, validateMessage, type CoachProfile, type QueueItem, type StaffThreadMessage, type Team, type ThreadReceipts } from '@/lib/messages'
 import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
 import { usePolling } from '@/lib/usePolling'
@@ -37,15 +39,16 @@ import { useSignedImages } from '@/lib/useSignedImages'
  * WhatsApp Web: the team's queue of employee conversations on the left,
  * the open conversation on the right. Sticky Queue: "Mine" holds the
  * coach's own conversations; "Pool" holds unassigned ones any coach of
- * the team can claim, up to their capacity (app/actions/routing.ts). Row-level security only ever
- * returns the signed-in staff member's own team. No WebSockets: the
+ * the team can claim, up to their capacity (app/actions/routing.ts).
+ * Row-level security only ever returns the coach's own conversations and
+ * their team's pool: colleagues' conversations never reach this screen. No WebSockets: the
  * queue refreshes every 15 s and the open chat every few seconds while
  * active (lib/useLivePolling.ts); data goes straight to Supabase
  * (lib/chat-data.ts).
  * ------------------------------------------------------------------ */
 
 const QUEUE_POLL_MS = 15_000
-type Filter = 'mine' | 'pool' | 'open' | 'closed'
+type Filter = 'mine' | 'pool' | 'closed'
 
 /** Avatar colours for employees' initials; all give white text 4.5:1 or more. */
 const AVATAR_COLORS = ['#6A55C9', '#1A6DB5', '#237A70', '#A85A0B', '#4A5BC4', '#B4345C']
@@ -157,6 +160,9 @@ export function TherapistPortal({ team }: { team: Team }) {
   const [coach, setCoach] = useState<CoachProfile | null>(null)
   const [coachBusy, setCoachBusy] = useState(false)
   const [claiming, setClaiming] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
+  /** The open conversation's receipts: when the employee last had our replies delivered / read. */
+  const [receipts, setReceipts] = useState<ThreadReceipts | null>(null)
   const [query, setQuery] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<StaffThreadMessage[]>([])
@@ -182,7 +188,7 @@ export function TherapistPortal({ team }: { team: Team }) {
     const target = queue.find((q) => q.thread_id === linked)
     if (!target) return
     linkedShown.current = linked
-    setFilter(target.status === 'unassigned' ? 'pool' : !isOpenStatus(target.status) ? 'closed' : target.assigned_coach_id === me ? 'mine' : 'open')
+    setFilter(target.status === 'unassigned' ? 'pool' : !isOpenStatus(target.status) ? 'closed' : 'mine')
   }, [linked, queue, me])
 
   const item = queue?.find((q) => q.thread_id === activeId) ?? null
@@ -211,6 +217,7 @@ export function TherapistPortal({ team }: { team: Team }) {
 
   useEffect(() => {
     setMessages([])
+    setReceipts(null)
     setNotice(null)
     setDraft('')
     setAttachment((a) => {
@@ -235,8 +242,9 @@ export function TherapistPortal({ team }: { team: Team }) {
     const id = activeRef.current
     if (!id) return
     const newest = messages[messages.length - 1]?.created_at ?? null
-    const { messages: fresh, status } = await pollStaffThread(supabase, id, newest)
+    const { messages: fresh, status, receipts: r } = await pollStaffThread(supabase, id, newest)
     if (activeRef.current !== id) return
+    if (r) setReceipts((cur) => (cur && cur.user_delivered_at === r.user_delivered_at && cur.user_read_at === r.user_read_at ? cur : r))
     const known = new Set(messages.map((m) => m.id))
     const added = fresh.filter((m) => !known.has(m.id))
     if (added.length) {
@@ -256,6 +264,19 @@ export function TherapistPortal({ team }: { team: Team }) {
     }
     if (status && item && status !== item.status) patchItem(id, { status })
   }, activeId !== null)
+
+  // Read receipts: an assigned conversation open on screen counts as read
+  // (pool browsing doesn't; the database ignores calls with nothing new).
+  const lastIncoming = [...messages].reverse().find((m) => m.sender_role === 'user')?.id
+  const assignedToMe = !!item && item.status === 'in_progress' && item.assigned_coach_id === me
+  useEffect(() => {
+    const id = activeRef.current
+    if (!id || !assignedToMe) return
+    const mark = () => document.visibilityState === 'visible' && markRead(supabase, id)
+    mark()
+    document.addEventListener('visibilitychange', mark)
+    return () => document.removeEventListener('visibilitychange', mark)
+  }, [lastIncoming, activeId, assignedToMe, supabase])
 
   /* ----- actions ----- */
 
@@ -352,11 +373,11 @@ export function TherapistPortal({ team }: { team: Team }) {
   async function toggleStatus() {
     if (!item) return
     const resolve = isOpenStatus(item.status)
-    if (resolve && !window.confirm(`Close this conversation with ${item.user_name}? They can still read it and can start a new one.`)) return
     setStatusBusy(true)
     try {
       patchItem(item.thread_id, { status: await setChatResolved(supabase, item.thread_id, resolve) })
       setCoach(await loadMyCoachProfile(supabase)) // closing or reopening changes the load
+      setConfirmClose(false)
     } catch (e) {
       setNotice(errorMessage(e))
     } finally {
@@ -370,13 +391,11 @@ export function TherapistPortal({ team }: { team: Team }) {
   const inFilter: Record<Filter, (x: QueueItem) => boolean> = {
     mine: isMine,
     pool: (x) => x.status === 'unassigned',
-    open: (x) => isOpenStatus(x.status),
     closed: (x) => !isOpenStatus(x.status),
   }
   const counts = {
     mine: queue?.filter(isMine).length ?? 0,
     pool: queue?.filter(inFilter.pool).length ?? 0,
-    open: queue?.filter(inFilter.open).length ?? 0,
     closed: queue?.filter(inFilter.closed).length ?? 0,
   }
   const q = query.trim().toLowerCase()
@@ -393,7 +412,7 @@ export function TherapistPortal({ team }: { team: Team }) {
         mine,
         content: m.content,
         createdAt: m.created_at,
-        state: 'sent' as const,
+        state: mine ? receiptState(m.created_at, receipts?.user_delivered_at, receipts?.user_read_at) : ('sent' as const),
         author: mine && m.sender_id && me && m.sender_id !== me ? colleague : undefined,
         image: m.media_url ? { src: imageUrls.get(m.media_url) ?? null } : undefined,
       }
@@ -421,7 +440,6 @@ export function TherapistPortal({ team }: { team: Team }) {
         options={[
           { id: 'mine', label: 'Mine', count: counts.mine },
           { id: 'pool', label: 'Pool', count: counts.pool },
-          { id: 'open', label: 'All open', count: counts.open },
           { id: 'closed', label: 'Closed', count: counts.closed },
         ]}
       />
@@ -476,10 +494,11 @@ export function TherapistPortal({ team }: { team: Team }) {
         title={item?.user_name ?? 'Conversation'}
         subtitle={item ? [item.user_email, owner ?? (open ? (item.waiting_since ? `waiting ${waitLabel(item.waiting_since)}` : 'replied') : 'closed')].filter(Boolean).join(' · ') : undefined}
         actions={
-          item && (
+          // Only the coach the conversation is assigned to can close or reopen it.
+          item && !unclaimed && item.assigned_coach_id === me && (
             <button
               type="button"
-              onClick={toggleStatus}
+              onClick={() => (open ? setConfirmClose(true) : toggleStatus())}
               disabled={statusBusy}
               className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-[#3B4A54] transition hover:bg-black/5 disabled:opacity-50"
             >
@@ -492,7 +511,11 @@ export function TherapistPortal({ team }: { team: Team }) {
       <MessageList
         messages={views}
         loading={loadingThread}
-        notice={<ChatNotice>Only the {label.toLowerCase()} team can see this conversation. Refer anyone in crisis to the EAP hotline or emergency services (112).</ChatNotice>}
+        notice={
+          <ChatNotice>
+            {unclaimed ? `Every ${label.toLowerCase()} coach can see this until someone claims it.` : 'Only you and the employee can see this conversation.'} Refer anyone in crisis to the EAP hotline or emergency services (112).
+          </ChatNotice>
+        }
         empty={<p className="mt-8 text-center text-sm text-[#54656F]">No messages yet.</p>}
       />
       <p className="sr-only" aria-live="polite">
@@ -545,5 +568,30 @@ export function TherapistPortal({ team }: { team: Team }) {
     </>
   )
 
-  return <ChatFrame sidebar={sidebar} main={main} showMain={activeId !== null} className="h-[calc(100dvh-7.5rem)] min-h-[480px] sm:h-[calc(100dvh-9rem)]" />
+  return (
+    <>
+      <ChatFrame sidebar={sidebar} main={main} showMain={activeId !== null} className="h-[calc(100dvh-7.5rem)] min-h-[480px] sm:h-[calc(100dvh-9rem)]" />
+      <Dialog
+        open={confirmClose && !!item}
+        busy={statusBusy}
+        onClose={() => setConfirmClose(false)}
+        title="Close this conversation?"
+        description={item ? <>With <strong className="text-ink">{item.user_name}</strong></> : null}
+        footer={
+          <>
+            <button type="button" className="btn-secondary" onClick={() => setConfirmClose(false)} disabled={statusBusy}>
+              Cancel
+            </button>
+            <button type="button" className="btn bg-alert text-white hover:bg-alert/90" onClick={toggleStatus} disabled={statusBusy}>
+              {statusBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Lock className="h-4 w-4" aria-hidden />}
+              Close conversation
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink">They can still read it, and they can start a new conversation any time. It frees a place in your capacity.</p>
+        <p className="mt-2 text-sm text-muted">You can reopen it later from <strong>Closed</strong>.</p>
+      </Dialog>
+    </>
+  )
 }

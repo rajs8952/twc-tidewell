@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertCircle, ArrowLeft, Check, Clock, ImagePlus, Loader2, Lock, Search, SendHorizontal, X, type LucideIcon } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, ImagePlus, Loader2, Lock, Search, SendHorizontal, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'
 
 /* ------------------------------------------------------------------
@@ -236,7 +236,8 @@ export interface ChatMessageView {
   createdAt: string
   /** Shown above the first bubble of a group, e.g. "Another therapist" on a colleague's reply. */
   author?: string
-  state?: 'sent' | 'sending' | 'failed'
+  /** Own messages: sending → sent (✓) → delivered (✓✓) → read (blue ✓✓); or failed. */
+  state?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed'
   error?: string
   onRetry?: () => void
   /** An attached image; `src` is null while its signed link is loading. */
@@ -269,7 +270,21 @@ function Tail({ mine }: { mine: boolean }) {
 function Ticks({ state }: { state: ChatMessageView['state'] }) {
   if (state === 'sending') return <Clock className="h-3.5 w-3.5" aria-label="Sending" />
   if (state === 'failed') return <AlertCircle className="h-3.5 w-3.5 text-[#C42B1C]" aria-label="Not sent" />
+  if (state === 'delivered') return <CheckCheck className="h-4 w-4" aria-label="Delivered" />
+  // WhatsApp's read blue, darkened slightly to stay readable on the green bubble.
+  if (state === 'read') return <CheckCheck className="h-4 w-4 text-[#0B83C8]" aria-label="Read" />
   return <Check className="h-3.5 w-3.5" aria-label="Sent" />
+}
+
+/**
+ * Where an own message stands, from the other side's receipts (when they
+ * last had our messages delivered / read).
+ */
+export function receiptState(createdAt: string, deliveredAt: string | null | undefined, readAt: string | null | undefined): 'sent' | 'delivered' | 'read' {
+  const t = Date.parse(createdAt)
+  if (readAt && Date.parse(readAt) >= t) return 'read'
+  if (deliveredAt && Date.parse(deliveredAt) >= t) return 'delivered'
+  return 'sent'
 }
 
 /**

@@ -184,6 +184,21 @@ export async function adminSetCoachCapacity(userId: string, maxCapacity: number)
   return { ok: true, data: null }
 }
 
+/**
+ * Puts all of a coach's open conversations back in their team's pool for
+ * colleagues to claim, and pauses new chats being routed to them. For when a
+ * coach leaves or is away. Returns how many conversations were released.
+ */
+export async function adminReleaseCoachChats(userId: string): Promise<ActionResult<{ released: number }>> {
+  if (!isUuid(userId)) return { ok: false, error: 'Unknown user.' }
+  const ctx = await requireAdmin()
+  if ('error' in ctx) return { ok: false, error: ctx.error }
+  const { data, error } = await ctx.admin.rpc('admin_release_coach_threads', { p_coach: userId })
+  if (error) return { ok: false, error: error.code === 'PGRST202' ? 'Releasing isn’t set up yet. Run supabase/chat-receipts-and-scoping.sql first.' : error.message }
+  audit(ctx, 'release chats', userId, String(data))
+  return { ok: true, data: { released: Number(data) || 0 } }
+}
+
 /* ---------- Deactivate / reactivate ---------- */
 
 /**
@@ -207,6 +222,11 @@ export async function adminDeactivateUser(userId: string): Promise<ActionResult<
   const { error } = await ctx.admin.auth.admin.updateUserById(userId, { ban_duration: DEACTIVATE_FOR })
   if (error) return { ok: false, error: error.message }
   await ctx.admin.from('push_subscriptions').delete().eq('user_id', userId)
+  // A deactivated coach can't answer: their open conversations go back to the pool.
+  if (role?.role === 'coach') {
+    const { error: releaseError } = await ctx.admin.rpc('admin_release_coach_threads', { p_coach: userId })
+    if (releaseError && releaseError.code !== 'PGRST202') console.error('[admin] releasing chats on deactivate failed:', releaseError.message)
+  }
   audit(ctx, 'deactivate', userId)
   return { ok: true, data: null }
 }

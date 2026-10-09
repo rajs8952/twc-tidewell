@@ -62,7 +62,20 @@ export interface ThreadMessage {
   media_type: 'image' | null
 }
 
-export interface TherapistThread {
+/**
+ * Read receipts (supabase/chat-receipts-and-scoping.sql): when each side last
+ * had the other's messages delivered (their app loaded them) and read
+ * (the conversation open on screen).
+ */
+export interface ThreadReceipts {
+  user_delivered_at: string | null
+  user_read_at: string | null
+  coach_delivered_at: string | null
+  coach_read_at: string | null
+}
+export const RECEIPT_COLUMNS = 'user_delivered_at, user_read_at, coach_delivered_at, coach_read_at'
+
+export interface TherapistThread extends Partial<ThreadReceipts> {
   id: string
   team: Team
   status: ThreadStatus
@@ -70,7 +83,7 @@ export interface TherapistThread {
 }
 
 export const MESSAGE_COLUMNS = 'id, thread_id, sender_role, content, created_at, media_url, media_type'
-export const THREAD_COLUMNS = 'id, team, status, created_at'
+export const THREAD_COLUMNS = `id, team, status, created_at, ${RECEIPT_COLUMNS}`
 
 /**
  * Trims the message and checks its length; the database enforces the same rule.

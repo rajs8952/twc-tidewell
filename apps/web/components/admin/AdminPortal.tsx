@@ -1,6 +1,6 @@
 'use client'
 
-import { Ban, Gauge, KeyRound, RotateCw, Search, ShieldCheck, UserCog, UserPlus, Users, UserCheck } from 'lucide-react'
+import { Ban, Gauge, KeyRound, Undo2, RotateCw, Search, ShieldCheck, UserCog, UserPlus, Users, UserCheck } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { adminGetUsers } from '@/app/actions/admin'
 import { errorMessage } from '@rajs8952/core/errors'
@@ -8,7 +8,7 @@ import type { AdminUser, AppRole } from '@/lib/admin'
 import { TEAMS } from '@/lib/messages'
 import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
-import { ActivationDialog, AddUserDialog, CapacityDialog, ROLE_LABEL, ResetPasswordDialog, RoleDialog } from './UserDialogs'
+import { ActivationDialog, AddUserDialog, CapacityDialog, ROLE_LABEL, ReleaseChatsDialog, ResetPasswordDialog, RoleDialog } from './UserDialogs'
 
 /* ------------------------------------------------------------------
  * Admin portal: everyone's account, role and status, with add user,
@@ -68,7 +68,7 @@ function Initials({ user }: { user: AdminUser }) {
 }
 
 /** The row's actions as small labelled buttons (no hidden menus, easy to reach by keyboard). */
-function RowActions({ user, isMe, onRole, onPassword, onActivation, onCapacity }: { user: AdminUser; isMe: boolean; onRole: () => void; onPassword: () => void; onActivation: () => void; onCapacity: () => void }) {
+function RowActions({ user, isMe, onRole, onPassword, onActivation, onCapacity, onRelease }: { user: AdminUser; isMe: boolean; onRole: () => void; onPassword: () => void; onActivation: () => void; onCapacity: () => void; onRelease: () => void }) {
   const btn = 'inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold ring-1 ring-line transition hover:bg-mist'
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -81,6 +81,11 @@ function RowActions({ user, isMe, onRole, onPassword, onActivation, onCapacity }
       {user.role === 'coach' && user.coach && (
         <button type="button" onClick={onCapacity} className={btn} aria-label={`Change capacity for ${user.full_name || user.email}`}>
           <Gauge className="h-3.5 w-3.5" aria-hidden /> Capacity
+        </button>
+      )}
+      {user.role === 'coach' && user.coach && (
+        <button type="button" onClick={onRelease} className={btn} aria-label={`Release conversations of ${user.full_name || user.email} to the pool`}>
+          <Undo2 className="h-3.5 w-3.5" aria-hidden /> Release chats
         </button>
       )}
       {!isMe && (
@@ -108,6 +113,7 @@ export function AdminPortal() {
   const [passwordFor, setPasswordFor] = useState<AdminUser | null>(null)
   const [activationFor, setActivationFor] = useState<AdminUser | null>(null)
   const [capacityFor, setCapacityFor] = useState<AdminUser | null>(null)
+  const [releaseFor, setReleaseFor] = useState<AdminUser | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [me, setMe] = useState<string | null>(null)
 
@@ -268,7 +274,7 @@ export function AdminPortal() {
                     <td className="whitespace-nowrap px-4 py-3 text-muted">{dateLabel(u.created_at)}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-muted">{dateLabel(u.last_sign_in_at)}</td>
                     <td className="px-4 py-3">
-                      <RowActions user={u} isMe={u.id === me} onRole={() => setRoleFor(u)} onPassword={() => setPasswordFor(u)} onActivation={() => setActivationFor(u)} onCapacity={() => setCapacityFor(u)} />
+                      <RowActions user={u} isMe={u.id === me} onRole={() => setRoleFor(u)} onPassword={() => setPasswordFor(u)} onActivation={() => setActivationFor(u)} onCapacity={() => setCapacityFor(u)} onRelease={() => setReleaseFor(u)} />
                     </td>
                   </tr>
                 ))}
@@ -296,7 +302,7 @@ export function AdminPortal() {
                       </p>
                     </div>
                   </div>
-                  <RowActions user={u} isMe={u.id === me} onRole={() => setRoleFor(u)} onPassword={() => setPasswordFor(u)} onActivation={() => setActivationFor(u)} onCapacity={() => setCapacityFor(u)} />
+                  <RowActions user={u} isMe={u.id === me} onRole={() => setRoleFor(u)} onPassword={() => setPasswordFor(u)} onActivation={() => setActivationFor(u)} onCapacity={() => setCapacityFor(u)} onRelease={() => setReleaseFor(u)} />
                 </li>
               ))}
             </ul>
@@ -315,6 +321,7 @@ export function AdminPortal() {
       />
       <RoleDialog user={roleFor} onClose={() => setRoleFor(null)} onDone={(u, msg) => { replace(u); setToast(msg) }} />
       <ResetPasswordDialog user={passwordFor} onClose={() => setPasswordFor(null)} onDone={setToast} />
+      <ReleaseChatsDialog user={releaseFor} onClose={() => setReleaseFor(null)} onDone={(u, msg) => { replace(u); setToast(msg) }} />
       <CapacityDialog user={capacityFor} onClose={() => setCapacityFor(null)} onDone={(u, msg) => { replace(u); setToast(msg) }} />
       <ActivationDialog user={activationFor} onClose={() => setActivationFor(null)} onDone={(u, msg) => { replace(u); setToast(msg) }} />
 

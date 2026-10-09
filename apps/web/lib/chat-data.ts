@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   MAX_THREAD_MESSAGES,
   MESSAGE_COLUMNS,
+  RECEIPT_COLUMNS,
   STAFF_MESSAGE_COLUMNS,
   THREAD_COLUMNS,
   type CoachProfile,
@@ -11,6 +12,7 @@ import {
   type StaffThreadMessage,
   type TherapistThread,
   type ThreadMessage,
+  type ThreadReceipts,
   type ThreadStatus,
   CHAT_IMAGE_LINK_SECONDS,
 } from './messages'
@@ -57,13 +59,38 @@ export function mergeMessages<T extends ThreadMessage>(current: T[], incoming: T
 
 export interface ChatSummary extends TherapistThread {
   last: Pick<ThreadMessage, 'sender_role' | 'content' | 'created_at' | 'media_url'> | null
+  /** The assigned coach's display name; null while it's waiting in the pool. */
+  coach_name: string | null
 }
+
+/* ---------- Receipts (supabase/chat-receipts-and-scoping.sql) ---------- */
+
+/**
+ * Tells the database the caller's app has received the other side's latest
+ * messages (on every chat-list or queue load). Fire and forget: a failure
+ * only means ticks update a little later.
+ */
+export function markDelivered(supabase: SupabaseClient) {
+  supabase.rpc('mark_threads_delivered').then(() => {}, () => {})
+}
+
+/** The caller has the conversation open on screen: its messages count as read. */
+export function markRead(supabase: SupabaseClient, threadId: string) {
+  supabase.rpc('mark_thread_read', { p_thread: threadId }).then(() => {}, () => {})
+}
+
+type ThreadPoll = { status: ThreadStatus } & ThreadReceipts
 
 /** All the employee's conversations (both teams), newest activity first, with their last message. */
 export async function listMyChats(supabase: SupabaseClient): Promise<ChatSummary[]> {
-  const { data: threads, error } = await supabase.from('therapist_threads').select(THREAD_COLUMNS).order('created_at', { ascending: false }).limit(50).returns<TherapistThread[]>()
+  const [{ data: threads, error }, coaches] = await Promise.all([
+    supabase.from('therapist_threads').select(THREAD_COLUMNS).order('created_at', { ascending: false }).limit(50).returns<TherapistThread[]>(),
+    supabase.rpc('my_chat_coaches'),
+  ])
   if (error) fail(error, 'load')
   if (!threads?.length) return []
+  markDelivered(supabase)
+  const coachOf = new Map(((coaches.data ?? []) as { thread_id: string; coach_name: string }[]).map((c) => [c.thread_id, c.coach_name]))
   const { data: recent, error: msgError } = await supabase
     .from('thread_messages')
     .select('thread_id, sender_role, content, created_at, media_url')
@@ -75,7 +102,7 @@ export async function listMyChats(supabase: SupabaseClient): Promise<ChatSummary
   const last = new Map<string, ChatSummary['last']>()
   for (const m of recent ?? []) if (!last.has(m.thread_id)) last.set(m.thread_id, { sender_role: m.sender_role, content: m.content, created_at: m.created_at, media_url: m.media_url })
   return threads
-    .map((t) => ({ ...t, last: last.get(t.id) ?? null }))
+    .map((t) => ({ ...t, last: last.get(t.id) ?? null, coach_name: coachOf.get(t.id) ?? null }))
     .sort((a, b) => (b.last?.created_at ?? b.created_at).localeCompare(a.last?.created_at ?? a.created_at))
 }
 
@@ -92,16 +119,16 @@ export async function loadMessages(supabase: SupabaseClient, threadId: string): 
   return (data ?? []).reverse()
 }
 
-/** What's new since `newest` (plus the thread's status), in one round trip. */
+/** What's new since `newest`, plus the thread's status and receipts, in one round trip. */
 export async function pollThread(supabase: SupabaseClient, threadId: string, newest: string | null) {
   let q = supabase.from('thread_messages').select(MESSAGE_COLUMNS).eq('thread_id', threadId)
   if (newest) q = q.gte('created_at', since(newest))
   const [msgs, thread] = await Promise.all([
     q.order('created_at', { ascending: true }).limit(100).returns<ThreadMessage[]>(),
-    supabase.from('therapist_threads').select('status').eq('id', threadId).maybeSingle<{ status: ThreadStatus }>(),
+    supabase.from('therapist_threads').select(`status, ${RECEIPT_COLUMNS}`).eq('id', threadId).maybeSingle<ThreadPoll>(),
   ])
   if (msgs.error) fail(msgs.error, 'load')
-  return { messages: msgs.data ?? [], status: thread.data?.status ?? null }
+  return { messages: msgs.data ?? [], status: thread.data?.status ?? null, receipts: thread.data ?? null }
 }
 
 /** An uploaded image's path (from app/actions/chat-media.ts) as message columns. */
@@ -123,6 +150,7 @@ export async function sendUserMessage(supabase: SupabaseClient, threadId: string
 export async function loadQueue(supabase: SupabaseClient): Promise<QueueItem[]> {
   const { data, error } = await supabase.rpc('therapist_queue')
   if (error) fail(error, 'load')
+  markDelivered(supabase)
   return (data ?? []) as QueueItem[]
 }
 
@@ -143,10 +171,10 @@ export async function pollStaffThread(supabase: SupabaseClient, threadId: string
   if (newest) q = q.gte('created_at', since(newest))
   const [msgs, thread] = await Promise.all([
     q.order('created_at', { ascending: true }).limit(100).returns<StaffThreadMessage[]>(),
-    supabase.from('therapist_threads').select('status').eq('id', threadId).maybeSingle<{ status: ThreadStatus }>(),
+    supabase.from('therapist_threads').select(`status, ${RECEIPT_COLUMNS}`).eq('id', threadId).maybeSingle<ThreadPoll>(),
   ])
   if (msgs.error) fail(msgs.error, 'load')
-  return { messages: msgs.data ?? [], status: thread.data?.status ?? null }
+  return { messages: msgs.data ?? [], status: thread.data?.status ?? null, receipts: thread.data ?? null }
 }
 
 /** A staff reply, optionally with an image ('therapist' means wellness staff; row-level security checks the team and that it's open). */
