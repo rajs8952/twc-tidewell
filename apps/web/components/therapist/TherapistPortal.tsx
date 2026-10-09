@@ -1,6 +1,7 @@
 'use client'
 
 import { CheckCheck, Clock, Hand, Inbox, Lock, LockOpen, Loader2, RotateCw } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChatAvatar,
@@ -169,6 +170,20 @@ export function TherapistPortal({ team }: { team: Team }) {
   const [announcement, setAnnouncement] = useState('')
   const activeRef = useRef<string | null>(null)
   activeRef.current = activeId
+
+  // An alert (or its email) links here with ?thread=…: open that conversation, under the filter that lists it.
+  const linked = useSearchParams().get('thread')
+  const linkedShown = useRef<string | null>(null)
+  useEffect(() => {
+    if (linked && /^[0-9a-f-]{36}$/i.test(linked)) setActiveId(linked)
+  }, [linked])
+  useEffect(() => {
+    if (!linked || !queue || me === null || linkedShown.current === linked) return
+    const target = queue.find((q) => q.thread_id === linked)
+    if (!target) return
+    linkedShown.current = linked
+    setFilter(target.status === 'unassigned' ? 'pool' : !isOpenStatus(target.status) ? 'closed' : target.assigned_coach_id === me ? 'mine' : 'open')
+  }, [linked, queue, me])
 
   const item = queue?.find((q) => q.thread_id === activeId) ?? null
   const imageUrls = useSignedImages(supabase, messages.flatMap((m) => (m.media_url ? [m.media_url] : [])))

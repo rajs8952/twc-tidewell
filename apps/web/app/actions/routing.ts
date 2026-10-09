@@ -1,5 +1,8 @@
 'use server'
 
+import { waitUntil } from '@vercel/functions'
+import { headers } from 'next/headers'
+import { alertCoachesOfQuery, clearPoolAlerts } from '@/lib/coach-alerts'
 import { isTeam, validateMessage, type Team } from '@/lib/messages'
 import { SIGNED_OUT, isUuid, signedIn } from '@/lib/supabase/actions'
 import type { ActionResult } from '@rajs8952/core/types'
@@ -11,6 +14,10 @@ import type { ActionResult } from '@rajs8952/core/types'
  * function from supabase/sticky-routing.sql as the signed-in user. Those
  * functions do the routing and claiming in one transaction each, with row
  * locks, so capacity limits hold and two coaches can't claim the same query.
+ *
+ * Coach alerts (lib/coach-alerts.ts) go out in the background once the
+ * query is saved: waitUntil() lets them finish after the response is sent,
+ * so the employee isn't kept waiting on email delivery.
  */
 
 export interface SubmittedQuery {
@@ -51,6 +58,9 @@ export async function submitUserQuery(category: Team, initialMessage: string): P
     .rpc('submit_user_query', { p_category: category, p_message: parsed.value })
     .single<{ thread_id: string; status: 'in_progress' | 'unassigned'; assigned: boolean }>()
   if (error) return { ok: false, error: friendly(error) }
+  // Server actions are POSTs, and Next.js checks their Origin matches the host: safe for links in the email.
+  const origin = headers().get('origin') ?? 'https://omniwell-app.vercel.app'
+  waitUntil(alertCoachesOfQuery({ threadId: data.thread_id, team: category, origin }))
   return { ok: true, data: { threadId: data.thread_id, status: data.status, assignedToPreferredCoach: data.assigned } }
 }
 
@@ -87,5 +97,6 @@ export async function claimTicket(threadId: string): Promise<ActionResult<{ thre
 
   const { data, error } = await session.supabase.rpc('claim_ticket', { p_thread: threadId }).single<{ thread_id: string }>()
   if (error) return { ok: false, error: friendly(error) }
+  waitUntil(clearPoolAlerts(data.thread_id))
   return { ok: true, data: { threadId: data.thread_id } }
 }
