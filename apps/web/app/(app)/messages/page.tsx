@@ -1,6 +1,17 @@
-import { redirect } from 'next/navigation'
+import type { Metadata } from 'next'
+import { SecureInbox } from '@/components/messages/SecureInbox'
 
-/** The original therapist-only address; kept so old links still work. */
+export const metadata: Metadata = { title: 'Chats' }
+
+/**
+ * The Chats tab: all of the employee's conversations with the therapist and
+ * dietitian teams (ongoing and closed), and where to start a new one.
+ */
 export default function MessagesPage() {
-  redirect('/messages/therapist')
+  return (
+    <>
+      <h1 className="sr-only">Chats</h1>
+      <SecureInbox />
+    </>
+  )
 }

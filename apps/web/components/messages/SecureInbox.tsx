@@ -113,14 +113,19 @@ function Disclaimer({ team }: { team: Team }) {
   )
 }
 
-export function SecureInbox({ team: routeTeam }: { team: Team }) {
+/**
+ * `team` opens straight onto that team's chat (from "Talk to Therapist" and
+ * the like). Without it (/messages, the Chats tab) it's the hub: phones start
+ * on the chat list, larger screens open the most recent open chat.
+ */
+export function SecureInbox({ team: routeTeam }: { team?: Team }) {
   const supabase = useMemo(() => createClient(), [])
   const [chats, setChats] = useState<ChatSummary[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   /** The open conversation, or a new one being started with a team. */
   const [active, setActive] = useState<{ kind: 'thread'; id: string } | { kind: 'new'; team: Team } | null>(null)
   // Arriving from "Talk to Therapist/Dietitian" opens the chat itself on phones; Back shows the list.
-  const [mobileShowChat, setMobileShowChat] = useState(true)
+  const [mobileShowChat, setMobileShowChat] = useState(!!routeTeam)
   const [messages, setMessages] = useState<ThreadMessage[]>([])
   const [loadingThread, setLoadingThread] = useState(false)
   const [pending, setPending] = useState<Pending[]>([])
@@ -151,10 +156,16 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
   }, [supabase])
 
   // First load: open the route team's newest open conversation, else start a new one with that team.
+  // The hub opens the most recent open conversation of either team, if any.
   useEffect(() => {
     setSeen(readSeen())
     trackProgress(refreshChats())
       .then((list) => {
+        if (!routeTeam) {
+          const recent = list.find((c) => isOpenStatus(c.status))
+          setActive(recent ? { kind: 'thread', id: recent.id } : null)
+          return
+        }
         const mine = list.filter((c) => c.team === routeTeam)
         const first = mine.find((c) => isOpenStatus(c.status)) ?? mine[0]
         setActive(first ? { kind: 'thread', id: first.id } : { kind: 'new', team: routeTeam })
@@ -245,7 +256,8 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
     clearAttachment()
     setMenuOpen(false)
     const team = next?.kind === 'new' ? next.team : chats?.find((c) => next?.kind === 'thread' && c.id === next.id)?.team
-    if (team && team !== routeTeam) window.history.replaceState(null, '', TEAMS[team].inboxPath)
+    // Keep the address in step on team pages; the hub stays at /messages.
+    if (routeTeam && team && team !== routeTeam) window.history.replaceState(null, '', TEAMS[team].inboxPath)
   }
 
   async function deliver(p: Pending) {
@@ -410,7 +422,22 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
             </li>
           ))
         ) : visibleChats.length === 0 ? (
-          <li className="px-6 py-10 text-center text-sm text-[#54656F]">{query ? 'No chats match your search.' : 'No conversations yet. Start one with the button above.'}</li>
+          <li className="px-6 py-10 text-center text-sm text-[#54656F]">
+            {query ? (
+              'No chats match your search.'
+            ) : (
+              <>
+                No conversations yet. Who would you like to talk to?
+                <span className="mt-4 flex flex-col items-center gap-2">
+                  {(Object.keys(TEAMS) as Team[]).map((t) => (
+                    <button key={t} type="button" onClick={() => open({ kind: 'new', team: t })} className="inline-flex w-56 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-white" style={{ background: TEAM_LOOK[t].color }}>
+                      <PenSquare className="h-4 w-4" aria-hidden /> Talk to {TEAMS[t].label}
+                    </button>
+                  ))}
+                </span>
+              </>
+            )}
+          </li>
         ) : (
           visibleChats.map((c) => {
             const unread = !!c.last && c.last.sender_role === 'therapist' && (!seen[c.id] || seen[c.id] < c.last.created_at) && threadId !== c.id
@@ -440,7 +467,14 @@ export function SecureInbox({ team: routeTeam }: { team: Team }) {
   const main =
     !active || !activeTeam || !look ? (
       <ChatPlaceholder icon={MessageCircleHeart} title="OmniWell Messages">
-        Choose a chat on the left, or start a new one with a therapist or dietitian.
+        Choose a chat on the left, or start a new one.
+        <span className="mt-4 flex flex-wrap justify-center gap-2">
+          {(Object.keys(TEAMS) as Team[]).map((t) => (
+            <button key={t} type="button" onClick={() => open({ kind: 'new', team: t })} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white" style={{ background: TEAM_LOOK[t].color }}>
+              <PenSquare className="h-4 w-4" aria-hidden /> Talk to {TEAMS[t].label}
+            </button>
+          ))}
+        </span>
       </ChatPlaceholder>
     ) : (
       <>

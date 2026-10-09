@@ -1,3 +1,4 @@
+import { House } from 'lucide-react'
 import Link from 'next/link'
 import { myStaffTeam } from '@/app/actions/therapist'
 import { Logo } from '@/components/Logo'
@@ -20,13 +21,19 @@ export async function StaffPortalShell({ team, children }: { team: Team; childre
       <header className="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-3">
-            <Logo />
+            <Link href="/dashboard" aria-label="OmniWell app" className="rounded-xl">
+              <Logo />
+            </Link>
             <span className="rounded-full px-2.5 py-1 text-xs font-bold text-ink" style={{ background: `${info.accent}26` }}>
               {info.label} portal
             </span>
           </div>
           <div className="flex items-center gap-2">
             {mine === team && <NotificationBell portalPath={info.portalPath} />}
+            <Link href="/dashboard" className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-bold text-ink ring-1 ring-line transition hover:bg-mist" title="Your own OmniWell: trackers, insights and profile">
+              <House className="h-4 w-4" aria-hidden />
+              <span className="hidden sm:inline">OmniWell app</span>
+            </Link>
             {mine === team && <CoachProfileButton />}
             <LogoutButton compact />
           </div>

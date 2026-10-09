@@ -1,25 +1,28 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { House, LayoutGrid, ShieldCheck, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react'
+import { BriefcaseMedical, House, LayoutGrid, MessageCircle, ShieldCheck, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { Logo, LogoMark } from './Logo'
 import { BRAND } from '@/lib/brand'
+import { TEAMS } from '@/lib/messages'
 import { useMyRole } from '@/lib/useMyRole'
+import { useMyStaffTeam } from '@/lib/useMyStaffTeam'
 import { BMI_TOOL, TRACKERS } from '@/lib/trackers'
 
 /* ------------------------------------------------------------------
  * App navigation.
- *  - lg+: labelled sidebar (Home, the six trackers, Insights, Profile)
+ *  - lg+: labelled sidebar (Home, the six trackers, Chats, Insights, Profile)
  *  - md:  the same links as a compact icon rail
- *  - phones: bottom bar (Home · Trackers · Insights · Profile);
+ *  - phones: bottom bar (Home · Trackers · Chats · Insights · Profile);
  *    "Trackers" opens a sheet with all six, since eight tabs don't fit.
  *  The water Garden and Stats live inside /water (Today · Stats · Garden).
  * ------------------------------------------------------------------ */
 
 const HOME = { href: '/dashboard', label: 'Home', icon: House, accent: '#0F2F37' }
+const CHATS = { href: '/messages', label: 'Chats', icon: MessageCircle, accent: '#008069' }
 const INSIGHTS = { href: '/insights', label: 'Insights', icon: Sparkles, accent: '#6A55C9' }
 const PROFILE = { href: '/profile', label: 'Profile', icon: UserRound, accent: '#0F2F37' }
 const ADMIN = { href: '/admin', label: 'Admin', icon: ShieldCheck, accent: '#0F2F37' }
@@ -68,8 +71,10 @@ function SideLink({ item, pathname }: { item: Item; pathname: string }) {
 }
 
 function Sidebar({ pathname }: { pathname: string }) {
-  // Admins get a link to the admin portal (which checks the role again on the server).
+  // Admins get a link to the admin portal and coaches one to their coach portal
+  // (both check access again on the server).
   const role = useMyRole()
+  const staffTeam = useMyStaffTeam()
   return (
     <nav
       aria-label="Main"
@@ -92,9 +97,11 @@ function Sidebar({ pathname }: { pathname: string }) {
         </ul>
         <div className="mx-auto my-2 h-px w-8 bg-line lg:mx-3 lg:my-3 lg:w-auto" aria-hidden />
         <ul className="space-y-1">
+          <SideLink item={CHATS} pathname={pathname} />
           <SideLink item={INSIGHTS} pathname={pathname} />
         </ul>
         <ul className="mt-auto space-y-1 pt-4">
+          {staffTeam && <SideLink item={{ href: TEAMS[staffTeam].portalPath, label: 'Coach portal', icon: BriefcaseMedical, accent: TEAMS[staffTeam].accent }} pathname={pathname} />}
           {role === 'admin' && <SideLink item={ADMIN} pathname={pathname} />}
           <SideLink item={PROFILE} pathname={pathname} />
         </ul>
@@ -234,6 +241,7 @@ function BottomBar({ pathname }: { pathname: string }) {
               Trackers
             </button>
           </li>
+          {tab(CHATS)}
           {tab(INSIGHTS)}
           {tab(PROFILE)}
         </ul>

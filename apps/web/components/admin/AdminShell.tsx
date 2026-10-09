@@ -1,4 +1,4 @@
-import { ShieldCheck } from 'lucide-react'
+import { House, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import { myRole } from '@/app/actions/roles'
 import { Logo } from '@/components/Logo'
@@ -24,7 +24,13 @@ export async function AdminShell({ children }: { children: React.ReactNode }) {
               <ShieldCheck className="h-3.5 w-3.5" aria-hidden /> Admin
             </span>
           </div>
-          <LogoutButton compact />
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard" className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-bold text-ink ring-1 ring-line transition hover:bg-mist">
+              <House className="h-4 w-4" aria-hidden />
+              <span className="hidden sm:inline">OmniWell app</span>
+            </Link>
+            <LogoutButton compact />
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-8">
