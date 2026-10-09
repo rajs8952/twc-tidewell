@@ -32,16 +32,23 @@ interface HookPayload {
   }
 }
 
-/** The site to link back to: the app the request came from (production or local), else production. */
+/**
+ * The site to link back to. Production unless the request explicitly came
+ * from a local dev server (redirect_to on localhost). Supabase's Site URL is
+ * only trusted when it's production: if it's left on localhost, Supabase falls
+ * back to it whenever redirect_to isn't on its allow-list, and real users
+ * would get links to localhost.
+ */
 function siteFrom(redirectTo: string, siteUrl: string) {
-  for (const candidate of [redirectTo, siteUrl]) {
+  const originOf = (u: string) => {
     try {
-      const { origin } = new URL(candidate)
-      if (origin === PROD || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return origin
+      return new URL(u).origin
     } catch {
-      /* not a URL */
+      return null
     }
   }
+  const requested = originOf(redirectTo)
+  if (requested === PROD || (requested && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(requested) && requested !== originOf(siteUrl))) return requested
   return PROD
 }
 
