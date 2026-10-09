@@ -1,15 +1,13 @@
 import 'server-only'
-import nodemailer from 'nodemailer'
-import { Resend } from 'resend'
+import { layout, sendEmail } from './email'
 import { TEAMS, type Team } from './messages'
 import { supabaseAdmin } from './supabase/admin'
 
 /*
  * Coach alerts: when a query reaches a coach (routed straight to them, or
  * new in their team's pool), they get an in-app notification
- * (supabase/coach-alerts.sql) and an email: through any SMTP server
- * (Gmail, Microsoft 365…) via Nodemailer when SMTP_* is set, otherwise
- * through Resend.
+ * (supabase/coach-alerts.sql) and an email (lib/email.ts: Gmail/SMTP via
+ * Nodemailer, or Resend).
  *
  * Called from the routing server actions after the query is saved, in the
  * background (waitUntil), so the employee never waits on email delivery and
@@ -18,14 +16,8 @@ import { supabaseAdmin } from './supabase/admin'
  * Privacy: alerts never include the employee's name or what they wrote,
  * only that a query is waiting, with a link to log in.
  *
- * Needs on the server (Vercel env vars): SUPABASE_SERVICE_ROLE_KEY, and for
- * email one of:
- *   SMTP  SMTP_HOST, SMTP_PORT (465 or 587), SMTP_USER, SMTP_PASS, optional
- *         SMTP_FROM. For Gmail: smtp.gmail.com, 465, the Gmail address, and
- *         a Google "app password" (not the account password). Gmail sends
- *         from the signed-in address whatever SMTP_FROM says.
- *   Resend  RESEND_API_KEY and RESEND_FROM (on a domain verified in Resend).
- * With neither, in-app alerts still work and emails are skipped.
+ * Needs SUPABASE_SERVICE_ROLE_KEY on the server; email settings are in
+ * lib/email.ts. Without them, in-app alerts still work and emails are skipped.
  */
 
 export type AlertKind = 'assigned' | 'pool'
@@ -40,71 +32,23 @@ function alertText(kind: AlertKind, team: Team) {
     : `A new user query is waiting in the ${TEAMS[team].label.toLowerCase()} pool. Log in to view it.`
 }
 
-interface Email {
-  to: string
-  subject: string
-  text: string
-  html: string
-}
-
-/** SMTP (Nodemailer) when configured, else Resend, else nothing. */
-function mailer(): { name: string; send: (m: Email) => Promise<void> } | null {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, RESEND_API_KEY, RESEND_FROM } = process.env
-  if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
-    const port = Number(SMTP_PORT) || 465
-    // One short-lived connection per alert batch: serverless functions don't keep sockets between requests.
-    const transport = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port,
-      secure: port === 465, // 465 = TLS from the start; 587 upgrades with STARTTLS
-      auth: { user: SMTP_USER, pass: SMTP_PASS },
-      connectionTimeout: 10_000,
-      greetingTimeout: 10_000,
-      socketTimeout: 15_000,
-    })
-    const from = SMTP_FROM || `OmniWell <${SMTP_USER}>`
-    return { name: 'smtp', send: async (m) => void (await transport.sendMail({ from, ...m })) }
-  }
-  if (RESEND_API_KEY && RESEND_FROM) {
-    const client = new Resend(RESEND_API_KEY)
-    return {
-      name: 'resend',
-      send: async (m) => {
-        const { error } = await client.emails.send({ from: RESEND_FROM, ...m })
-        if (error) throw new Error(`${error.name}: ${error.message}`)
-      },
-    }
-  }
-  return null
-}
-
 /**
  * Emails one coach that a query is waiting for them. Resolves to whether it
  * was sent; never throws.
  */
 export async function sendCoachAlertEmail(coachEmail: string, userType: Team, threadId: string, kind: AlertKind = 'assigned', origin = 'https://omniwell-app.vercel.app'): Promise<boolean> {
-  const transport = mailer()
-  if (!transport) {
-    console.warn('[coach-alerts] email skipped: set SMTP_HOST/SMTP_USER/SMTP_PASS (e.g. Gmail) or RESEND_API_KEY/RESEND_FROM')
-    return false
-  }
-  const text = alertText(kind, userType)
-  const link = portalLink(origin, userType, threadId)
+  const team = TEAMS[userType].label.toLowerCase()
+  const { html, text } = layout({
+    heading: kind === 'assigned' ? 'A query is waiting for you' : `New query in the ${team} pool`,
+    paragraphs: [alertText(kind, userType)],
+    button: { label: `Open the ${team} portal`, url: portalLink(origin, userType, threadId) },
+    footer: `You're getting this because you're on the OmniWell ${team} team.`,
+  })
   try {
-    await transport.send({
-      to: coachEmail,
-      subject: kind === 'assigned' ? 'New query in your OmniWell queue' : `New ${TEAMS[userType].label.toLowerCase()} query in the OmniWell pool`,
-      text: `${text}\n\n${link}\n\nYou're getting this because you're on the OmniWell ${TEAMS[userType].label.toLowerCase()} team.`,
-      html: `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.5;color:#17303a">
-  <p>${text}</p>
-  <p><a href="${link}" style="display:inline-block;background:#0f7a6a;color:#fff;text-decoration:none;font-weight:700;padding:10px 18px;border-radius:999px">Open the ${TEAMS[userType].label.toLowerCase()} portal</a></p>
-  <p style="color:#5b6b73;font-size:12px">You're getting this because you're on the OmniWell ${TEAMS[userType].label.toLowerCase()} team.</p>
-</div>`,
-    })
+    await sendEmail({ to: coachEmail, subject: kind === 'assigned' ? 'New query in your OmniWell queue' : `New ${team} query in the OmniWell pool`, text, html })
     return true
   } catch (e) {
-    // The message only: SMTP errors never include the password, but keep logs lean anyway.
-    console.error(`[coach-alerts] email via ${transport.name} failed:`, (e as Error).message)
+    console.error('[coach-alerts]', (e as Error).message)
     return false
   }
 }

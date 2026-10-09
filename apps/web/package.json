@@ -37,6 +37,7 @@
     "recharts": "^2.15.4",
     "resend": "^6.32.1",
     "server-only": "^0.0.1",
+    "standardwebhooks": "^1.1.1",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
