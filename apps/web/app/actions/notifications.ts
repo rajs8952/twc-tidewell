@@ -4,6 +4,7 @@ import {
   DEFAULT_NOTIFY_TIME,
   SCHEDULE_COLUMNS,
   TRACKER_TYPES,
+  isRepeat,
   isTime,
   isTrackerType,
   toHHMM,
@@ -24,10 +25,13 @@ import { SIGNED_OUT, signedIn } from '@/lib/supabase/actions'
 
 function friendly(e: { code?: string; message: string }) {
   if (e.code === 'PGRST205' || e.code === 'PGRST202') return 'Reminders aren’t set up yet. Run supabase/notifications.sql in Supabase first.'
+  if (e.code === '23514') return 'The last reminder has to be later than the first one.'
+  if (e.code === '42703' || e.code === 'PGRST204') return 'Repeating reminders aren’t set up yet. Run supabase/notification-repeat.sql in Supabase first.'
   return e.message
 }
 
-type Row = { tracker_type: TrackerType; is_enabled: boolean; notify_time: string }
+type Row = { tracker_type: TrackerType; is_enabled: boolean; notify_time: string; repeat_every_minutes: number | null; end_time: string | null }
+const toSchedule = (r: Row): NotificationSchedule => ({ ...r, notify_time: toHHMM(r.notify_time), end_time: r.end_time ? toHHMM(r.end_time) : null, saved: true })
 
 /** All six trackers' reminder settings; trackers never changed come back off, with their default time. */
 export async function getNotificationSchedules(): Promise<ActionResult<NotificationSchedule[]>> {
@@ -42,9 +46,7 @@ export async function getNotificationSchedules(): Promise<ActionResult<Notificat
     ok: true,
     data: TRACKER_TYPES.map((t) => {
       const r = saved.get(t)
-      return r
-        ? { tracker_type: t, is_enabled: r.is_enabled, notify_time: toHHMM(r.notify_time), saved: true }
-        : { tracker_type: t, is_enabled: false, notify_time: DEFAULT_NOTIFY_TIME[t], saved: false }
+      return r ? toSchedule(r) : { tracker_type: t, is_enabled: false, notify_time: DEFAULT_NOTIFY_TIME[t], repeat_every_minutes: null, end_time: null, saved: false }
     }),
   }
 }
@@ -58,11 +60,17 @@ export async function saveNotificationSchedule(input: {
   tracker_type: TrackerType
   is_enabled?: boolean
   notify_time?: string
+  /** null = once a day. Sent together with end_time. */
+  repeat_every_minutes?: number | null
+  end_time?: string | null
 }): Promise<ActionResult<NotificationSchedule>> {
   if (!isTrackerType(input?.tracker_type)) return { ok: false, error: 'Unknown tracker.' }
   if (input.is_enabled !== undefined && typeof input.is_enabled !== 'boolean') return { ok: false, error: 'Invalid setting.' }
   if (input.notify_time !== undefined && !isTime(input.notify_time)) return { ok: false, error: 'Choose a valid time.' }
-  if (input.is_enabled === undefined && input.notify_time === undefined) return { ok: false, error: 'Nothing to change.' }
+  if (input.repeat_every_minutes !== undefined && !isRepeat(input.repeat_every_minutes)) return { ok: false, error: 'Choose how often to repeat.' }
+  if (input.end_time !== undefined && input.end_time !== null && !isTime(input.end_time)) return { ok: false, error: 'Choose a valid end time.' }
+  if (input.repeat_every_minutes && !input.end_time) return { ok: false, error: 'Choose when the reminders stop.' }
+  if (Object.values({ ...input, tracker_type: undefined }).every((v) => v === undefined)) return { ok: false, error: 'Nothing to change.' }
 
   const session = await signedIn()
   if (!session) return { ok: false, error: SIGNED_OUT }
@@ -71,9 +79,10 @@ export async function saveNotificationSchedule(input: {
   const patch: Partial<Row> = {}
   if (input.is_enabled !== undefined) patch.is_enabled = input.is_enabled
   if (input.notify_time !== undefined) patch.notify_time = input.notify_time
-  const toSchedule = (r: Row): NotificationSchedule => ({ ...r, notify_time: toHHMM(r.notify_time), saved: true })
+  if (input.repeat_every_minutes !== undefined) patch.repeat_every_minutes = input.repeat_every_minutes
+  if (input.end_time !== undefined) patch.end_time = input.end_time
 
-  // Update first: users may change only is_enabled and notify_time on existing rows.
+  // Update first: users may change only the schedule fields on existing rows.
   {
     const { data, error } = await supabase
       .from('notification_schedules')

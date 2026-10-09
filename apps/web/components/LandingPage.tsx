@@ -5,7 +5,7 @@ import { InsightCard } from './insights/InsightCard'
 import { Logo, LogoMark } from './Logo'
 import { BRAND, PILLAR_COLORS, PILLAR_ORDER } from '@/lib/brand'
 import type { Headline } from '@/lib/insights/headline'
-import { TRACKERS, type TrackerId } from '@/lib/trackers'
+import { BMI_TOOL, TRACKERS, type TrackerId } from '@/lib/trackers'
 
 /** One concrete line per pillar for the feature grid. */
 const HIGHLIGHTS: Record<TrackerId, string> = {
@@ -117,7 +117,15 @@ export function LandingPage() {
                 <Lock className="h-4 w-4" aria-hidden /> Private by default. Only you can see your entries.
               </p>
             </div>
-            <PillarOrbit />
+            <div>
+              <PillarOrbit />
+              <p className="mx-auto mt-2 flex w-fit items-center gap-2 rounded-full bg-white/80 px-3 py-1.5 text-sm font-bold ring-1 ring-line backdrop-blur">
+                <span className="flex h-6 w-6 items-center justify-center rounded-lg text-white" style={{ background: BMI_TOOL.accent }}>
+                  <BMI_TOOL.icon className="h-3.5 w-3.5" aria-hidden />
+                </span>
+                Plus a BMI calculator
+              </p>
+            </div>
           </div>
         </section>
 
@@ -127,7 +135,7 @@ export function LandingPage() {
             <h2 id="features-title" className="text-3xl font-extrabold sm:text-4xl">
               Six trackers that work together
             </h2>
-            <p className="mt-3 text-lg text-muted">Each one takes seconds to log. Together they show you the bigger picture.</p>
+            <p className="mt-3 text-lg text-muted">Each one takes seconds to log. Together they show you the bigger picture. And a BMI calculator when you want to check where you stand.</p>
           </div>
           <ul className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {TRACKERS.map((t) => {
@@ -148,6 +156,32 @@ export function LandingPage() {
               )
             })}
           </ul>
+
+          {/* The BMI calculator: a tool, not a daily tracker, so it sits under the six. */}
+          <div className="relative mt-4 grid gap-5 overflow-hidden rounded-3xl bg-white p-6 ring-1 ring-line sm:grid-cols-[auto_1fr_auto] sm:items-center">
+            <span className="absolute inset-x-0 top-0 h-1" style={{ background: BMI_TOOL.accent }} aria-hidden />
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl" style={{ background: `${BMI_TOOL.accent}1A`, color: BMI_TOOL.accent }}>
+              <BMI_TOOL.icon className="h-6 w-6" aria-hidden />
+            </span>
+            <div>
+              <h3 className="text-xl font-bold">{BMI_TOOL.name}</h3>
+              <p className="mt-1 font-semibold text-ink/80">{BMI_TOOL.description}</p>
+              <p className="mt-2 text-sm text-muted">
+                Filled in from your profile, with the healthy weight range for your height. Try other numbers safely; nothing changes until you save. A rough guide, so a
+                dietitian is a message away for a proper check.
+              </p>
+            </div>
+            {/* A sample reading, like the one in the app. */}
+            <div className="rounded-2xl bg-mist px-4 py-3 ring-1 ring-line sm:w-56" aria-label="Example BMI reading">
+              <p className="flex items-baseline justify-between text-sm font-bold">
+                Body-mass index <span className="text-2xl font-extrabold tabular-nums">22.4</span>
+              </p>
+              <div className="relative mt-2 h-2 rounded-full" style={{ background: 'linear-gradient(90deg,#7FB6E6 0 17.5%,#5CC79A 17.5% 50%,#F2C14E 50% 75%,#EF8A5B 75%)' }}>
+                <span className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink ring-2 ring-white" style={{ left: '37%' }} />
+              </div>
+              <p className="mt-2 text-xs font-semibold text-[#1E7A52]">In the healthy range</p>
+            </div>
+          </div>
         </section>
 
         {/* Insights */}

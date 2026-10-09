@@ -37,13 +37,45 @@ export const REMINDER_HINT: Record<TrackerType, string> = {
 export interface NotificationSchedule {
   tracker_type: TrackerType
   is_enabled: boolean
-  /** Local time, "HH:MM". */
+  /** Local time, "HH:MM": the first (or only) reminder of the day. */
   notify_time: string
+  /** Repeat every N minutes through the day (supabase/notification-repeat.sql); null = once a day. */
+  repeat_every_minutes: number | null
+  /** With a repeat: the last reminder time, "HH:MM". */
+  end_time: string | null
   /** False when the user has never changed this tracker (shown as off, with the default time). */
   saved: boolean
 }
 
-export const SCHEDULE_COLUMNS = 'tracker_type, is_enabled, notify_time'
+export const SCHEDULE_COLUMNS = 'tracker_type, is_enabled, notify_time, repeat_every_minutes, end_time'
+
+/** How often a reminder can repeat (the delivery job runs every 15 minutes, so 30 is the shortest). */
+export const REPEAT_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: 'Once a day' },
+  { value: 30, label: 'Every 30 minutes' },
+  { value: 60, label: 'Every hour' },
+  { value: 90, label: 'Every 1½ hours' },
+  { value: 120, label: 'Every 2 hours' },
+  { value: 180, label: 'Every 3 hours' },
+  { value: 240, label: 'Every 4 hours' },
+]
+export const isRepeat = (v: unknown): v is number | null => v === null || REPEAT_OPTIONS.some((o) => o.value === v)
+
+/** Where a new repeat ends unless the user picks otherwise. */
+export const DEFAULT_END_TIME = '21:00'
+
+const toMinutes = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5))
+
+/** How many reminders a repeating schedule sends a day ("09:00–21:00 every 2 h" = 7). */
+export function remindersPerDay(start: string, end: string, every: number) {
+  const span = toMinutes(end) - toMinutes(start)
+  return span < 0 ? 0 : Math.floor(span / every) + 1
+}
+
+/** A sensible end time for a new repeat: 21:00, or the end of the day if the first reminder is later. */
+export function defaultEndFor(start: string) {
+  return toMinutes(start) < toMinutes(DEFAULT_END_TIME) ? DEFAULT_END_TIME : '23:59'
+}
 
 export const isTrackerType = (v: unknown): v is TrackerType => typeof v === 'string' && (TRACKER_TYPES as string[]).includes(v)
 

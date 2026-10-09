@@ -1,6 +1,6 @@
 'use client'
 
-import { Ban, Gauge, KeyRound, Undo2, RotateCw, Search, ShieldCheck, UserCog, UserPlus, Users, UserCheck } from 'lucide-react'
+import { Ban, ChevronLeft, ChevronRight, Gauge, KeyRound, Undo2, RotateCw, Search, ShieldCheck, UserCog, UserPlus, Users, UserCheck } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { adminGetUsers } from '@/app/actions/admin'
 import { errorMessage } from '@rajs8952/core/errors'
@@ -18,6 +18,49 @@ import { ActivationDialog, AddUserDialog, CapacityDialog, ROLE_LABEL, ReleaseCha
  * ------------------------------------------------------------------ */
 
 type Filter = 'all' | AppRole | 'deactivated'
+
+/** Accounts per page in the list. */
+const PAGE_SIZE = 25
+
+/** Previous / next with "Showing 26–50 of 132", plus a few page numbers on larger screens. */
+function Pager({ page, pages, total, onPage }: { page: number; pages: number; total: number; onPage: (p: number) => void }) {
+  if (total <= PAGE_SIZE) return null
+  const from = (page - 1) * PAGE_SIZE + 1
+  const to = Math.min(total, page * PAGE_SIZE)
+  // Up to five numbers around the current page.
+  const first = Math.max(1, Math.min(page - 2, pages - 4))
+  const numbers = Array.from({ length: Math.min(5, pages) }, (_, i) => first + i)
+  const btn = 'inline-flex h-9 min-w-9 items-center justify-center rounded-full px-2 text-sm font-bold ring-1 ring-line transition hover:bg-mist disabled:opacity-40 disabled:hover:bg-transparent'
+  return (
+    <nav aria-label="Pages" className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
+      <p className="text-sm text-muted" aria-live="polite">
+        Showing <span className="font-bold tabular-nums text-ink">{from}–{to}</span> of <span className="font-bold tabular-nums text-ink">{total}</span>
+      </p>
+      <div className="flex items-center gap-1.5">
+        <button type="button" className={btn} onClick={() => onPage(page - 1)} disabled={page === 1} aria-label="Previous page">
+          <ChevronLeft className="h-4 w-4" aria-hidden />
+        </button>
+        {numbers.map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => onPage(n)}
+            aria-current={n === page ? 'page' : undefined}
+            className={`${btn} hidden tabular-nums sm:inline-flex ${n === page ? 'bg-ink text-white ring-ink hover:bg-ink' : ''}`}
+          >
+            {n}
+          </button>
+        ))}
+        <span className="px-1 text-sm font-semibold tabular-nums text-muted sm:hidden">
+          {page} / {pages}
+        </span>
+        <button type="button" className={btn} onClick={() => onPage(page + 1)} disabled={page === pages} aria-label="Next page">
+          <ChevronRight className="h-4 w-4" aria-hidden />
+        </button>
+      </div>
+    </nav>
+  )
+}
 const FILTER_LABEL: Record<Filter, string> = { all: 'All', user: 'Users', coach: 'Coaches', admin: 'Admins', deactivated: 'Deactivated' }
 
 const ROLE_STYLE: Record<AppRole, string> = {
@@ -108,6 +151,7 @@ export function AdminPortal() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
+  const [page, setPage] = useState(1)
   const [adding, setAdding] = useState(false)
   const [roleFor, setRoleFor] = useState<AdminUser | null>(null)
   const [passwordFor, setPasswordFor] = useState<AdminUser | null>(null)
@@ -154,10 +198,21 @@ export function AdminPortal() {
   }, [users])
 
   const q = query.trim().toLowerCase()
-  const shown = (users ?? []).filter((u) => {
+  const matching = (users ?? []).filter((u) => {
     if (filter === 'deactivated' ? !u.deactivated : filter !== 'all' && u.role !== filter) return false
     return !q || u.full_name.toLowerCase().includes(q) || (u.email ?? '').toLowerCase().includes(q)
   })
+  const pages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE))
+  const current = Math.min(page, pages)
+  const shown = matching.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
+
+  // A new search or filter starts again from the first page.
+  useEffect(() => setPage(1), [q, filter])
+
+  function goTo(p: number) {
+    setPage(Math.max(1, Math.min(pages, p)))
+    document.getElementById('accounts')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const tiles: { label: string; value: number; icon: typeof Users; filter: Filter }[] = [
     { label: 'Total accounts', value: counts.all, icon: Users, filter: 'all' },
@@ -208,7 +263,7 @@ export function AdminPortal() {
         })}
       </div>
 
-      <section aria-label="Accounts" className="overflow-hidden rounded-3xl bg-white ring-1 ring-line">
+      <section id="accounts" aria-label="Accounts" className="scroll-mt-20 overflow-hidden rounded-3xl bg-white ring-1 ring-line">
         <div className="flex flex-col gap-3 border-b border-line p-4 sm:flex-row sm:items-center sm:justify-between">
           <label className="relative block sm:w-80">
             <span className="sr-only">Search by name or email</span>
@@ -306,6 +361,7 @@ export function AdminPortal() {
                 </li>
               ))}
             </ul>
+            <Pager page={current} pages={pages} total={matching.length} onPage={goTo} />
           </>
         )}
       </section>

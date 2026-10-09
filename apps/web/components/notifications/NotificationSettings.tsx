@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { deletePushSubscription, getNotificationSchedules, savePushSubscription, saveNotificationSchedule, sendTestNotification } from '@/app/actions/notifications'
 import { ProfileSection } from '@/components/profile/ProfileSection'
 import { errorMessage } from '@rajs8952/core/errors'
-import { REMINDER_HINT, type NotificationSchedule, type TrackerType } from '@/lib/notifications'
+import { REMINDER_HINT, REPEAT_OPTIONS, defaultEndFor, remindersPerDay, type NotificationSchedule, type TrackerType } from '@/lib/notifications'
 import { trackProgress } from '@/lib/progress'
 import { pushStatus, subscribeToPush, type PushState } from '@/lib/push-client'
 import { TRACKERS } from '@/lib/trackers'
@@ -13,8 +13,9 @@ import { TRACKERS } from '@/lib/trackers'
 /* ------------------------------------------------------------------
  * Reminder settings: a master switch that allows notifications on this
  * device (permission + Web Push subscription), and per-tracker toggles
- * with a time. Changes save straight away; times save once you stop
- * typing or leave the field. Sending the reminders is a later phase.
+ * with a time, optionally repeating through the day (e.g. water every 2
+ * hours until 21:00). Changes save straight away; times save once you stop
+ * typing or leave the field. The cron job (app/api/cron/notify) sends them.
  * ------------------------------------------------------------------ */
 
 const TIME_SAVE_DELAY_MS = 700
@@ -122,8 +123,9 @@ export function NotificationSettings() {
   const [pushBusy, setPushBusy] = useState(false)
   const [pushError, setPushError] = useState<string | null>(null)
   const [pushNote, setPushNote] = useState<string | null>(null)
-  const timeTimers = useRef<Partial<Record<TrackerType, ReturnType<typeof setTimeout>>>>({})
-  const pendingTimes = useRef<Partial<Record<TrackerType, string>>>({})
+  /** Typed times waiting to save, per tracker and field ("water:notify_time"). */
+  const timeTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const pendingTimes = useRef<Record<string, string>>({})
 
   useEffect(() => {
     trackProgress(getNotificationSchedules())
@@ -140,7 +142,7 @@ export function NotificationSettings() {
     return () => Object.values(timers).forEach((t) => clearTimeout(t))
   }, [])
 
-  const save = useCallback(async (tracker: TrackerType, change: { is_enabled?: boolean; notify_time?: string }) => {
+  const save = useCallback(async (tracker: TrackerType, change: Omit<Parameters<typeof saveNotificationSchedule>[0], 'tracker_type'>) => {
     setStatus((s) => ({ ...s, [tracker]: { kind: 'saving' } }))
     try {
       const res = await saveNotificationSchedule({ tracker_type: tracker, ...change })
@@ -161,21 +163,40 @@ export function NotificationSettings() {
     save(row.tracker_type, on && !row.saved ? { is_enabled: on, notify_time: row.notify_time } : { is_enabled: on })
   }
 
+  type TimeField = 'notify_time' | 'end_time'
+
   /** Saves a pending time change now (on blur) or after a pause in typing. */
-  function flushTime(tracker: TrackerType) {
-    clearTimeout(timeTimers.current[tracker])
-    const t = pendingTimes.current[tracker]
+  function flushTime(tracker: TrackerType, field: TimeField) {
+    const key = `${tracker}:${field}`
+    clearTimeout(timeTimers.current[key])
+    const t = pendingTimes.current[key]
     if (t === undefined) return
-    delete pendingTimes.current[tracker]
-    save(tracker, { notify_time: t })
+    delete pendingTimes.current[key]
+    // A repeating reminder must stop after it starts; say so instead of saving.
+    const row = schedules?.find((r) => r.tracker_type === tracker)
+    const start = field === 'notify_time' ? t : row?.notify_time
+    const end = field === 'end_time' ? t : row?.end_time
+    if (row?.repeat_every_minutes && start && end && end <= start) {
+      setStatus((st) => ({ ...st, [tracker]: { kind: 'error', message: 'The last reminder has to be later than the first one.' } }))
+      return
+    }
+    save(tracker, { [field]: t })
   }
 
-  function changeTime(tracker: TrackerType, value: string) {
-    update(tracker, { notify_time: value })
+  function changeTime(tracker: TrackerType, value: string, field: TimeField = 'notify_time') {
+    update(tracker, { [field]: value })
     if (!value) return // cleared mid-edit; wait for a full time
-    pendingTimes.current[tracker] = value
-    clearTimeout(timeTimers.current[tracker])
-    timeTimers.current[tracker] = setTimeout(() => flushTime(tracker), TIME_SAVE_DELAY_MS)
+    const key = `${tracker}:${field}`
+    pendingTimes.current[key] = value
+    clearTimeout(timeTimers.current[key])
+    timeTimers.current[key] = setTimeout(() => flushTime(tracker, field), TIME_SAVE_DELAY_MS)
+  }
+
+  /** Once a day, or every N minutes until an end time (saved together). */
+  function changeRepeat(row: NotificationSchedule, every: number | null) {
+    const end = every ? (row.end_time && row.end_time > row.notify_time ? row.end_time : defaultEndFor(row.notify_time)) : null
+    update(row.tracker_type, { repeat_every_minutes: every, end_time: end })
+    save(row.tracker_type, { repeat_every_minutes: every, end_time: end })
   }
 
   async function enablePush() {
@@ -279,12 +300,49 @@ export function NotificationSettings() {
                         type="time"
                         value={row.notify_time}
                         onChange={(e) => changeTime(row.tracker_type, e.target.value)}
-                        onBlur={() => flushTime(row.tracker_type)}
+                        onBlur={() => flushTime(row.tracker_type, 'notify_time')}
                         className="rounded-xl border border-line bg-white px-2.5 py-1.5 text-sm font-semibold tabular-nums text-ink focus:border-tide-500 focus:outline-none focus:ring-4 focus:ring-tide-200/60"
                       />
                     </>
                   )}
                   <Toggle checked={row.is_enabled} onChange={(on) => toggle(row, on)} label={`${t.name} reminders`} accent={TRACK_ON_OVERRIDE[row.tracker_type] ?? t.accent} />
+                  {row.is_enabled && (
+                    <div className="flex w-full flex-wrap items-center gap-2 pl-[3.25rem] text-sm">
+                      <label htmlFor={`${timeId}-repeat`} className="text-muted">
+                        Repeat
+                      </label>
+                      <select
+                        id={`${timeId}-repeat`}
+                        value={row.repeat_every_minutes ?? ''}
+                        onChange={(e) => changeRepeat(row, e.target.value ? Number(e.target.value) : null)}
+                        className="rounded-xl border border-line bg-white px-2.5 py-1.5 text-sm font-semibold text-ink focus:border-tide-500 focus:outline-none focus:ring-4 focus:ring-tide-200/60"
+                      >
+                        {REPEAT_OPTIONS.map((o) => (
+                          <option key={o.label} value={o.value ?? ''}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                      {row.repeat_every_minutes && row.end_time && (
+                        <>
+                          <label htmlFor={`${timeId}-end`} className="text-muted">
+                            until
+                          </label>
+                          <input
+                            id={`${timeId}-end`}
+                            type="time"
+                            value={row.end_time}
+                            onChange={(e) => changeTime(row.tracker_type, e.target.value, 'end_time')}
+                            onBlur={() => flushTime(row.tracker_type, 'end_time')}
+                            className="rounded-xl border border-line bg-white px-2.5 py-1.5 text-sm font-semibold tabular-nums text-ink focus:border-tide-500 focus:outline-none focus:ring-4 focus:ring-tide-200/60"
+                          />
+                          {row.end_time > row.notify_time && (
+                            <span className="text-xs text-muted">· {remindersPerDay(row.notify_time, row.end_time, row.repeat_every_minutes)} reminders a day</span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                   {st?.kind === 'error' && (
                     <p role="alert" className="w-full text-xs font-semibold text-alert">
                       {st.message}
