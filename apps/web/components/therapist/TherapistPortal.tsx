@@ -440,7 +440,8 @@ export function TherapistPortal({ team }: { team: Team }) {
         options={[
           { id: 'mine', label: 'Mine', count: counts.mine },
           { id: 'pool', label: 'Pool', count: counts.pool },
-          { id: 'closed', label: 'Closed', count: counts.closed },
+          // The queue lists the 100 most recently closed (supabase/queue-and-previews.sql).
+          { id: 'closed', label: counts.closed >= 100 ? 'Closed 100+' : 'Closed', count: counts.closed >= 100 ? undefined : counts.closed },
         ]}
       />
       {queueError && <p role="alert" className="mx-3 mb-2 rounded-lg bg-[#FDECEA] px-3 py-2 text-sm font-semibold text-[#8C1D13]">{queueError}</p>}

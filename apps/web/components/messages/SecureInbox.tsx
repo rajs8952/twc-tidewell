@@ -20,7 +20,7 @@ import {
   type ChatMessageView,
 } from '@/components/chat/ChatUI'
 import { uploadChatImage } from '@/app/actions/chat-media'
-import { submitUserQuery } from '@/app/actions/routing'
+import { notifyCoachOfReply, submitUserQuery } from '@/app/actions/routing'
 import { errorMessage } from '@rajs8952/core/errors'
 import { ChatImageError, formatBytes, prepareChatImage } from '@/lib/chat-image'
 import { storageKey } from '@/lib/brand'
@@ -300,6 +300,9 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
       if (p.image) URL.revokeObjectURL(p.image.previewUrl)
       setPending((ps) => ps.filter((x) => x.key !== p.key))
       if (activeIdRef.current === threadId) setMessages((cur) => mergeMessages(cur, saved))
+      // A follow-up in an existing conversation (a brand-new chat already alerted coaches when it was
+      // opened): let the coach know. The server checks it's theirs and rate-limits it.
+      if (p.threadId && !p.textSent) notifyCoachOfReply(threadId).catch(() => {})
       bump()
     } catch (e) {
       setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, state: 'failed', error: errorMessage(e) } : x)))

@@ -103,16 +103,27 @@ export async function listMyChats(supabase: SupabaseClient): Promise<ChatSummary
   if (!threads?.length) return []
   markDelivered(supabase)
   const coachOf = new Map(((coaches.data ?? []) as ChatCoach[]).map((c) => [c.thread_id, c]))
-  const { data: recent, error: msgError } = await supabase
-    .from('thread_messages')
-    .select('thread_id, sender_role, content, created_at, media_url')
-    .in('thread_id', threads.map((t) => t.id))
-    .order('created_at', { ascending: false })
-    .limit(300)
-    .returns<(ThreadMessage & { thread_id: string })[]>()
-  if (msgError) fail(msgError, 'load')
+  type Preview = Pick<ThreadMessage, 'thread_id' | 'sender_role' | 'content' | 'created_at' | 'media_url'>
+  // Each conversation's latest message (supabase/queue-and-previews.sql).
+  let previews: Preview[]
+  const rpc = await supabase.rpc('my_chat_previews')
+  if (!rpc.error) {
+    previews = (rpc.data ?? []) as Preview[]
+  } else {
+    // Before that SQL is run: the newest messages overall (one very busy chat can crowd others out).
+    if (rpc.error.code !== 'PGRST202') fail(rpc.error, 'load')
+    const { data: recent, error: msgError } = await supabase
+      .from('thread_messages')
+      .select('thread_id, sender_role, content, created_at, media_url')
+      .in('thread_id', threads.map((t) => t.id))
+      .order('created_at', { ascending: false })
+      .limit(300)
+      .returns<Preview[]>()
+    if (msgError) fail(msgError, 'load')
+    previews = recent ?? []
+  }
   const last = new Map<string, ChatSummary['last']>()
-  for (const m of recent ?? []) if (!last.has(m.thread_id)) last.set(m.thread_id, { sender_role: m.sender_role, content: m.content, created_at: m.created_at, media_url: m.media_url })
+  for (const m of previews) if (!last.has(m.thread_id)) last.set(m.thread_id, { sender_role: m.sender_role, content: m.content, created_at: m.created_at, media_url: m.media_url })
   return threads
     .map((t) => {
       const c = coachOf.get(t.id)

@@ -30,9 +30,9 @@ export const SEVERITY_ORDER: Severity[] = ['CRITICAL', 'WARNING', 'SUGGESTION', 
 export const RULES = {
   /** Mood scores at or below this are critical (1 = Awful on the 1–5 scale). */
   moodCriticalAtOrBelow: 1,
-  /** Sleep outside [min, max] hours is a warning; the bounds themselves are fine. */
+  /** Sleep outside [min, max] hours is a warning; the bounds themselves are fine. The max matches the 7–9 h guide on the Sleep page. */
   sleepMinHours: 5,
-  sleepMaxHours: 8,
+  sleepMaxHours: 9,
   /** WHO "overweight" starts at a BMI of 25; obesity (30+) gets the same suggestion. */
   bmiSuggestAtOrAbove: 25,
 } as const
@@ -144,8 +144,9 @@ export function evaluateMetric(metric: LoggedMetric, context: InterventionContex
           title: short ? 'That’s not much sleep' : 'That’s a lot of sleep',
           message: short
             ? `You slept ${formatHours(metric.value)}. A night like this now and then is normal, but if it keeps happening the wellness team can help you find out why.`
-            : `You slept ${formatHours(metric.value)}. Regularly needing this much can be a sign of low energy, diet or stress, which the wellness team can help with.`,
-          actions: [{ kind: 'book', label: 'Book a wellness consultation', contact: 'dietitian' }],
+            : `You slept ${formatHours(metric.value)}. Regularly needing this much can be a sign of low mood, stress or poor-quality sleep, which a therapist can help with.`,
+          // Sleep is a wellbeing question, so it goes to the therapist (not the dietitian).
+          actions: [{ kind: 'chat', label: 'Talk to a therapist', contact: 'therapist' }],
           showEmergencyNote: false,
         }
       }

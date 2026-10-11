@@ -82,6 +82,9 @@ function LevelSlider({
         step={1}
         value={value ?? 3}
         onChange={(e) => onChange(Number(e.target.value))}
+        // While unset the thumb rests on the middle; a tap there doesn't change the input's value, so no
+        // change event fires. Treat that tap as choosing "Medium".
+        onPointerUp={(e) => value == null && onChange(Number(e.currentTarget.value))}
         aria-valuetext={value == null ? 'Not set' : LEVEL_LABELS[value - 1]}
         className={`mt-2 h-2 w-full cursor-pointer accent-tide-500 ${value == null ? 'opacity-40' : ''}`}
       />

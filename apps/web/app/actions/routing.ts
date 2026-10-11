@@ -2,7 +2,7 @@
 
 import { waitUntil } from '@vercel/functions'
 import { headers } from 'next/headers'
-import { alertCoachesOfQuery, clearPoolAlerts } from '@/lib/coach-alerts'
+import { alertCoachOfReply, alertCoachesOfQuery, clearPoolAlerts } from '@/lib/coach-alerts'
 import { isTeam, validateMessage, type Team } from '@/lib/messages'
 import { SIGNED_OUT, isUuid, signedIn } from '@/lib/supabase/actions'
 import type { ActionResult } from '@rajs8952/core/types'
@@ -99,4 +99,27 @@ export async function claimTicket(threadId: string): Promise<ActionResult<{ thre
   if (error) return { ok: false, error: friendly(error) }
   waitUntil(clearPoolAlerts(data.thread_id))
   return { ok: true, data: { threadId: data.thread_id } }
+}
+
+/**
+ * Called after an employee sends a message in an existing conversation: if a
+ * coach has it, they're alerted (at most once per conversation every 30
+ * minutes; see lib/coach-alerts.ts). Pool conversations were already
+ * announced when they were opened. Returns straight away; the alert runs in
+ * the background.
+ */
+export async function notifyCoachOfReply(threadId: string): Promise<ActionResult<null>> {
+  if (!isUuid(threadId)) return { ok: false, error: 'That conversation wasn’t found.' }
+  const session = await signedIn()
+  if (!session) return { ok: false, error: SIGNED_OUT }
+  // Read as the employee: row-level security only returns their own conversations.
+  const { data: thread } = await session.supabase
+    .from('therapist_threads')
+    .select('id, team, status, assigned_coach_id, user_id')
+    .eq('id', threadId)
+    .maybeSingle<{ id: string; team: Team; status: string; assigned_coach_id: string | null; user_id: string }>()
+  if (!thread || thread.user_id !== session.userId || thread.status !== 'in_progress' || !thread.assigned_coach_id) return { ok: true, data: null }
+  const origin = headers().get('origin') ?? 'https://omniwell-app.vercel.app'
+  waitUntil(alertCoachOfReply({ threadId, team: thread.team, coachId: thread.assigned_coach_id, origin }))
+  return { ok: true, data: null }
 }

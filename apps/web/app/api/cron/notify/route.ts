@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { reminderPayload, type TrackerType } from '@/lib/notifications'
 import { mapLimit, sendPush } from '@/lib/push-server'
+import { remindersAlreadyDone } from '@/lib/reminder-skip'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 
 /* ------------------------------------------------------------------
@@ -15,8 +16,10 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
  *     every enabled reminder whose time has come in its user's timezone and
  *     marks it sent in the same step, so overlapping or late runs never
  *     send twice. It returns one row per subscribed device.
- *  3. Each device gets a Web Push; subscriptions the push service reports
- *     gone (404/410) are deleted.
+ *  3. Reminders for something already done today (water goal met, mood
+ *     logged, weighed in this week…) are skipped: lib/reminder-skip.ts.
+ *  4. Each remaining device gets a Web Push; subscriptions the push service
+ *     reports gone (404/410) are deleted.
  *
  * Uses the Supabase service role (server only) because it works across all
  * users; the key never leaves the server.
@@ -52,7 +55,9 @@ export async function GET(req: Request) {
     console.error('[cron/notify] claim failed', error)
     return NextResponse.json({ error: error.code === 'PGRST202' ? 'Run supabase/notification-delivery.sql in Supabase first.' : error.message }, { status: 500 })
   }
-  const due = (data ?? []) as DueRow[]
+  const claimed = (data ?? []) as DueRow[]
+  const done = await remindersAlreadyDone(admin, claimed, now)
+  const due = claimed.filter((r) => !done.has(`${r.user_id}:${r.tracker_type}`))
 
   const results = await mapLimit(due, CONCURRENCY, async (row) => ({ row, result: await sendPush(row, reminderPayload(row.tracker_type)) }))
 
@@ -68,6 +73,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     at: now.toISOString(),
     devices: due.length,
+    skippedAlreadyDone: claimed.length - due.length,
     sent: results.filter((r) => r.result.ok).length,
     removedExpired: gone.length,
     failed: failed.length,

@@ -146,7 +146,8 @@ export function MeditationTracker({
 
   const [mode, setMode] = useState<'timer' | 'log'>('timer')
   const [type, setType] = useState<SessionType>('breathing')
-  const [minutes, setMinutes] = useState(5)
+  // Starts at the daily target on Home (MEDITATION_TARGET_MIN in @rajs8952/trackers), so one default session completes the day.
+  const [minutes, setMinutes] = useState(10)
   const [calmBefore, setCalmBefore] = useState<number | null>(null)
   const [calmAfter, setCalmAfter] = useState<number | null>(null)
   const [note, setNote] = useState('')

@@ -29,9 +29,15 @@ describe('sleep', () => {
     [4.5, 'WARNING', 'sleep-short'],
     [RULES.sleepMinHours, 'NORMAL', 'normal'],
     [RULES.sleepMaxHours, 'NORMAL', 'normal'],
+    [8.25, 'NORMAL', 'normal'],
     [9.25, 'WARNING', 'sleep-long'],
   ])('%f h → %s', (hours, severity, rule) => {
     expect(evaluateMetric({ type: 'sleep', value: hours })).toMatchObject({ severity, rule })
+  })
+
+  it('points sleep worries to the therapist', () => {
+    expect(evaluateMetric({ type: 'sleep', value: 10 }).actions[0]).toMatchObject({ contact: 'therapist' })
+    expect(evaluateMetric({ type: 'sleep', value: 4 }).actions[0]).toMatchObject({ contact: 'therapist' })
   })
 
   it('formats the hours in the message', () => {
