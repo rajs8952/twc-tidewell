@@ -194,6 +194,9 @@ export function toProfile(r: Record<string, unknown>): Profile {
     ...(r.goal_sleep_min == null ? {} : { goal_sleep_min: Number(r.goal_sleep_min) }),
     ...(r.goal_meditation_min == null ? {} : { goal_meditation_min: Number(r.goal_meditation_min) }),
     ...(r.goal_exercise_week_min == null ? {} : { goal_exercise_week_min: Number(r.goal_exercise_week_min) }),
+    // Present only once onboarding.sql has run, so "absent" and "not onboarded yet" stay distinct.
+    ...('onboarded_at' in r ? { onboarded_at: (r.onboarded_at as string | null) ?? null } : {}),
+    ...(Array.isArray(r.focus_trackers) ? { focus_trackers: r.focus_trackers as string[] } : {}),
   }
 }
 

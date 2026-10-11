@@ -17,6 +17,7 @@ const APP_ROUTES = [
   '/dietitian',
   '/admin',
   '/update-password',
+  '/welcome',
 ]
 const AUTH_ROUTES = ['/login', '/signup']
 

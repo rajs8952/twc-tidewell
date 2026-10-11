@@ -18,6 +18,10 @@ export interface Profile {
   goal_sleep_min?: number
   goal_meditation_min?: number
   goal_exercise_week_min?: number
+  /** Onboarding (supabase/onboarding.sql); absent before that's run. */
+  focus_trackers?: string[]
+  /** When they finished or skipped the welcome screen; null = not yet. */
+  onboarded_at?: string | null
 }
 
 export interface DrinkLog {

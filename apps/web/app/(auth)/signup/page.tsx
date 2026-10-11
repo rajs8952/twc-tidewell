@@ -77,7 +77,8 @@ export default function SignupPage() {
           await stashPendingAvatar(avatar.blob)
         }
       }
-      router.replace('/dashboard')
+      // First stop for a new account: choose a focus and reminders.
+      router.replace('/welcome')
       router.refresh()
       return
     }

@@ -2,9 +2,13 @@
 
 import { AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { Check, Flame, Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { getTrackerData } from '@/app/actions/dashboard'
 import { Avatar } from '@/components/Avatar'
+import { FirstWeekChecklist } from '@/components/hub/FirstWeekChecklist'
+import { GardenCard } from '@/components/hub/GardenCard'
 import { HubCard } from '@/components/hub/HubCard'
 import { WellnessTeam } from '@/components/hub/WellnessTeam'
 import { InterventionBanner } from '@/components/interventions/InterventionBanner'
@@ -12,11 +16,14 @@ import { getDrinkLogs } from '@rajs8952/storage/supabase'
 import { errorMessage } from '@rajs8952/core/errors'
 import { exerciseRange } from '@rajs8952/core/exercise'
 import { hubSummaries, type HubSummary, type TrackerData } from '@rajs8952/trackers/hub'
-import { addDays, greeting, startOfDay } from '@rajs8952/core/dates'
+import { addDays, dayKey, greeting, startOfDay } from '@rajs8952/core/dates'
 import { effectiveGoal } from '@rajs8952/core/hydration'
 import { latestInterventions } from '@rajs8952/interventions'
 import { meditationRange } from '@rajs8952/core/meditation'
-import { moodRange } from '@rajs8952/core/mood'
+import { MOODS, moodRange, type MoodLog, type MoodState } from '@rajs8952/core/mood'
+import { MoodFace } from '@rajs8952/tracker-mood'
+import { useTrackerStorage } from '@rajs8952/ui'
+import { activeStreak, dayStreak, loadActivity, waterStreak, weekStreak, type Activity } from '@/lib/activity'
 import { sleepRange } from '@rajs8952/core/sleep'
 import { createClient } from '@/lib/supabase/client'
 import { TRACKERS, type TrackerId } from '@/lib/trackers'
@@ -30,8 +37,21 @@ import { trackProgress } from '@/lib/progress'
 export function HubView() {
   const supabase = useMemo(() => createClient(), [])
   const { profile, error: profileError } = useProfile()
+  const router = useRouter()
+
+  // A brand-new account goes to the welcome screen once (focus and reminders).
+  // onboarded_at is undefined before supabase/onboarding.sql exists, so nobody is redirected then.
+  useEffect(() => {
+    if (!profile || profile.onboarded_at !== null || !profile.created_at) return
+    if (Date.now() - Date.parse(profile.created_at) < 3 * 86_400_000) router.replace('/welcome')
+  }, [profile, router])
   const [trackerData, setTrackerData] = useState<TrackerData | null>(null)
   const [waterMl, setWaterMl] = useState<number | null>(null)
+  const [activity, setActivity] = useState<Activity | null>(null)
+  const storage = useTrackerStorage()
+  /** Quick logging from the cards: which button is saving, and a short confirmation. */
+  const [quickBusy, setQuickBusy] = useState<string | null>(null)
+  const [quickNote, setQuickNote] = useState<{ tracker: TrackerId; text: string; error?: boolean } | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -55,10 +75,48 @@ export function HubView() {
     trackProgress(getDrinkLogs(supabase, today, addDays(today, 1)))
       .then((logs) => alive && setWaterMl(logs.reduce((s, l) => s + l.effective_ml, 0)))
       .catch(() => alive && setWaterMl(-1))
+    // Streak history (a few months of "which days"), loaded alongside.
+    loadActivity(supabase, now)
+      .then((a) => alive && setActivity(a))
+      .catch(() => {})
     return () => {
       alive = false
     }
   }, [supabase])
+
+  useEffect(() => {
+    if (!quickNote) return
+    const t = setTimeout(() => setQuickNote(null), 3500)
+    return () => clearTimeout(t)
+  }, [quickNote])
+
+  const todayKey = dayKey(new Date())
+
+  /** One tap from Home: a glass or bottle of water now. */
+  async function quickWater(ml: number) {
+    setQuickBusy(`water-${ml}`)
+    try {
+      const log = await storage.water.add('water', ml)
+      setWaterMl((v) => (v ?? 0) + log.effective_ml)
+      setActivity((a) => (a ? { ...a, waterTotals: { ...a.waterTotals, [todayKey]: (a.waterTotals[todayKey] ?? 0) + log.effective_ml } } : a))
+      setQuickNote({ tracker: 'water', text: `Added ${ml} ml` })
+    } catch (e) {
+      setQuickNote({ tracker: 'water', text: `Not saved: ${errorMessage(e)}`, error: true })
+    } finally {
+      setQuickBusy(null)
+    }
+  }
+
+  /** One tap from Home: a mood check-in now. "Awful" brings up the support prompt, as on the Mood page. */
+  async function quickMood(mood: MoodState) {
+    setQuickBusy(`mood-${mood}`)
+    const res = await storage.mood.create({ mood_state: mood })
+    setQuickBusy(null)
+    if (!res.ok) return setQuickNote({ tracker: 'mood', text: `Not saved: ${res.error}`, error: true })
+    setTrackerData((d) => (d && d.mood.ok ? { ...d, mood: { ok: true, data: [res.data as MoodLog, ...d.mood.data] } } : d))
+    setActivity((a) => (a ? { ...a, days: { ...a.days, mood: new Set([...a.days.mood, todayKey]) } } : a))
+    setQuickNote({ tracker: 'mood', text: `Checked in: ${MOODS.find((m) => m.id === mood)?.label}` })
+  }
 
   const now = new Date()
   const summaries: Partial<Record<TrackerId, HubSummary>> = useMemo(() => {
@@ -79,6 +137,78 @@ export function HubView() {
   const banners = visible.filter((i) => i.severity !== 'CRITICAL')
 
   const loaded = Object.keys(summaries).length > 0
+  // Focus trackers (chosen on the welcome screen) come first.
+  const focus = profile?.focus_trackers ?? []
+  const ordered = [...TRACKERS].sort((a, b) => Number(focus.includes(b.id)) - Number(focus.includes(a.id)))
+  const has = (r: { ok: boolean; data?: unknown[] } | undefined) => !!r?.ok && !!r.data?.length
+  const loggedAnything = !!trackerData && (Object.values(trackerData).some((r) => has(r as never)) || (waterMl ?? 0) > 0)
+
+  // Streaks: logged days in a row (weight: weeks; water: goal days, as on the Water page).
+  const streaks: Partial<Record<TrackerId, { n: number; unit: 'day' | 'week' }>> = useMemo(() => {
+    if (!activity || !profile) return {}
+    const goal = effectiveGoal(profile)
+    return {
+      water: { n: waterStreak(activity.waterTotals, goal), unit: 'day' },
+      mood: { n: dayStreak(activity.days.mood), unit: 'day' },
+      sleep: { n: dayStreak(activity.days.sleep), unit: 'day' },
+      meditation: { n: dayStreak(activity.days.meditation), unit: 'day' },
+      exercise: { n: dayStreak(activity.days.exercise), unit: 'day' },
+      weight: { n: weekStreak(activity.days.weight), unit: 'week' },
+    }
+  }, [activity, profile])
+  const active = activity ? activeStreak(activity) : 0
+
+  /** Quick-log buttons for the cards that have them. */
+  function quickActions(id: TrackerId) {
+    const note = quickNote?.tracker === id ? quickNote : null
+    const status = (
+      <span role="status" className={`text-xs font-semibold ${note?.error ? 'text-alert' : 'text-emerald-700'}`}>
+        {note && !note.error && <Check className="mr-0.5 inline h-3.5 w-3.5" strokeWidth={3} aria-hidden />}
+        {note?.text}
+      </span>
+    )
+    if (id === 'water') {
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+          {[250, 500].map((ml) => (
+            <button
+              key={ml}
+              type="button"
+              onClick={() => quickWater(ml)}
+              disabled={!!quickBusy}
+              className="inline-flex min-h-9 items-center gap-1 rounded-full bg-[#E3F0FB] px-3 text-sm font-bold text-[#1A5C99] transition hover:bg-[#D3E7F8] disabled:opacity-50"
+              aria-label={`Add ${ml} ml of water`}
+            >
+              {quickBusy === `water-${ml}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : '+'} {ml} ml
+            </button>
+          ))}
+          {status}
+        </div>
+      )
+    }
+    if (id === 'mood') {
+      return (
+        <div className="flex flex-wrap items-center gap-1">
+          {MOODS.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => quickMood(m.id)}
+              disabled={!!quickBusy}
+              className="rounded-full p-1 transition hover:scale-110 hover:bg-mist disabled:opacity-50"
+              aria-label={`Check in: ${m.label}`}
+              title={m.label}
+            >
+              {quickBusy === `mood-${m.id}` ? <Loader2 className="h-7 w-7 animate-spin p-1 text-muted" aria-hidden /> : <MoodFace mood={m.id} className="h-7 w-7" />}
+            </button>
+          ))}
+          <span className="ml-1">{status}</span>
+        </div>
+      )
+    }
+    return undefined
+  }
+
   // The strip counts what's been tracked today; goals show on each card's ring.
   const loggedCount = TRACKERS.filter((t) => summaries[t.id]?.logged).length
   const firstName = profile?.full_name.split(' ')[0]
@@ -94,6 +224,11 @@ export function HubView() {
             {greeting(now)}
             {firstName ? `, ${firstName}` : ''}
           </h1>
+          {active >= 2 && (
+            <p className="mt-1 inline-flex items-center gap-1 text-sm font-bold text-[#B9650E]">
+              <Flame className="h-4 w-4" aria-hidden /> Active {active} days in a row
+            </p>
+          )}
         </div>
         {profile && (
           <Link href="/profile" aria-label="Edit profile" className="rounded-full">
@@ -112,6 +247,15 @@ export function HubView() {
           ))}
         </AnimatePresence>
       </div>
+
+      {profile && trackerData && (
+        <FirstWeekChecklist
+          createdAt={profile.created_at}
+          focusChosen={!!profile.onboarded_at && focus.length > 0}
+          loggedAnything={loggedAnything}
+          checkedInMood={has(trackerData.mood as never)}
+        />
+      )}
 
       <section aria-labelledby="today-title" className="mb-4 flex flex-wrap items-center justify-between gap-3 sm:mb-6">
         <h2 id="today-title" className="text-lg font-bold">
@@ -138,12 +282,18 @@ export function HubView() {
       </section>
 
       <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-        {TRACKERS.map((t) => (
+        {ordered.map((t) => (
           <li key={t.id}>
-            <HubCard tracker={t} summary={summaries[t.id] ?? null} />
+            <HubCard tracker={t} summary={summaries[t.id] ?? null} focus={focus.includes(t.id)} streak={streaks[t.id]} actions={quickActions(t.id)} />
           </li>
         ))}
       </ul>
+
+      {activity && profile && (
+        <div className="mt-4">
+          <GardenCard totals={activity.waterTotals} goal={effectiveGoal(profile)} />
+        </div>
+      )}
 
       <section id="wellness-team" aria-labelledby="wellness-team-title" className="mt-10 scroll-mt-6">
         <div className="mb-4">
