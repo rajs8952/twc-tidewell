@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import { TopProgressBar } from '@/components/TopProgressBar'
+import { PullToRefresh } from '@/components/pwa/PullToRefresh'
 import { PwaClient } from '@/components/pwa/PwaClient'
+import { SplashScreen } from '@/components/pwa/SplashScreen'
 import { BRAND } from '@/lib/brand'
 import './globals.css'
 
@@ -36,9 +38,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable}`}>
+    // suppressHydrationWarning: the splash script may set data-splash on <html> before React starts.
+    <html lang="en" className={`${display.variable} ${body.variable}`} suppressHydrationWarning>
       <body className="min-h-dvh bg-mist font-body text-ink antialiased">
+        <SplashScreen />
         <TopProgressBar />
+        <PullToRefresh />
         {children}
         <PwaClient />
       </body>

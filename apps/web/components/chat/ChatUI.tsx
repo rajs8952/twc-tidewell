@@ -29,7 +29,8 @@ const C = {
 
 export function ChatFrame({ sidebar, main, showMain, className = '' }: { sidebar: ReactNode; main: ReactNode; showMain: boolean; className?: string }) {
   return (
-    <div className={`flex overflow-hidden rounded-2xl bg-white shadow-[0_6px_24px_-12px_rgba(11,20,26,0.35)] ring-1 ring-black/5 ${className}`}>
+    // Chats update themselves; pull to refresh would only reload the page and lose a draft.
+    <div data-no-pull-refresh className={`flex overflow-hidden rounded-2xl bg-white shadow-[0_6px_24px_-12px_rgba(11,20,26,0.35)] ring-1 ring-black/5 ${className}`}>
       <aside className={`${showMain ? 'hidden md:flex' : 'flex'} w-full flex-col border-r md:w-[340px] md:shrink-0 lg:w-[380px]`} style={{ borderColor: C.line }}>
         {sidebar}
       </aside>
