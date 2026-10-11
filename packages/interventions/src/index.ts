@@ -199,12 +199,18 @@ export const moodInterventionKey = (i: Intervention, now = new Date()) => `${i.r
  * tracker's latest data (lists are newest first, as the range queries return them):
  *  - mood:   today's latest check-in. Keyed by day, so one acknowledgement covers today.
  *  - sleep:  a night that ended in the last 24 hours. Keyed by the entry.
- *  - weight: the latest weigh-in, else the profile weight, with the profile height.
+ *  - weight: the latest actual weigh-in (never the sign-up weight), with the profile height.
  *            Keyed by month, so a dismissed suggestion comes back once a month at most.
+ *
+ * Suggestions (the gentlest kind, e.g. BMI) wait until the account is
+ * NEW_USER_QUIET_DAYS old, so a new employee's first look at OmniWell isn't
+ * advice about their weight. Critical and warning alerts are never held back.
  */
+export const NEW_USER_QUIET_DAYS = 7
+
 export function latestInterventions(
   logs: { mood?: MoodLog[]; sleep?: SleepLog[]; weight?: WeightLog[] },
-  profile: { height_cm: number | null; weight_kg: number } | null,
+  profile: { height_cm: number | null; weight_kg: number; created_at?: string | null } | null,
   now = new Date(),
 ): KeyedIntervention[] {
   const out: KeyedIntervention[] = []
@@ -222,8 +228,9 @@ export function latestInterventions(
     if (r.severity !== 'NORMAL') out.push({ ...r, key: `${r.rule}:${sleep.id}` })
   }
 
-  const weightKg = logs.weight?.[0]?.weight_kg ?? profile?.weight_kg
-  if (weightKg && profile?.height_cm) {
+  const weightKg = logs.weight?.[0]?.weight_kg
+  const settledIn = !profile?.created_at || now.getTime() - new Date(profile.created_at).getTime() >= NEW_USER_QUIET_DAYS * 86_400_000
+  if (weightKg && profile?.height_cm && settledIn) {
     const r = evaluateMetric({ type: 'weight', value: weightKg }, { heightCm: profile.height_cm })
     if (r.severity !== 'NORMAL') out.push({ ...r, key: `${r.rule}:${today.slice(0, 7)}` })
   }

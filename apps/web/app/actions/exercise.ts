@@ -42,3 +42,18 @@ export async function deleteExercise(id: string): Promise<ActionResult<null>> {
   if (error) return { ok: false, error: friendly(error) }
   return { ok: true, data: null }
 }
+
+/** Changes an entry's details (and, with input.logged_at, its time). Row-level security limits it to the caller's own. */
+export async function updateExercise(id: string, input: unknown): Promise<ActionResult<ExerciseLog>> {
+  if (!isUuid(id)) return { ok: false, error: 'Invalid entry.' }
+  const parsed = validateExerciseInput(input)
+  if (!parsed.ok) return parsed
+
+  const supabase = await signedInClient()
+  if (!supabase) return { ok: false, error: SIGNED_OUT }
+
+  const { data, error } = await supabase.from('exercise_logs').update(parsed.value).eq('id', id).select(COLUMNS).maybeSingle()
+  if (error) return { ok: false, error: friendly(error) }
+  if (!data) return { ok: false, error: 'That workout wasn’t found.' }
+  return { ok: true, data: toExerciseLog(data as unknown as Record<string, unknown>) }
+}

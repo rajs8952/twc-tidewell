@@ -93,3 +93,28 @@ describe('combining', () => {
     expect(r).toEqual([])
   })
 })
+
+describe('new users and weight', () => {
+  const now = new Date(2026, 9, 7, 12)
+  const weighIn = [{ id: 'w', weight_kg: 90, body_fat_pct: null, note: null, logged_at: '' }]
+  const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000).toISOString()
+
+  it('never suggests from the sign-up weight alone (no weigh-ins)', () => {
+    expect(latestInterventions({ weight: [] }, { height_cm: 170, weight_kg: 95, created_at: daysAgo(30) }, now)).toEqual([])
+  })
+
+  it('holds the BMI suggestion back in the first week', () => {
+    expect(latestInterventions({ weight: weighIn }, { height_cm: 170, weight_kg: 90, created_at: daysAgo(2) }, now)).toEqual([])
+  })
+
+  it('suggests once the account is a week old', () => {
+    const r = latestInterventions({ weight: weighIn }, { height_cm: 170, weight_kg: 90, created_at: daysAgo(8) }, now)
+    expect(r.map((i) => i.rule)).toEqual(['bmi-high'])
+  })
+
+  it('never holds back a crisis, even on day one', () => {
+    const mood = [{ id: 'm', mood_state: 'awful', energy_level: null, stress_level: null, emotion_tags: [], note: null, logged_at: now.toISOString() }]
+    const r = latestInterventions({ mood: mood as never }, { height_cm: 170, weight_kg: 90, created_at: daysAgo(0) }, now)
+    expect(r[0]?.severity).toBe('CRITICAL')
+  })
+})

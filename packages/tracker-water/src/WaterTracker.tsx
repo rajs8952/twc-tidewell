@@ -2,9 +2,10 @@
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { WaterStore } from '@rajs8952/core/storage'
-import { StreakCard, useStore, type WeekDay } from '@rajs8952/ui'
+import { StreakCard, type WeekDay, savedForNote, useStore, useUndoDelete } from '@rajs8952/ui'
+import type { DrinkChange } from './DrinkEditor'
 import { DrinkLogger } from './DrinkLogger'
 import { TodayLog } from './TodayLog'
 import { WaterVessel } from './WaterVessel'
@@ -41,6 +42,10 @@ export function WaterTracker({
   const [error, setError] = useState<string | null>(null)
   const [splash, setSplash] = useState<{ key: number; ml: number } | null>(null)
   const [celebrate, setCelebrate] = useState(false)
+  const [savedNote, setSavedNote] = useState<string | null>(null)
+  const noteTimer = useRef<ReturnType<typeof setTimeout>>()
+
+  useEffect(() => () => clearTimeout(noteTimer.current), [])
 
   useEffect(() => {
     let alive = true
@@ -82,8 +87,35 @@ export function WaterTracker({
     }
   })
 
-  async function handleAdd(beverage: BeverageId, ml: number) {
+  /** Entries that land on another day don't show in today's list, so say where they went. */
+  function noteSavedFor(iso: string) {
+    setSavedNote(savedForNote(iso))
+    clearTimeout(noteTimer.current)
+    noteTimer.current = setTimeout(() => setSavedNote(null), 4000)
+  }
+
+  /** Off-today drinks only live in `history` (today's total comes from `logs`). */
+  function shiftHistory(iso: string, deltaMl: number) {
+    const k = dayKey(new Date(iso))
+    if (k === dayKey(new Date())) return
+    setHistory((h) => ({ ...h, [k]: Math.max((h[k] ?? 0) + deltaMl, 0) }))
+  }
+
+  const byNewest = (a: DrinkLog, b: DrinkLog) => b.logged_at.localeCompare(a.logged_at)
+
+  async function handleAdd(beverage: BeverageId, ml: number, loggedAt?: string) {
     if (!profile) return
+    if (loggedAt && dayKey(new Date(loggedAt)) !== todayKey) {
+      setError(null)
+      try {
+        const saved = await water.add(beverage, ml, loggedAt)
+        shiftHistory(saved.logged_at, saved.effective_ml)
+        noteSavedFor(saved.logged_at)
+      } catch (e) {
+        setError(`That drink wasn’t saved: ${errorMessage(e)}`)
+      }
+      return
+    }
     const b = BEVERAGES[beverage]
     const temp: DrinkLog = {
       id: `temp-${Date.now()}`,
@@ -91,34 +123,66 @@ export function WaterTracker({
       amount_ml: ml,
       multiplier: b.multiplier,
       effective_ml: Math.round(ml * b.multiplier),
-      logged_at: new Date().toISOString(),
+      logged_at: loggedAt ?? new Date().toISOString(),
     }
     const before = todayTotal
     setError(null)
-    setLogs((prev) => [temp, ...prev])
+    setLogs((prev) => [temp, ...prev].sort(byNewest))
     setSplash({ key: Date.now(), ml: temp.effective_ml })
     if (before < goal && before + temp.effective_ml >= goal) {
       setCelebrate(true)
       setTimeout(() => setCelebrate(false), 2600)
     }
     try {
-      const saved = await water.add(beverage, ml)
+      const saved = await water.add(beverage, ml, loggedAt)
       setLogs((prev) => prev.map((x) => (x.id === temp.id ? saved : x)))
+      if (loggedAt) noteSavedFor(saved.logged_at)
     } catch (e) {
       setLogs((prev) => prev.filter((x) => x.id !== temp.id))
       setError(`That drink wasn’t saved: ${errorMessage(e)}`)
     }
   }
 
-  async function handleDelete(id: string) {
-    const removed = logs.find((l) => l.id === id)
-    setLogs((prev) => prev.filter((l) => l.id !== id))
+  /** Saves an edit; a drink moved off today leaves the list and counts toward its new day instead. */
+  async function handleUpdate(id: string, change: DrinkChange): Promise<boolean> {
+    if (!logs.some((l) => l.id === id)) return false
+    setError(null)
     try {
-      await water.remove(id)
+      const saved = await water.update(id, change)
+      if (dayKey(new Date(saved.logged_at)) === dayKey(new Date())) {
+        setLogs((prev) => prev.map((l) => (l.id === id ? saved : l)).sort(byNewest))
+      } else {
+        setLogs((prev) => prev.filter((l) => l.id !== id))
+        shiftHistory(saved.logged_at, saved.effective_ml)
+        noteSavedFor(saved.logged_at)
+      }
+      return true
     } catch (e) {
-      if (removed) setLogs((prev) => [...prev, removed].sort((a, b) => b.logged_at.localeCompare(a.logged_at)))
-      setError(`That drink wasn’t removed: ${errorMessage(e)}`)
+      setError(`That change wasn’t saved: ${errorMessage(e)}`)
+      return false
     }
+  }
+
+  const undo = useUndoDelete()
+
+  /** Removes it from today's list now; it's really deleted once the 5-second "Undo" has passed. */
+  function handleDelete(id: string) {
+    const removed = logs.find((l) => l.id === id)
+    if (!removed) return
+    const restore = () => setLogs((prev) => (prev.some((l) => l.id === id) ? prev : [...prev, removed].sort((a, b) => b.logged_at.localeCompare(a.logged_at))))
+    setLogs((prev) => prev.filter((l) => l.id !== id))
+    undo.schedule({
+      label: 'Drink removed',
+      restore,
+      commit: async () => {
+        try {
+          await water.remove(id)
+        } catch (e) {
+          restore()
+          setError(`That drink wasn’t removed: ${errorMessage(e)}`)
+        }
+      },
+    })
   }
 
   if (!profile || !loaded) {
@@ -137,7 +201,11 @@ export function WaterTracker({
 
   return (
     <>
+      {undo.toast}
       {error && <p role="alert" className="omni-notice-error mb-6">{error}</p>}
+      <p role="status" className={savedNote ? 'omni-notice-ok mb-6' : 'sr-only'}>
+        {savedNote}
+      </p>
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] md:gap-12">
         <section className="flex flex-col items-center md:sticky md:top-10 md:self-start" aria-label="Today’s progress">
@@ -184,7 +252,7 @@ export function WaterTracker({
         <div className="space-y-6">
           <StreakCard current={streaks.current} best={streaks.best} week={week} />
           <DrinkLogger onAdd={handleAdd} />
-          <TodayLog logs={logs} onDelete={handleDelete} />
+          <TodayLog logs={logs} onDelete={handleDelete} onUpdate={handleUpdate} />
         </div>
       </div>
     </>

@@ -1,10 +1,11 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Pencil, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TrackerStorage } from '@rajs8952/core/storage'
-import { useInitialLoad, useSaving, useStore } from '@rajs8952/ui'
+import { DELETE_BUTTON_CLASS, WhenPicker, savedForNote, useInitialLoad, useSaving, useStore, useUndoDelete } from '@rajs8952/ui'
+import { type WhenChoice, whenFromIso, whenProblem, whenToIso } from '@rajs8952/core/when'
 import { addDays, dayKey, startOfWeek } from '@rajs8952/core/dates'
 import {
   EMOTIONS,
@@ -125,7 +126,17 @@ export function MoodTracker({
   const [stress, setStress] = useState<number | null>(null)
   const [emotions, setEmotions] = useState<string[]>([])
   const [note, setNote] = useState('')
+  const [when, setWhen] = useState<WhenChoice>({ day: 'now' })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [savedNote, setSavedNote] = useState<string | null>(null)
   const [saving, startSaving] = useSaving()
+  const formRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!savedNote) return
+    const id = setTimeout(() => setSavedNote(null), 4000)
+    return () => clearTimeout(id)
+  }, [savedNote])
 
   const now = new Date()
   const weekStart = startOfWeek(now)
@@ -144,6 +155,7 @@ export function MoodTracker({
   )
 
   const todayKey = dayKey(now)
+  const editing = editingId ? logs.find((l) => l.id === editingId) : undefined
   const today = logs.filter((l) => dayKey(new Date(l.logged_at)) === todayKey)
 
   const week = useMemo(
@@ -170,15 +182,60 @@ export function MoodTracker({
     setStress(null)
     setEmotions([])
     setNote('')
+    setWhen({ day: 'now' })
+    setEditingId(null)
+  }
+
+  /** Entries saved for another day leave today's list, so say where they went. */
+  function noteIfNotToday(iso: string) {
+    if (dayKey(new Date(iso)) !== dayKey(new Date())) setSavedNote(savedForNote(iso))
+  }
+
+  function startEdit(l: Row) {
+    setMood(l.mood_state)
+    setEnergy(l.energy_level)
+    setStress(l.stress_level)
+    setEmotions(l.emotions)
+    setNote(l.note ?? '')
+    setWhen(whenFromIso(l.logged_at))
+    setEditingId(l.id)
+    setError(null)
+    // Wait a frame so the details panel has rendered before scrolling to it.
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      formRef.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus({ preventScroll: true })
+    })
   }
 
   function save() {
-    if (!mood) return
-    const input = { mood_state: mood, energy_level: energy, stress_level: stress, emotions, note }
-    const temp: MoodLog = { id: `temp-${Date.now()}`, ...input, note: note.trim() || null, logged_at: new Date().toISOString() }
+    if (!mood || whenProblem(when)) return
+    const at = whenToIso(when)
+    const base = { mood_state: mood, energy_level: energy, stress_level: stress, emotions, note }
+
+    if (editingId) {
+      const id = editingId
+      // On an edit, an omitted time keeps the entry's own, so "Now" has to be sent explicitly.
+      const input: MoodInput = { ...base, logged_at: at ?? new Date().toISOString() }
+      setError(null)
+      startSaving(async () => {
+        const res = await store.update(id, input)
+        if (res.ok) {
+          setLogs((prev) =>
+            prev.map((l) => (l.id === id ? { ...res.data, _key: l._key } : l)).sort((a, b) => b.logged_at.localeCompare(a.logged_at)),
+          )
+          reset()
+          noteIfNotToday(res.data.logged_at)
+        } else setError(`Your changes weren’t saved: ${res.error}`)
+      })
+      return
+    }
+
+    const input: MoodInput = at ? { ...base, logged_at: at } : base
+    const temp: MoodLog = { id: `temp-${Date.now()}`, ...base, note: note.trim() || null, logged_at: at ?? new Date().toISOString() }
     setError(null)
-    setLogs((prev) => [temp, ...prev])
+    setLogs((prev) => [temp, ...prev].sort((a, b) => b.logged_at.localeCompare(a.logged_at)))
     reset()
+    noteIfNotToday(temp.logged_at)
     onCheckIn?.(input)
     startSaving(async () => {
       const res = await store.create(input)
@@ -190,14 +247,26 @@ export function MoodTracker({
     })
   }
 
-  async function remove(id: string) {
+  const undo = useUndoDelete()
+
+  /** Removes it from the list now; it's really deleted once the 5-second "Undo" has passed. */
+  function remove(id: string) {
     const removed = logs.find((l) => l.id === id)
+    if (!removed) return
+    if (id === editingId) reset()
+    const restore = () => setLogs((prev) => (prev.some((l) => l.id === id) ? prev : [...prev, removed].sort((a, b) => b.logged_at.localeCompare(a.logged_at))))
     setLogs((prev) => prev.filter((l) => l.id !== id))
-    const res = await store.remove(id)
-    if (!res.ok) {
-      if (removed) setLogs((prev) => [...prev, removed].sort((a, b) => b.logged_at.localeCompare(a.logged_at)))
-      setError(`That check-in wasn’t removed: ${res.error}`)
-    }
+    undo.schedule({
+      label: 'Check-in removed',
+      restore,
+      commit: async () => {
+        const res = await store.remove(id)
+        if (!res.ok) {
+          restore()
+          setError(`That check-in wasn’t removed: ${res.error}`)
+        }
+      },
+    })
   }
 
   if (!loaded) {
@@ -211,10 +280,19 @@ export function MoodTracker({
 
   return (
     <div className="space-y-5">
+      {undo.toast}
       {banner}
       {error && <p role="alert" className="omni-notice-error">{error}</p>}
 
-      <div className="rounded-2xl bg-white p-4 ring-1 ring-line sm:p-5">
+      <div ref={formRef} className="rounded-2xl bg-white p-4 ring-1 ring-line sm:p-5">
+        {editing && (
+          <p className="mb-3 flex items-center justify-between gap-3 rounded-xl bg-mist px-3 py-2 text-sm font-semibold">
+            <span>Editing your check-in from {time(editing.logged_at)}</span>
+            <button type="button" onClick={reset} className="font-bold text-muted hover:text-ink">
+              Cancel
+            </button>
+          </p>
+        )}
         <p id="mood-question" className="font-display text-base font-bold">
           How are you feeling right now?
         </p>
@@ -228,7 +306,8 @@ export function MoodTracker({
                 role="radio"
                 aria-checked={active}
                 whileTap={{ scale: 0.9 }}
-                onClick={() => setMood(active ? null : m.id)}
+                // While editing, the face can be changed but not cleared (that would hide the form).
+                onClick={() => setMood(active && !editingId ? null : m.id)}
                 className="relative flex flex-col items-center gap-1 rounded-xl py-2 transition"
               >
                 {active && (
@@ -300,9 +379,11 @@ export function MoodTracker({
                   />
                 </div>
 
+                <WhenPicker value={when} onChange={setWhen} original={editing?.logged_at} />
+
                 <div className="flex gap-2">
-                  <button type="button" onClick={save} disabled={saving} className="omni-btn-primary flex-1">
-                    Log {MOOD_BY_ID[mood].label.toLowerCase()} mood
+                  <button type="button" onClick={save} disabled={saving || whenProblem(when) != null} className="omni-btn-primary flex-1">
+                    {editingId ? 'Save changes' : `Log ${MOOD_BY_ID[mood].label.toLowerCase()} mood`}
                   </button>
                   <button type="button" onClick={reset} className="omni-btn-secondary">
                     Cancel
@@ -312,6 +393,9 @@ export function MoodTracker({
             </motion.div>
           )}
         </AnimatePresence>
+        <p role="status" className="text-sm font-semibold mt-3 text-emerald-700 empty:hidden">
+          {savedNote}
+        </p>
       </div>
 
       <div className="rounded-2xl bg-white p-4 ring-1 ring-line sm:p-5">
@@ -377,12 +461,21 @@ export function MoodTracker({
                     </div>
                     <button
                       type="button"
+                      disabled={pending || saving}
+                      onClick={() => startEdit(l)}
+                      className={DELETE_BUTTON_CLASS}
+                      aria-label={`Edit ${m.label.toLowerCase()} check-in from ${time(l.logged_at)}`}
+                    >
+                      <Pencil className="h-5 w-5" aria-hidden />
+                    </button>
+                    <button
+                      type="button"
                       disabled={pending}
                       onClick={() => remove(l.id)}
-                      className="rounded-full p-2 text-muted transition hover:bg-mist hover:text-alert disabled:opacity-30"
+                      className={DELETE_BUTTON_CLASS}
                       aria-label={`Remove ${m.label.toLowerCase()} check-in from ${time(l.logged_at)}`}
                     >
-                      <Trash2 className="h-4 w-4" aria-hidden />
+                      <Trash2 className="h-5 w-5" aria-hidden />
                     </button>
                   </motion.li>
                 )

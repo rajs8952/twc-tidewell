@@ -4,6 +4,7 @@
  * ------------------------------------------------------------------ */
 
 import { addDays, startOfDay, startOfWeek } from './dates'
+import { validateLoggedAt } from './when'
 import type { DateRange } from './types'
 
 export type { ActionResult, DateRange } from './types'
@@ -50,6 +51,8 @@ export interface MeditationInput {
   calm_before?: number | null
   calm_after?: number | null
   note?: string | null
+  /** When it happened (ISO). Omitted: now. At most MAX_BACKDATE_DAYS ago (./when). */
+  logged_at?: string
 }
 
 const isLevel = (n: unknown) => n == null || (Number.isInteger(n) && (n as number) >= 1 && (n as number) <= 5)
@@ -60,6 +63,8 @@ export function validateMeditationInput(
 ): { ok: true; value: MeditationInput } | { ok: false; error: string } {
   if (!input || typeof input !== 'object') return { ok: false, error: 'Missing session details.' }
   const i = input as Record<string, unknown>
+  const when = validateLoggedAt(i.logged_at)
+  if (!when.ok) return when
   const minutes = i.duration_min
   if (!Number.isInteger(minutes) || (minutes as number) < 1 || (minutes as number) > MAX_MINUTES) {
     return { ok: false, error: `Sessions must be between 1 and ${MAX_MINUTES} minutes.` }
@@ -73,6 +78,7 @@ export function validateMeditationInput(
   return {
     ok: true,
     value: {
+      ...(when.value ? { logged_at: when.value } : {}),
       duration_min: minutes as number,
       session_type: i.session_type as SessionType,
       calm_before: (i.calm_before as number | null | undefined) ?? null,

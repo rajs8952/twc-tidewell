@@ -3,6 +3,8 @@ export { ActivityPicker, GenderPicker, GoalPreview, HeightInput, WeightInput } f
 export { StreakCard, type WeekDay } from './StreakCard'
 export { TrackerStorageProvider, useStore, useTrackerStorage, useTrackLoad } from './storage'
 export { TrackerBoundary } from './TrackerBoundary'
+export { DELETE_BUTTON_CLASS, useUndoDelete } from './UndoDelete'
+export { WhenPicker, savedForNote } from './WhenPicker'
 export { useInitialLoad } from './useInitialLoad'
 export { useSaving } from './useSaving'
 export { useStoredProfile } from './useStoredProfile'

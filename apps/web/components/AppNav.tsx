@@ -10,6 +10,7 @@ import { BRAND } from '@/lib/brand'
 import { TEAMS } from '@/lib/messages'
 import { useMyRole } from '@/lib/useMyRole'
 import { useMyStaffTeam } from '@/lib/useMyStaffTeam'
+import { useUnreadChats } from '@/lib/useUnreadChats'
 import { BMI_TOOL, TRACKERS } from '@/lib/trackers'
 
 /* ------------------------------------------------------------------
@@ -32,7 +33,18 @@ const TRACKER_LINKS = [
   { href: BMI_TOOL.href, label: 'BMI', icon: BMI_TOOL.icon, accent: BMI_TOOL.accent },
 ]
 
-type Item = { href: string; label: string; icon: LucideIcon; accent: string }
+type Item = { href: string; label: string; icon: LucideIcon; accent: string; badge?: number }
+
+/** The unread count on Chats: a small red bubble, also spelled out for screen readers. */
+function Badge({ n, className = '' }: { n?: number; className?: string }) {
+  if (!n) return null
+  return (
+    <span className={`flex h-5 min-w-5 items-center justify-center rounded-full bg-[#C42B1C] px-1 text-[11px] font-bold tabular-nums leading-none text-white ring-2 ring-white ${className}`}>
+      {n > 9 ? '9+' : n}
+      <span className="sr-only"> unread</span>
+    </span>
+  )
+}
 
 const isActive = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`)
 
@@ -58,19 +70,21 @@ function SideLink({ item, pathname }: { item: Item; pathname: string }) {
           />
         )}
         <span
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition"
+          className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition"
           style={active ? { background: item.accent, color: '#fff' } : { color: item.accent }}
         >
           <Icon className="h-[18px] w-[18px]" aria-hidden />
+          <Badge n={item.badge} className="absolute -right-2 -top-1.5 lg:hidden" />
         </span>
         {/* The md rail is icon-only (label via title + screen readers); lg shows the label. */}
         <span className="sr-only lg:not-sr-only lg:truncate">{item.label}</span>
+        <Badge n={item.badge} className="ml-auto hidden lg:flex" />
       </Link>
     </li>
   )
 }
 
-function Sidebar({ pathname }: { pathname: string }) {
+function Sidebar({ pathname, unread }: { pathname: string; unread: number }) {
   // Admins get a link to the admin portal and coaches one to their coach portal
   // (both check access again on the server).
   const role = useMyRole()
@@ -97,7 +111,7 @@ function Sidebar({ pathname }: { pathname: string }) {
         </ul>
         <div className="mx-auto my-2 h-px w-8 bg-line lg:mx-3 lg:my-3 lg:w-auto" aria-hidden />
         <ul className="space-y-1">
-          <SideLink item={CHATS} pathname={pathname} />
+          <SideLink item={{ ...CHATS, badge: unread }} pathname={pathname} />
           <SideLink item={INSIGHTS} pathname={pathname} />
         </ul>
         <ul className="mt-auto space-y-1 pt-4">
@@ -186,7 +200,7 @@ function TrackerSheet({ open, onClose, pathname }: { open: boolean; onClose: () 
   )
 }
 
-function BottomBar({ pathname }: { pathname: string }) {
+function BottomBar({ pathname, unread }: { pathname: string; unread: number }) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const onTracker = TRACKER_LINKS.some((t) => isActive(pathname, t.href))
@@ -210,7 +224,10 @@ function BottomBar({ pathname }: { pathname: string }) {
           className={`relative flex flex-col items-center gap-1 rounded-2xl py-2 text-[11px] font-bold transition ${active ? 'text-ink' : 'text-muted'}`}
         >
           {active && <motion.span layoutId="bar-pill" className="absolute inset-x-1 inset-y-0 -z-10 rounded-2xl bg-mist" />}
-          <Icon className="h-5 w-5" style={active ? { color: item.accent } : undefined} aria-hidden />
+          <span className="relative">
+            <Icon className="h-5 w-5" style={active ? { color: item.accent } : undefined} aria-hidden />
+            <Badge n={item.badge} className="absolute -right-3 -top-2" />
+          </span>
           {item.label}
         </Link>
       </li>
@@ -241,7 +258,7 @@ function BottomBar({ pathname }: { pathname: string }) {
               Trackers
             </button>
           </li>
-          {tab(CHATS)}
+          {tab({ ...CHATS, badge: unread })}
           {tab(INSIGHTS)}
           {tab(PROFILE)}
         </ul>
@@ -253,10 +270,12 @@ function BottomBar({ pathname }: { pathname: string }) {
 
 export function AppNav() {
   const pathname = usePathname()
+  // Checked once here for both the sidebar and the phone bar.
+  const unread = useUnreadChats()
   return (
     <>
-      <Sidebar pathname={pathname} />
-      <BottomBar pathname={pathname} />
+      <Sidebar pathname={pathname} unread={unread} />
+      <BottomBar pathname={pathname} unread={unread} />
     </>
   )
 }

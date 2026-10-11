@@ -4,6 +4,7 @@
  * ------------------------------------------------------------------ */
 
 import { addDays, startOfDay } from './dates'
+import { validateLoggedAt } from './when'
 import type { DateRange } from './types'
 
 export type { ActionResult, DateRange } from './types'
@@ -33,6 +34,8 @@ export interface WeightInput {
   note?: string | null
   /** Also set profiles.weight_kg, which the water goal is calculated from. */
   sync_profile?: boolean
+  /** When it happened (ISO). Omitted: now. At most MAX_BACKDATE_DAYS ago (./when). */
+  logged_at?: string
 }
 
 export const round1 = (n: number) => Math.round(n * 10) / 10
@@ -65,6 +68,8 @@ export function toWeightLog(r: Record<string, unknown>): WeightLog {
 export function validateWeightInput(input: unknown): { ok: true; value: WeightInput } | { ok: false; error: string } {
   if (!input || typeof input !== 'object') return { ok: false, error: 'Missing weight.' }
   const i = input as Record<string, unknown>
+  const when = validateLoggedAt(i.logged_at)
+  if (!when.ok) return when
 
   const kg = typeof i.weight_kg === 'number' ? round1(i.weight_kg) : NaN
   if (!Number.isFinite(kg) || kg < MIN_KG || kg > MAX_KG) {
@@ -82,7 +87,7 @@ export function validateWeightInput(input: unknown): { ok: true; value: WeightIn
   const note = typeof i.note === 'string' ? i.note.trim() : null
   if (note && note.length > 1000) return { ok: false, error: 'Notes can be up to 1,000 characters.' }
 
-  return { ok: true, value: { weight_kg: kg, body_fat_pct: fat, note: note || null, sync_profile: i.sync_profile === true } }
+  return { ok: true, value: { ...(when.value ? { logged_at: when.value } : {}), weight_kg: kg, body_fat_pct: fat, note: note || null, sync_profile: i.sync_profile === true } }
 }
 
 /** What the Weight card shows: the longest chart range (90 days) through today. */

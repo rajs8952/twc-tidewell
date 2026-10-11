@@ -1,14 +1,14 @@
 'use client'
 
 import { useMemo } from 'react'
-import { deleteExercise, getExerciseLogs, logExercise } from '@/app/actions/exercise'
-import { deleteMeditation, getMeditationLogs, logMeditation } from '@/app/actions/meditation'
-import { deleteMood, getMoodLogs, logMood } from '@/app/actions/mood'
-import { deleteSleep, getSleepLogs, logSleep } from '@/app/actions/sleep'
-import { deleteWeight, getWeightLogs, logWeight } from '@/app/actions/weight'
+import { deleteExercise, updateExercise, getExerciseLogs, logExercise } from '@/app/actions/exercise'
+import { deleteMeditation, updateMeditation, getMeditationLogs, logMeditation } from '@/app/actions/meditation'
+import { deleteMood, updateMood, getMoodLogs, logMood } from '@/app/actions/mood'
+import { deleteSleep, updateSleep, getSleepLogs, logSleep } from '@/app/actions/sleep'
+import { deleteWeight, updateWeight, getWeightLogs, logWeight } from '@/app/actions/weight'
 import { TrackerStorageProvider } from '@rajs8952/ui'
 import { getProfile } from '@/lib/data'
-import { addDrinkLog, deleteDrinkLog, getDailyTotals, getDrinkLogs, updateProfileRow } from '@rajs8952/storage/supabase'
+import { addDrinkLog, deleteDrinkLog, updateDrinkLog, getDailyTotals, getDrinkLogs, updateProfileRow } from '@rajs8952/storage/supabase'
 import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
 import type { TrackerStorage } from '@rajs8952/core/storage'
@@ -20,14 +20,15 @@ import type { TrackerStorage } from '@rajs8952/core/storage'
 export function createOmniWellStorage(): TrackerStorage {
   const supabase = createClient()
   return {
-    mood: { list: (r) => getMoodLogs(r.from, r.to), create: logMood, remove: deleteMood },
-    sleep: { list: (r) => getSleepLogs(r.from, r.to), create: logSleep, remove: deleteSleep },
-    weight: { list: (r) => getWeightLogs(r.from, r.to), create: logWeight, remove: deleteWeight },
-    exercise: { list: (r) => getExerciseLogs(r.from, r.to), create: logExercise, remove: deleteExercise },
-    meditation: { list: (r) => getMeditationLogs(r.from, r.to), create: logMeditation, remove: deleteMeditation },
+    mood: { list: (r) => getMoodLogs(r.from, r.to), create: logMood, update: updateMood, remove: deleteMood },
+    sleep: { list: (r) => getSleepLogs(r.from, r.to), create: logSleep, update: updateSleep, remove: deleteSleep },
+    weight: { list: (r) => getWeightLogs(r.from, r.to), create: logWeight, update: updateWeight, remove: deleteWeight },
+    exercise: { list: (r) => getExerciseLogs(r.from, r.to), create: logExercise, update: updateExercise, remove: deleteExercise },
+    meditation: { list: (r) => getMeditationLogs(r.from, r.to), create: logMeditation, update: updateMeditation, remove: deleteMeditation },
     water: {
       list: (from, to) => getDrinkLogs(supabase, from, to),
-      add: (beverage, ml) => addDrinkLog(supabase, beverage, ml),
+      add: (beverage, ml, at) => addDrinkLog(supabase, beverage, ml, at),
+      update: (id, change) => updateDrinkLog(supabase, id, change),
       remove: (id) => deleteDrinkLog(supabase, id),
       dailyTotals: (days) => getDailyTotals(supabase, days),
     },

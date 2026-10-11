@@ -54,3 +54,19 @@ export async function deleteWeight(id: string): Promise<ActionResult<null>> {
   if (error) return { ok: false, error: friendly(error) }
   return { ok: true, data: null }
 }
+
+/** Changes a weigh-in's weight, body fat, note or time. Doesn't touch the profile. */
+export async function updateWeight(id: string, input: unknown): Promise<ActionResult<{ log: WeightLog; profileSynced: boolean }>> {
+  if (!isUuid(id)) return { ok: false, error: 'Invalid entry.' }
+  const parsed = validateWeightInput(input)
+  if (!parsed.ok) return parsed
+
+  const supabase = await signedInClient()
+  if (!supabase) return { ok: false, error: SIGNED_OUT }
+  const { sync_profile: _sync, ...row } = parsed.value
+
+  const { data, error } = await supabase.from('weight_logs').update(row).eq('id', id).select(COLUMNS).maybeSingle()
+  if (error) return { ok: false, error: friendly(error) }
+  if (!data) return { ok: false, error: 'That weigh-in wasn’t found.' }
+  return { ok: true, data: { log: toWeightLog(data as unknown as Record<string, unknown>), profileSynced: false } }
+}

@@ -12,6 +12,8 @@ export interface Profile {
   height_cm: number | null
   /** Stored instead of an age so it never goes stale. */
   birth_year: number | null
+  /** When the account was created (ISO); used to go easy on brand-new users. */
+  created_at?: string | null
 }
 
 export interface DrinkLog {

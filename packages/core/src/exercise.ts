@@ -4,6 +4,7 @@
  * ------------------------------------------------------------------ */
 
 import { addDays, startOfDay, startOfWeek } from './dates'
+import { validateLoggedAt } from './when'
 import type { DateRange } from './types'
 
 export type { ActionResult, DateRange } from './types'
@@ -59,6 +60,8 @@ export interface ExerciseInput {
   calories_kcal?: number | null
   distance_km?: number | null
   note?: string | null
+  /** When it happened (ISO). Omitted: now. At most MAX_BACKDATE_DAYS ago (./when). */
+  logged_at?: string
 }
 
 /** kcal ≈ MET × body weight (kg) × hours. */
@@ -86,6 +89,8 @@ export function toExerciseLog(r: Record<string, unknown>): ExerciseLog {
 export function validateExerciseInput(input: unknown): { ok: true; value: ExerciseInput } | { ok: false; error: string } {
   if (!input || typeof input !== 'object') return { ok: false, error: 'Missing workout details.' }
   const i = input as Record<string, unknown>
+  const when = validateLoggedAt(i.logged_at)
+  if (!when.ok) return when
 
   if (!ACTIVITIES.some((a) => a.id === i.activity)) return { ok: false, error: 'Pick an activity.' }
   if (!Number.isInteger(i.duration_min) || (i.duration_min as number) < 1 || (i.duration_min as number) > MAX_MINUTES) {
@@ -110,6 +115,7 @@ export function validateExerciseInput(input: unknown): { ok: true; value: Exerci
   return {
     ok: true,
     value: {
+      ...(when.value ? { logged_at: when.value } : {}),
       activity: i.activity as ActivityId,
       duration_min: i.duration_min as number,
       intensity: i.intensity as Intensity,

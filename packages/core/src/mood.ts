@@ -47,9 +47,12 @@ export interface MoodInput {
   stress_level?: number | null
   emotions?: string[]
   note?: string | null
+  /** When it happened (ISO). Omitted: now. At most MAX_BACKDATE_DAYS ago (./when). */
+  logged_at?: string
 }
 
 import { addDays, startOfDay, startOfWeek } from './dates'
+import { validateLoggedAt } from './when'
 import type { DateRange } from './types'
 
 export type { ActionResult, DateRange } from './types'
@@ -63,6 +66,8 @@ const isLevel = (n: unknown) => n == null || (Number.isInteger(n) && (n as numbe
 export function validateMoodInput(input: unknown): { ok: true; value: MoodInput } | { ok: false; error: string } {
   if (!input || typeof input !== 'object') return { ok: false, error: 'Missing mood check-in.' }
   const i = input as Record<string, unknown>
+  const when = validateLoggedAt(i.logged_at)
+  if (!when.ok) return when
   if (!MOODS.some((m) => m.id === i.mood_state)) return { ok: false, error: 'Pick how you feel first.' }
   if (!isLevel(i.energy_level)) return { ok: false, error: 'Energy must be between 1 and 5.' }
   if (!isLevel(i.stress_level)) return { ok: false, error: 'Stress must be between 1 and 5.' }
@@ -79,6 +84,7 @@ export function validateMoodInput(input: unknown): { ok: true; value: MoodInput 
   return {
     ok: true,
     value: {
+      ...(when.value ? { logged_at: when.value } : {}),
       mood_state: i.mood_state as MoodState,
       energy_level: (i.energy_level as number | null | undefined) ?? null,
       stress_level: (i.stress_level as number | null | undefined) ?? null,

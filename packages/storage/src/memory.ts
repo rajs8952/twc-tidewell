@@ -107,8 +107,22 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
       async create(input: TInput): Promise<ActionResult<TSaved>> {
         const parsed = validate(input)
         if (!parsed.ok) return parsed
-        const log = build(parsed.value, { id: newId(), logged_at: now().toISOString() })
+        const at = (parsed.value as { logged_at?: string }).logged_at
+        const log = build(parsed.value, { id: newId(), logged_at: at ?? now().toISOString() })
         rows().push(log)
+        const result = saved(log, parsed.value)
+        changed()
+        return { ok: true, data: copy(result) }
+      },
+      async update(id: string, input: TInput): Promise<ActionResult<TSaved>> {
+        const parsed = validate(input)
+        if (!parsed.ok) return parsed
+        const i = rows().findIndex((l) => l.id === id)
+        if (i < 0) return { ok: false, error: 'That entry wasn’t found.' }
+        const existing = rows()[i] as Log & { logged_at: string }
+        const at = (parsed.value as { logged_at?: string }).logged_at
+        const log = build(parsed.value, { id, logged_at: at ?? existing.logged_at })
+        rows()[i] = log
         const result = saved(log, parsed.value)
         changed()
         return { ok: true, data: copy(result) }
@@ -191,7 +205,7 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
         })
         return copy(inRange.sort((a, b) => b.logged_at.localeCompare(a.logged_at)))
       },
-      async add(beverage: BeverageId, amountMl: number) {
+      async add(beverage: BeverageId, amountMl: number, loggedAt?: string) {
         // The same checks as the drink_logs table.
         if (!(beverage in BEVERAGES)) throw new Error('Unknown drink.')
         const amount = Math.round(amountMl)
@@ -203,9 +217,21 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): MemoryS
           amount_ml: amount,
           multiplier,
           effective_ml: Math.round(amount * multiplier),
-          logged_at: now().toISOString(),
+          logged_at: loggedAt ?? now().toISOString(),
         }
         data.water.push(log)
+        changed()
+        return copy(log)
+      },
+      async update(id: string, change: { beverage: BeverageId; amountMl: number; loggedAt?: string }) {
+        const i = data.water.findIndex((l) => l.id === id)
+        if (i < 0) throw new Error('That drink wasn’t found.')
+        if (!(change.beverage in BEVERAGES)) throw new Error('Unknown drink.')
+        const amount = Math.round(change.amountMl)
+        if (!(amount >= 1 && amount <= 5000)) throw new Error('A drink must be between 1 and 5,000 ml.')
+        const multiplier = BEVERAGES[change.beverage].multiplier
+        const log: DrinkLog = { ...data.water[i]!, beverage: change.beverage, amount_ml: amount, multiplier, effective_ml: Math.round(amount * multiplier), logged_at: change.loggedAt ?? data.water[i]!.logged_at }
+        data.water[i] = log
         changed()
         return copy(log)
       },

@@ -7,6 +7,7 @@ import {
   Ellipsis,
   Flower2,
   Footprints,
+  Pencil,
   PersonStanding,
   Trash2,
   Trophy,
@@ -14,9 +15,10 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TrackerStorage } from '@rajs8952/core/storage'
-import { useInitialLoad, useSaving, useStore } from '@rajs8952/ui'
+import { DELETE_BUTTON_CLASS, WhenPicker, savedForNote, useInitialLoad, useSaving, useStore, useUndoDelete } from '@rajs8952/ui'
+import { whenFromIso, whenProblem, whenToIso, type WhenChoice } from '@rajs8952/core/when'
 import {
   ACTIVITIES,
   ACTIVITY_BY_ID,
@@ -52,7 +54,12 @@ const ICONS: Record<ActivityId, LucideIcon> = {
 /** `_key` keeps a row's React key stable when the server copy replaces the optimistic one. */
 type Row = ExerciseLog & { _key?: string }
 
-const when = (iso: string) => {
+const byNewest = (x: Row, y: Row) => Date.parse(y.logged_at) - Date.parse(x.logged_at)
+
+const fullWhen = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+
+const shortWhen = (iso: string) => {
   const d = new Date(iso)
   const today = dayKey(new Date()) === dayKey(d)
   return today
@@ -86,6 +93,17 @@ export function ExerciseTracker({
   const [kcalText, setKcalText] = useState('')
   const [kcalEdited, setKcalEdited] = useState(false)
   const [note, setNote] = useState('')
+  const [when, setWhen] = useState<WhenChoice>({ day: 'now' })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [savedNote, setSavedNote] = useState<string | null>(null)
+  const formRef = useRef<HTMLDivElement>(null)
+  const activityRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!savedNote) return
+    const t = setTimeout(() => setSavedNote(null), 4000)
+    return () => clearTimeout(t)
+  }, [savedNote])
 
   const now = new Date()
   const weekStart = startOfWeek(now)
@@ -114,10 +132,52 @@ export function ExerciseTracker({
   const distValue = distance === '' ? null : Number(distance)
   const distValid = distValue === null || (Number.isFinite(distValue) && distValue >= 0 && distValue <= 1000)
   const a = ACTIVITY_BY_ID[activity]
-  const canSave = (custom === '' || customValid) && kcalValid && distValid && !saving
+  const editing = editingId ? logs.find((l) => l.id === editingId) : undefined
+  const canSave = (custom === '' || customValid) && kcalValid && distValid && !whenProblem(when) && !saving
+
+  function resetForm() {
+    setDistance('')
+    setKcalEdited(false)
+    setKcalText('')
+    setNote('')
+    setCustom('')
+    setWhen({ day: 'now' })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    resetForm()
+  }
+
+  /** Recent workouts only shows the newest few, so say where an older one went. */
+  function noteIfHidden(iso: string, list: Row[]) {
+    const newer = list.filter((l) => Date.parse(l.logged_at) > Date.parse(iso)).length
+    if (newer >= 5) setSavedNote(savedForNote(iso))
+  }
+
+  function startEdit(row: Row) {
+    setError(null)
+    setEditingId(row.id)
+    setActivity(row.activity)
+    setIntensity(row.intensity)
+    if ((DURATIONS as readonly number[]).includes(row.duration_min)) {
+      setMinutes(row.duration_min)
+      setCustom('')
+    } else setCustom(String(row.duration_min))
+    setDistance(row.distance_km == null ? '' : String(row.distance_km))
+    // The stored number is what they saved; don't let the estimate overwrite it.
+    setKcalEdited(true)
+    setKcalText(row.calories_kcal == null ? '' : String(row.calories_kcal))
+    setNote(row.note ?? '')
+    setWhen(whenFromIso(row.logged_at))
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    activityRef.current?.querySelector<HTMLElement>(`[data-activity="${row.activity}"]`)?.focus({ preventScroll: true })
+  }
 
   function save() {
     if (!canSave) return
+    // Editing with "Now" moves the entry to now; leaving logged_at out would keep its old time.
+    const loggedAt = whenToIso(when) ?? (editingId ? new Date().toISOString() : undefined)
     const input: ExerciseInput = {
       activity,
       duration_min: duration,
@@ -125,7 +185,25 @@ export function ExerciseTracker({
       calories_kcal: kcalValue,
       distance_km: a.distance ? distValue : null,
       note,
+      ...(loggedAt ? { logged_at: loggedAt } : {}),
     }
+    setError(null)
+
+    if (editingId) {
+      const id = editingId
+      startSaving(async () => {
+        const res = await store.update(id, input)
+        if (res.ok) {
+          const replace = (list: Row[]) => list.map((l) => (l.id === id ? { ...res.data, _key: l._key } : l)).sort(byNewest)
+          setLogs(replace)
+          noteIfHidden(res.data.logged_at, replace(logs))
+          setEditingId(null)
+          resetForm()
+        } else setError(`Your changes weren’t saved: ${res.error}`)
+      })
+      return
+    }
+
     const temp: Row = {
       id: `temp-${Date.now()}`,
       activity,
@@ -134,33 +212,42 @@ export function ExerciseTracker({
       calories_kcal: input.calories_kcal ?? null,
       distance_km: input.distance_km ?? null,
       note: note.trim() || null,
-      logged_at: new Date().toISOString(),
+      logged_at: loggedAt ?? new Date().toISOString(),
     }
-    setError(null)
-    setLogs((prev) => [temp, ...prev])
-    setDistance('')
-    setKcalEdited(false)
-    setKcalText('')
-    setNote('')
-    setCustom('')
+    if (loggedAt) noteIfHidden(loggedAt, logs)
+    setLogs((prev) => [temp, ...prev].sort(byNewest))
+    resetForm()
     startSaving(async () => {
       const res = await store.create(input)
-      if (res.ok) setLogs((prev) => prev.map((l) => (l.id === temp.id ? { ...res.data, _key: temp.id } : l)))
+      if (res.ok) setLogs((prev) => prev.map((l) => (l.id === temp.id ? { ...res.data, _key: temp.id } : l)).sort(byNewest))
       else {
         setLogs((prev) => prev.filter((l) => l.id !== temp.id))
+        setSavedNote(null)
         setError(`That workout wasn’t saved: ${res.error}`)
       }
     })
   }
 
-  async function remove(id: string) {
+  const undo = useUndoDelete()
+
+  /** Removes it from the list now; it's really deleted once the 5-second "Undo" has passed. */
+  function remove(id: string) {
     const removed = logs.find((l) => l.id === id)
+    if (!removed) return
+    if (id === editingId) cancelEdit()
+    const restore = () => setLogs((prev) => (prev.some((l) => l.id === id) ? prev : [...prev, removed].sort(byNewest)))
     setLogs((prev) => prev.filter((l) => l.id !== id))
-    const res = await store.remove(id)
-    if (!res.ok) {
-      if (removed) setLogs((prev) => [...prev, removed].sort((x, y) => y.logged_at.localeCompare(x.logged_at)))
-      setError(`That workout wasn’t removed: ${res.error}`)
-    }
+    undo.schedule({
+      label: 'Workout removed',
+      restore,
+      commit: async () => {
+        const res = await store.remove(id)
+        if (!res.ok) {
+          restore()
+          setError(`That workout wasn’t removed: ${res.error}`)
+        }
+      },
+    })
   }
 
   const todayKey = dayKey(now)
@@ -200,13 +287,24 @@ export function ExerciseTracker({
 
   return (
     <div className="space-y-5">
+      {undo.toast}
       {error && <p role="alert" className="omni-notice-error">{error}</p>}
+      {savedNote && <p role="status" className="omni-notice-ok">{savedNote}</p>}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="space-y-4 rounded-2xl bg-white p-4 ring-1 ring-line sm:p-5">
-          <p className="font-display text-base font-bold">Log a workout</p>
+        <div ref={formRef} className="space-y-4 rounded-2xl bg-white p-4 ring-1 ring-line sm:p-5">
+          {editing && (
+            <p className="flex flex-wrap items-center gap-x-1.5 rounded-xl px-3 py-2 text-sm font-semibold" style={{ background: `${ACCENT}14` }}>
+              <Pencil className="h-3.5 w-3.5" style={{ color: ACCENT }} aria-hidden />
+              Editing your workout from {fullWhen(editing.logged_at)} ·
+              <button type="button" onClick={cancelEdit} className="font-bold underline" style={{ color: ACCENT }}>
+                Cancel
+              </button>
+            </p>
+          )}
+          <p className="font-display text-base font-bold">{editing ? 'Edit workout' : 'Log a workout'}</p>
 
-          <div role="radiogroup" aria-label="Activity" className="grid grid-cols-3 gap-1.5 sm:gap-2">
+          <div ref={activityRef} role="radiogroup" aria-label="Activity" className="grid grid-cols-3 gap-1.5 sm:gap-2">
             {ACTIVITIES.map((x) => {
               const Icon = ICONS[x.id]
               const active = activity === x.id
@@ -216,6 +314,7 @@ export function ExerciseTracker({
                   type="button"
                   role="radio"
                   aria-checked={active}
+                  data-activity={x.id}
                   whileTap={{ scale: 0.94 }}
                   onClick={() => setActivity(x.id)}
                   className={`relative flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-xs font-bold ring-1 transition ${
@@ -373,8 +472,14 @@ export function ExerciseTracker({
             />
           </div>
 
+          <WhenPicker
+            value={when}
+            onChange={setWhen}
+            original={editing && whenFromIso(editing.logged_at).day === 'original' ? editing.logged_at : undefined}
+          />
+
           <button type="button" onClick={save} disabled={!canSave} className="omni-btn-primary w-full" style={{ background: ACCENT }}>
-            Log {formatMinutes(duration)} of {a.label.toLowerCase()}
+            {editing ? 'Save changes' : `Log ${formatMinutes(duration)} of ${a.label.toLowerCase()}`}
           </button>
         </div>
 
@@ -473,7 +578,7 @@ export function ExerciseTracker({
                           <p className="font-bold">
                             {formatMinutes(l.duration_min)} {ACTIVITY_BY_ID[l.activity].label.toLowerCase()}{' '}
                             <span className="text-xs font-semibold text-muted">
-                              {when(l.logged_at)}
+                              {shortWhen(l.logged_at)}
                               {pending && ', saving…'}
                             </span>
                           </p>
@@ -482,11 +587,20 @@ export function ExerciseTracker({
                         <button
                           type="button"
                           disabled={pending}
-                          onClick={() => remove(l.id)}
-                          className="rounded-full p-2 text-muted transition hover:bg-mist hover:text-alert disabled:opacity-30"
-                          aria-label={`Remove ${formatMinutes(l.duration_min)} ${ACTIVITY_BY_ID[l.activity].label.toLowerCase()} from ${when(l.logged_at)}`}
+                          onClick={() => startEdit(l)}
+                          className={DELETE_BUTTON_CLASS}
+                          aria-label={`Edit ${formatMinutes(l.duration_min)} ${ACTIVITY_BY_ID[l.activity].label.toLowerCase()} from ${shortWhen(l.logged_at)}`}
                         >
-                          <Trash2 className="h-4 w-4" aria-hidden />
+                          <Pencil className="h-5 w-5" aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={pending}
+                          onClick={() => remove(l.id)}
+                          className={DELETE_BUTTON_CLASS}
+                          aria-label={`Remove ${formatMinutes(l.duration_min)} ${ACTIVITY_BY_ID[l.activity].label.toLowerCase()} from ${shortWhen(l.logged_at)}`}
+                        >
+                          <Trash2 className="h-5 w-5" aria-hidden />
                         </button>
                       </motion.li>
                     )

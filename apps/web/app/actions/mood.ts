@@ -43,3 +43,18 @@ export async function deleteMood(id: string): Promise<ActionResult<null>> {
   if (error) return { ok: false, error: friendly(error) }
   return { ok: true, data: null }
 }
+
+/** Changes an entry's details (and, with input.logged_at, its time). Row-level security limits it to the caller's own. */
+export async function updateMood(id: string, input: unknown): Promise<ActionResult<MoodLog>> {
+  if (!isUuid(id)) return { ok: false, error: 'Invalid entry.' }
+  const parsed = validateMoodInput(input)
+  if (!parsed.ok) return parsed
+
+  const supabase = await signedInClient()
+  if (!supabase) return { ok: false, error: SIGNED_OUT }
+
+  const { data, error } = await supabase.from('mood_logs').update(parsed.value).eq('id', id).select(COLUMNS).maybeSingle()
+  if (error) return { ok: false, error: friendly(error) }
+  if (!data) return { ok: false, error: 'That check-in wasn’t found.' }
+  return { ok: true, data: data as unknown as MoodLog }
+}

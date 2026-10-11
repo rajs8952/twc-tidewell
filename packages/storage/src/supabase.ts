@@ -5,6 +5,7 @@
  * limits every table to the user's own rows.
  * ------------------------------------------------------------------ */
 
+import { validateLoggedAt } from '@rajs8952/core/when'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { validateExerciseInput, toExerciseLog, type ExerciseLog } from '@rajs8952/core/exercise'
 import { BEVERAGES, type BeverageId } from '@rajs8952/core/hydration'
@@ -125,14 +126,37 @@ export async function getDrinkLogs(supabase: SupabaseClient, from: Date, to: Dat
   return (data ?? []).map(toDrinkLog)
 }
 
-export async function addDrinkLog(supabase: SupabaseClient, beverage: BeverageId, amountMl: number): Promise<DrinkLog> {
+export async function addDrinkLog(supabase: SupabaseClient, beverage: BeverageId, amountMl: number, loggedAt?: string): Promise<DrinkLog> {
+  const at = checkedTime(loggedAt)
   const { data, error } = await supabase
     .from('drink_logs')
-    .insert({ beverage, amount_ml: Math.round(amountMl), multiplier: BEVERAGES[beverage].multiplier })
+    .insert({ beverage, amount_ml: Math.round(amountMl), multiplier: BEVERAGES[beverage].multiplier, ...(at ? { logged_at: at } : {}) })
     .select(DRINK_COLUMNS)
     .single()
   if (error) throw error
   return toDrinkLog(data)
+}
+
+/** A drink's type, amount and (optionally) time. */
+export async function updateDrinkLog(supabase: SupabaseClient, id: string, change: { beverage: BeverageId; amountMl: number; loggedAt?: string }): Promise<DrinkLog> {
+  if (!isUuid(id)) throw new Error('Invalid entry.')
+  const at = checkedTime(change.loggedAt)
+  const { data, error } = await supabase
+    .from('drink_logs')
+    .update({ beverage: change.beverage, amount_ml: Math.round(change.amountMl), multiplier: BEVERAGES[change.beverage].multiplier, ...(at ? { logged_at: at } : {}) })
+    .eq('id', id)
+    .select(DRINK_COLUMNS)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('That drink wasn’t found.')
+  return toDrinkLog(data)
+}
+
+/** The same "when" rule as the other trackers (@rajs8952/core/when); throws if it's out of range. */
+function checkedTime(loggedAt?: string) {
+  const r = validateLoggedAt(loggedAt)
+  if (!r.ok) throw new Error(r.error)
+  return r.value
 }
 
 export async function deleteDrinkLog(supabase: SupabaseClient, id: string) {
@@ -166,6 +190,7 @@ export function toProfile(r: Record<string, unknown>): Profile {
     // Undefined (not null) before supabase/profile.sql has been run.
     height_cm: r.height_cm == null ? null : Number(r.height_cm),
     birth_year: r.birth_year == null ? null : Number(r.birth_year),
+    created_at: (r.created_at as string | null) ?? null,
   }
 }
 
@@ -206,6 +231,15 @@ export function createSupabaseStorage(supabase: SupabaseClient): TrackerStorage 
         if (error) return { ok: false, error: friendlyDbError(error, q.name) }
         return { ok: true, data: map(data as unknown as Record<string, unknown>) }
       },
+      async update(id, input) {
+        if (!isUuid(id)) return { ok: false, error: 'Invalid entry.' }
+        const parsed = validate(input)
+        if (!parsed.ok) return parsed
+        const { data, error } = await supabase.from(q.table).update(parsed.value).eq('id', id).select(q.columns).maybeSingle()
+        if (error) return { ok: false, error: friendlyDbError(error, q.name) }
+        if (!data) return { ok: false, error: 'That entry wasn’t found.' }
+        return { ok: true, data: map(data as unknown as Record<string, unknown>) }
+      },
       async remove(id) {
         if (!isUuid(id)) return { ok: false, error: 'Invalid entry.' }
         const { error } = await supabase.from(q.table).delete().eq('id', id)
@@ -230,6 +264,11 @@ export function createSupabaseStorage(supabase: SupabaseClient): TrackerStorage 
     weight: {
       list: weightRows.list,
       remove: weightRows.remove,
+      // Editing a weigh-in doesn't touch the profile.
+      async update(id, input) {
+        const saved = await weightRows.update(id, input)
+        return saved.ok ? { ok: true, data: { log: saved.data, profileSynced: false } } : saved
+      },
       // Like OmniWell's server action: optionally copies the weight to the profile; a failure there keeps the entry.
       async create(input) {
         const parsed = validateWeightInput(input)
@@ -246,7 +285,8 @@ export function createSupabaseStorage(supabase: SupabaseClient): TrackerStorage 
     },
     water: {
       list: (from, to) => getDrinkLogs(supabase, from, to),
-      add: (beverage, ml) => addDrinkLog(supabase, beverage, ml),
+      add: (beverage, ml, at) => addDrinkLog(supabase, beverage, ml, at),
+      update: (id, change) => updateDrinkLog(supabase, id, change),
       remove: (id) => deleteDrinkLog(supabase, id),
       dailyTotals: (days) => getDailyTotals(supabase, days),
     },

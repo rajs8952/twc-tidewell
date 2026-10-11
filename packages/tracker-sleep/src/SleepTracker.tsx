@@ -1,11 +1,12 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { Minus, Moon, Plus, Star, Sun, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Minus, Moon, Pencil, Plus, Star, Sun, Trash2 } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
 import type { TrackerStorage } from '@rajs8952/core/storage'
-import { useInitialLoad, useSaving, useStore } from '@rajs8952/ui'
-import { addDays, dayKey, startOfWeek } from '@rajs8952/core/dates'
+import { DELETE_BUTTON_CLASS, useInitialLoad, useSaving, useStore, useUndoDelete } from '@rajs8952/ui'
+import { addDays, dayKey, startOfDay, startOfWeek } from '@rajs8952/core/dates'
+import { hhmm } from '@rajs8952/core/when'
 import {
   HOURS_STEP,
   MAX_AWAKENINGS,
@@ -80,12 +81,16 @@ export function SleepTracker({
   const [error, setError] = useState<string | null>(null)
   const [saving, startSaving] = useSaving()
 
-  const [wakeDay, setWakeDay] = useState<0 | -1>(0)
+  /** Days before today the night ended: 0 today, -1 yesterday, further back only while editing an older night. */
+  const [wakeDay, setWakeDay] = useState(0)
   const [wakeTime, setWakeTime] = useState(() => defaultWakeTime())
   const [hours, setHours] = useState(8)
   const [quality, setQuality] = useState<number | null>(null)
   const [awakenings, setAwakenings] = useState(0)
   const [note, setNote] = useState('')
+  /** The night being edited, and the day offset it ended on (so an older date stays pickable). */
+  const [editing, setEditing] = useState<{ id: string; dayOffset: number; label: string } | null>(null)
+  const editBanner = useRef<HTMLParagraphElement>(null)
 
   const now = new Date()
   const weekStart = startOfWeek(now)
@@ -103,9 +108,39 @@ export function SleepTracker({
     },
   )
 
-  const wake = wakeDate(wakeTime, wakeDay, now)
+  const wake = wakeDate(wakeTime, 0, addDays(now, wakeDay))
   const bed = bedDate(wake, hours)
   const inFuture = wake.getTime() > now.getTime() + 10 * 60_000
+
+  function resetForm() {
+    setWakeDay(0)
+    setWakeTime(defaultWakeTime())
+    setHours(8)
+    setQuality(null)
+    setAwakenings(0)
+    setNote('')
+  }
+
+  /** Loads a night into the form above; saving then updates it instead of adding a new one. */
+  function startEdit(row: Row) {
+    const w = new Date(row.wake_at)
+    const dayOffset = Math.round((startOfDay(w).getTime() - startOfDay(new Date()).getTime()) / 86_400_000)
+    const slept = Math.round(row.duration_min / 60 / HOURS_STEP) * HOURS_STEP
+    setEditing({ id: row.id, dayOffset, label: `${weekday(w)} ${formatTime(w)}` })
+    setWakeDay(dayOffset)
+    setWakeTime(hhmm(w))
+    setHours(Math.min(MAX_HOURS, Math.max(MIN_HOURS, slept)))
+    setQuality(row.quality)
+    setAwakenings(row.awakenings ?? 0)
+    setNote(row.note ?? '')
+    setError(null)
+    requestAnimationFrame(() => editBanner.current?.focus())
+  }
+
+  function cancelEdit() {
+    setEditing(null)
+    resetForm()
+  }
 
   function save() {
     if (!quality || inFuture) return
@@ -115,6 +150,20 @@ export function SleepTracker({
       quality,
       awakenings,
       note,
+    }
+    if (editing) {
+      const id = editing.id
+      setError(null)
+      startSaving(async () => {
+        const res = await store.update(id, input)
+        if (!res.ok) {
+          setError(`Your changes weren’t saved: ${res.error}`)
+          return
+        }
+        setLogs((prev) => prev.map((l) => (l.id === id ? { ...res.data, _key: l._key } : l)).sort((a, b) => b.wake_at.localeCompare(a.wake_at)))
+        cancelEdit()
+      })
+      return
     }
     const temp: Row = {
       id: `temp-${Date.now()}`,
@@ -141,14 +190,26 @@ export function SleepTracker({
     })
   }
 
-  async function remove(id: string) {
+  const undo = useUndoDelete()
+
+  /** Removes it from the list now; it's really deleted once the 5-second "Undo" has passed. */
+  function remove(id: string) {
     const removed = logs.find((l) => l.id === id)
+    if (!removed) return
+    if (editing?.id === id) cancelEdit()
+    const restore = () => setLogs((prev) => (prev.some((l) => l.id === id) ? prev : [...prev, removed].sort((a, b) => b.wake_at.localeCompare(a.wake_at))))
     setLogs((prev) => prev.filter((l) => l.id !== id))
-    const res = await store.remove(id)
-    if (!res.ok) {
-      if (removed) setLogs((prev) => [...prev, removed].sort((a, b) => b.wake_at.localeCompare(a.wake_at)))
-      setError(`That night wasn’t removed: ${res.error}`)
-    }
+    undo.schedule({
+      label: 'Night removed',
+      restore,
+      commit: async () => {
+        const res = await store.remove(id)
+        if (!res.ok) {
+          restore()
+          setError(`That night wasn’t removed: ${res.error}`)
+        }
+      },
+    })
   }
 
   const todayKey = dayKey(now)
@@ -177,21 +238,40 @@ export function SleepTracker({
   }
 
   const recent = logs.slice(0, 5)
+  // While editing an older night, its own date joins Today / Yesterday.
+  const wakeDays = editing && editing.dayOffset < -1 ? [0, -1, editing.dayOffset] : [0, -1]
   const pct = (h: number) => `${(Math.min(h, CHART_MAX_HOURS) / CHART_MAX_HOURS) * 100}%`
 
   return (
     <div className="space-y-5">
+      {undo.toast}
       {error && <p role="alert" className="omni-notice-error">{error}</p>}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="space-y-5 rounded-2xl bg-white p-4 ring-1 ring-line sm:p-5">
-          <p className="font-display text-base font-bold">How did you sleep?</p>
+          {editing ? (
+            <p ref={editBanner} tabIndex={-1} className="flex flex-wrap items-baseline gap-x-2 rounded-xl bg-mist px-3 py-2 text-sm font-semibold focus:outline-none">
+              <span>
+                Editing the night ending <span className="font-bold">{editing.label}</span>
+              </span>
+              <span aria-hidden>·</span>
+              <button type="button" onClick={cancelEdit} disabled={saving} className="font-bold underline-offset-2 hover:underline disabled:opacity-40" style={{ color: ACCENT }}>
+                Cancel
+              </button>
+            </p>
+          ) : (
+            <p className="font-display text-base font-bold">How did you sleep?</p>
+          )}
 
           <div>
             <p className="mb-2 text-sm font-bold">Woke up</p>
             <div className="flex flex-col gap-2 min-[420px]:flex-row">
-              <div role="radiogroup" aria-label="Wake day" className="grid flex-1 grid-cols-2 rounded-full bg-mist p-1 text-sm font-bold">
-                {([0, -1] as const).map((d) => (
+              <div
+                role="radiogroup"
+                aria-label="Wake day"
+                className={`grid flex-1 rounded-full bg-mist p-1 text-sm font-bold ${wakeDays.length > 2 ? 'grid-cols-3' : 'grid-cols-2'}`}
+              >
+                {wakeDays.map((d) => (
                   <button
                     key={d}
                     type="button"
@@ -207,7 +287,7 @@ export function SleepTracker({
                         transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                       />
                     )}
-                    <span className="relative">{d === 0 ? 'Today' : 'Yesterday'}</span>
+                    <span className="relative">{d === 0 ? 'Today' : d === -1 ? 'Yesterday' : addDays(now, d).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</span>
                   </button>
                 ))}
               </div>
@@ -319,7 +399,7 @@ export function SleepTracker({
             className="omni-btn-primary w-full"
             style={{ background: ACCENT }}
           >
-            {quality ? `Log ${formatDuration(hours * 60)} of sleep` : 'Rate your sleep to log it'}
+            {editing ? 'Save changes' : quality ? `Log ${formatDuration(hours * 60)} of sleep` : 'Rate your sleep to log it'}
           </button>
         </div>
 
@@ -415,12 +495,22 @@ export function SleepTracker({
                         </div>
                         <button
                           type="button"
+                          disabled={pending || saving}
+                          onClick={() => startEdit(l)}
+                          aria-pressed={editing?.id === l.id}
+                          className={DELETE_BUTTON_CLASS}
+                          aria-label={`Edit ${formatDuration(l.duration_min)} sleep ending ${weekday(l.wake_at)} ${formatTime(l.wake_at)}`}
+                        >
+                          <Pencil className="h-5 w-5" aria-hidden />
+                        </button>
+                        <button
+                          type="button"
                           disabled={pending}
                           onClick={() => remove(l.id)}
-                          className="rounded-full p-2 text-muted transition hover:bg-mist hover:text-alert disabled:opacity-30"
+                          className={DELETE_BUTTON_CLASS}
                           aria-label={`Remove ${formatDuration(l.duration_min)} sleep ending ${weekday(l.wake_at)} ${formatTime(l.wake_at)}`}
                         >
-                          <Trash2 className="h-4 w-4" aria-hidden />
+                          <Trash2 className="h-5 w-5" aria-hidden />
                         </button>
                       </motion.li>
                     )

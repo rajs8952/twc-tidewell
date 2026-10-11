@@ -1,10 +1,11 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { Minus, Plus, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { Minus, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TrackerStorage } from '@rajs8952/core/storage'
-import { useInitialLoad, useSaving, useStore } from '@rajs8952/ui'
+import { DELETE_BUTTON_CLASS, WhenPicker, savedForNote, useInitialLoad, useSaving, useStore, useUndoDelete } from '@rajs8952/ui'
+import { whenFromIso, whenProblem, whenToIso, type WhenChoice } from '@rajs8952/core/when'
 import { storageKey } from '@rajs8952/core/persist'
 import { addDays, startOfDay } from '@rajs8952/core/dates'
 import {
@@ -21,6 +22,7 @@ import {
   weightRange,
   type ActionResult,
   type WeightLog,
+  type WeightInput,
   type WeightUnit,
 } from '@rajs8952/core/weight'
 
@@ -33,6 +35,9 @@ type Row = WeightLog & { _key?: string }
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 const monthOf = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short' })
 const dayOf = (iso: string) => new Date(iso).getDate()
+const fullWhen = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+const byNewest = (a: Row, b: Row) => Date.parse(b.logged_at) - Date.parse(a.logged_at)
 
 function readUnit(): WeightUnit {
   try {
@@ -131,6 +136,17 @@ export function WeightTracker({
   const [note, setNote] = useState('')
   const [syncProfile, setSyncProfile] = useState(false)
   const [range, setRange] = useState<(typeof RANGES)[number]>(30)
+  const [when, setWhen] = useState<WhenChoice>({ day: 'now' })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [savedNote, setSavedNote] = useState<string | null>(null)
+  const formRef = useRef<HTMLDivElement>(null)
+  const weightRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!savedNote) return
+    const t = setTimeout(() => setSavedNote(null), 4000)
+    return () => clearTimeout(t)
+  }, [savedNote])
 
   useEffect(() => setUnit(readUnit()), [])
 
@@ -177,26 +193,87 @@ export function WeightTracker({
     setText(Math.max(0, round1(base + delta)).toFixed(1))
   }
 
-  function save() {
-    if (!kgValid || !fatValid) return
-    const input = { weight_kg: kg, body_fat_pct: fatValue === null ? null : round1(fatValue), note, sync_profile: syncProfile }
-    const temp: Row = {
-      id: `temp-${Date.now()}`,
-      weight_kg: kg,
-      body_fat_pct: input.body_fat_pct,
-      note: note.trim() || null,
-      logged_at: new Date().toISOString(),
-    }
-    setError(null)
-    setNotice(null)
-    setLogs((prev) => [temp, ...prev])
+  const editing = editingId ? logs.find((l) => l.id === editingId) : undefined
+  const canSave = kgValid && fatValid && !whenProblem(when) && !saving
+
+  function resetForm() {
     setNote('')
     setFat('')
     setShowFat(false)
+    setWhen({ day: 'now' })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    resetForm()
+    // Put the latest weigh-in back as the starting point, as on load.
+    const latest = logs.find((l) => l.id !== editingId)
+    if (latest) setText(round1(toUnit(latest.weight_kg, unit)).toFixed(1))
+  }
+
+  /** Recent weigh-ins only shows the newest few, so say where an older one went. */
+  function noteIfHidden(iso: string, list: Row[]) {
+    const newer = list.filter((l) => Date.parse(l.logged_at) > Date.parse(iso)).length
+    if (newer >= 5) setSavedNote(savedForNote(iso))
+  }
+
+  function startEdit(row: Row) {
+    setError(null)
+    setNotice(null)
+    setEditingId(row.id)
+    setText(round1(toUnit(row.weight_kg, unit)).toFixed(1))
+    setFat(row.body_fat_pct == null ? '' : String(row.body_fat_pct))
+    setShowFat(row.body_fat_pct != null)
+    setNote(row.note ?? '')
+    setWhen(whenFromIso(row.logged_at))
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    weightRef.current?.focus({ preventScroll: true })
+  }
+
+  function save() {
+    if (!canSave) return
+    // Editing with "Now" moves the entry to now; leaving logged_at out would keep its old time.
+    const loggedAt = whenToIso(when) ?? (editingId ? new Date().toISOString() : undefined)
+    const input: WeightInput = {
+      weight_kg: kg,
+      body_fat_pct: fatValue === null ? null : round1(fatValue),
+      note,
+      // Edits never touch the profile.
+      sync_profile: editingId ? false : syncProfile,
+      ...(loggedAt ? { logged_at: loggedAt } : {}),
+    }
+    setError(null)
+    setNotice(null)
+
+    if (editingId) {
+      const id = editingId
+      startSaving(async () => {
+        const res = await store.update(id, input)
+        if (res.ok) {
+          const replace = (list: Row[]) => list.map((l) => (l.id === id ? { ...res.data.log, _key: l._key } : l)).sort(byNewest)
+          setLogs(replace)
+          noteIfHidden(res.data.log.logged_at, replace(logs))
+          setEditingId(null)
+          resetForm()
+        } else setError(`Your changes weren’t saved: ${res.error}`)
+      })
+      return
+    }
+
+    const temp: Row = {
+      id: `temp-${Date.now()}`,
+      weight_kg: kg,
+      body_fat_pct: input.body_fat_pct ?? null,
+      note: note.trim() || null,
+      logged_at: loggedAt ?? new Date().toISOString(),
+    }
+    if (loggedAt) noteIfHidden(loggedAt, logs)
+    setLogs((prev) => [temp, ...prev].sort(byNewest))
+    resetForm()
     startSaving(async () => {
       const res = await store.create(input)
       if (res.ok) {
-        setLogs((prev) => prev.map((l) => (l.id === temp.id ? { ...res.data.log, _key: temp.id } : l)))
+        setLogs((prev) => prev.map((l) => (l.id === temp.id ? { ...res.data.log, _key: temp.id } : l)).sort(byNewest))
         if (input.sync_profile) {
           if (res.data.profileSynced) {
             onProfileWeightChange?.(kg)
@@ -205,19 +282,32 @@ export function WeightTracker({
         }
       } else {
         setLogs((prev) => prev.filter((l) => l.id !== temp.id))
+        setSavedNote(null)
         setError(`That weigh-in wasn’t saved: ${res.error}`)
       }
     })
   }
 
-  async function remove(id: string) {
+  const undo = useUndoDelete()
+
+  /** Removes it from the list now; it's really deleted once the 5-second "Undo" has passed. */
+  function remove(id: string) {
     const removed = logs.find((l) => l.id === id)
+    if (!removed) return
+    if (id === editingId) cancelEdit()
+    const restore = () => setLogs((prev) => (prev.some((l) => l.id === id) ? prev : [...prev, removed].sort(byNewest)))
     setLogs((prev) => prev.filter((l) => l.id !== id))
-    const res = await store.remove(id)
-    if (!res.ok) {
-      if (removed) setLogs((prev) => [...prev, removed].sort((a, b) => b.logged_at.localeCompare(a.logged_at)))
-      setError(`That weigh-in wasn’t removed: ${res.error}`)
-    }
+    undo.schedule({
+      label: 'Weigh-in removed',
+      restore,
+      commit: async () => {
+        const res = await store.remove(id)
+        if (!res.ok) {
+          restore()
+          setError(`That weigh-in wasn’t removed: ${res.error}`)
+        }
+      },
+    })
   }
 
   const inRange = useMemo(() => {
@@ -240,16 +330,30 @@ export function WeightTracker({
   const lowest = inRange.length ? Math.min(...inRange.map((l) => l.weight_kg)) : null
   const highest = inRange.length ? Math.max(...inRange.map((l) => l.weight_kg)) : null
   const recent = logs.slice(0, 5)
+  // "Since last weigh-in" means the one before the chosen time (not the entry being edited).
+  const targetTime = Date.parse(whenToIso(when) ?? new Date().toISOString())
+  const previous = logs.find((l) => l.id !== editingId && Date.parse(l.logged_at) < targetTime)
 
   return (
     <div className="space-y-5">
+      {undo.toast}
       {error && <p role="alert" className="omni-notice-error">{error}</p>}
       {notice && <p role="status" className="omni-notice-ok">{notice}</p>}
+      {savedNote && <p role="status" className="omni-notice-ok">{savedNote}</p>}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="space-y-4 rounded-2xl bg-white p-4 ring-1 ring-line sm:p-5">
+        <div ref={formRef} className="space-y-4 rounded-2xl bg-white p-4 ring-1 ring-line sm:p-5">
+          {editing && (
+            <p className="flex flex-wrap items-center gap-x-1.5 rounded-xl px-3 py-2 text-sm font-semibold" style={{ background: `${ACCENT}14` }}>
+              <Pencil className="h-3.5 w-3.5" style={{ color: ACCENT }} aria-hidden />
+              Editing your weigh-in from {fullWhen(editing.logged_at)} ·
+              <button type="button" onClick={cancelEdit} className="font-bold underline" style={{ color: ACCENT }}>
+                Cancel
+              </button>
+            </p>
+          )}
           <div className="flex items-center justify-between gap-3">
-            <p className="font-display text-base font-bold">Weigh in</p>
+            <p className="font-display text-base font-bold">{editing ? 'Edit weigh-in' : 'Weigh in'}</p>
             <div className="flex rounded-full bg-mist p-1" role="radiogroup" aria-label="Weight unit">
               {(['kg', 'lb'] as const).map((u) => (
                 <button
@@ -282,6 +386,7 @@ export function WeightTracker({
               </label>
               <input
                 id="weight-value"
+                ref={weightRef}
                 type="number"
                 inputMode="decimal"
                 step="0.1"
@@ -307,9 +412,9 @@ export function WeightTracker({
               Enter a weight between {formatWeight(MIN_KG, unit)} and {formatWeight(MAX_KG, unit)}.
             </p>
           )}
-          {latest && kgValid && (
+          {previous && kgValid && (
             <p className="text-center text-sm text-muted">
-              {formatChange(kg - latest.weight_kg, unit)} since {shortDate(latest.logged_at)}
+              {formatChange(kg - previous.weight_kg, unit)} since {shortDate(previous.logged_at)}
             </p>
           )}
 
@@ -356,22 +461,30 @@ export function WeightTracker({
             />
           </div>
 
-          <label className="flex cursor-pointer items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              checked={syncProfile}
-              onChange={(e) => setSyncProfile(e.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0"
-              style={{ accentColor: ACCENT }}
-            />
-            <span>
-              <span className="font-bold">Also use for my water goal</span>
-              <span className="block text-muted">Updates the weight your daily water goal is calculated from.</span>
-            </span>
-          </label>
+          <WhenPicker
+            value={when}
+            onChange={setWhen}
+            original={editing && whenFromIso(editing.logged_at).day === 'original' ? editing.logged_at : undefined}
+          />
 
-          <button type="button" onClick={save} disabled={!kgValid || !fatValid || saving} className="omni-btn-primary w-full" style={{ background: ACCENT }}>
-            {kgValid ? `Log ${formatWeight(kg, unit)}` : 'Enter your weight'}
+          {!editing && (
+            <label className="flex cursor-pointer items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={syncProfile}
+                onChange={(e) => setSyncProfile(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0"
+                style={{ accentColor: ACCENT }}
+              />
+              <span>
+                <span className="font-bold">Also use for my water goal</span>
+                <span className="block text-muted">Updates the weight your daily water goal is calculated from.</span>
+              </span>
+            </label>
+          )}
+
+          <button type="button" onClick={save} disabled={!canSave} className="omni-btn-primary w-full" style={{ background: ACCENT }}>
+            {!kgValid ? 'Enter your weight' : editing ? 'Save changes' : `Log ${formatWeight(kg, unit)}`}
           </button>
         </div>
 
@@ -472,11 +585,20 @@ export function WeightTracker({
                         <button
                           type="button"
                           disabled={pending}
+                          onClick={() => startEdit(l)}
+                          className={DELETE_BUTTON_CLASS}
+                          aria-label={`Edit ${formatWeight(l.weight_kg, unit)} weigh-in from ${shortDate(l.logged_at)}`}
+                        >
+                          <Pencil className="h-5 w-5" aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={pending}
                           onClick={() => remove(l.id)}
-                          className="rounded-full p-2 text-muted transition hover:bg-mist hover:text-alert disabled:opacity-30"
+                          className={DELETE_BUTTON_CLASS}
                           aria-label={`Remove ${formatWeight(l.weight_kg, unit)} weigh-in from ${shortDate(l.logged_at)}`}
                         >
-                          <Trash2 className="h-4 w-4" aria-hidden />
+                          <Trash2 className="h-5 w-5" aria-hidden />
                         </button>
                       </motion.li>
                     )

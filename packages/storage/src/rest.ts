@@ -62,6 +62,7 @@ export function createRestStorage(options: RestStorageOptions): TrackerStorage {
     return {
       list: (r: { from: string; to: string }) => result<TLog[]>('GET', `/${name}${range(r.from, r.to)}`),
       create: (input: TInput) => result<TSaved>('POST', `/${name}`, input),
+      update: (id: string, input: TInput) => result<TSaved>('PATCH', `/${name}/${encodeURIComponent(id)}`, input),
       remove: async (id: string): Promise<ActionResult<null>> => {
         const r = await result<unknown>('DELETE', `/${name}/${encodeURIComponent(id)}`)
         return r.ok ? { ok: true, data: null } : r
@@ -77,7 +78,8 @@ export function createRestStorage(options: RestStorageOptions): TrackerStorage {
     meditation: logStore('meditation'),
     water: {
       list: (from, to) => request('GET', `/water${range(from.toISOString(), to.toISOString())}`),
-      add: (beverage, amountMl) => request('POST', '/water', { beverage, amount_ml: Math.round(amountMl) }),
+      add: (beverage, amountMl, loggedAt) => request('POST', '/water', { beverage, amount_ml: Math.round(amountMl), ...(loggedAt ? { logged_at: loggedAt } : {}) }),
+      update: (id, c) => request('PATCH', `/water/${encodeURIComponent(id)}`, { beverage: c.beverage, amount_ml: Math.round(c.amountMl), ...(c.loggedAt ? { logged_at: c.loggedAt } : {}) }),
       remove: async (id) => {
         await request('DELETE', `/water/${encodeURIComponent(id)}`)
       },

@@ -1,10 +1,11 @@
 'use client'
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { Pause, Play, Square, Trash2 } from 'lucide-react'
+import { Pause, Pencil, Play, Square, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { TrackerStorage } from '@rajs8952/core/storage'
-import { useInitialLoad, useSaving, useStore } from '@rajs8952/ui'
+import { DELETE_BUTTON_CLASS, WhenPicker, savedForNote, useInitialLoad, useSaving, useStore, useUndoDelete } from '@rajs8952/ui'
+import { type WhenChoice, whenFromIso, whenProblem, whenToIso } from '@rajs8952/core/when'
 import { addDays, dayKey, startOfWeek } from '@rajs8952/core/dates'
 import {
   BREATH_SECONDS,
@@ -152,6 +153,16 @@ export function MeditationTracker({
   const [calmAfter, setCalmAfter] = useState<number | null>(null)
   const [note, setNote] = useState('')
   const [custom, setCustom] = useState('')
+  const [when, setWhen] = useState<WhenChoice>({ day: 'now' })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [savedNote, setSavedNote] = useState<string | null>(null)
+  const formRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!savedNote) return
+    const id = setTimeout(() => setSavedNote(null), 4000)
+    return () => clearTimeout(id)
+  }, [savedNote])
 
   // Timer: elapsed time is derived from the clock so it stays correct in background tabs.
   const [phase, setPhase] = useState<Phase>('setup')
@@ -226,6 +237,48 @@ export function MeditationTracker({
     setCalmAfter(null)
     setNote('')
     setCustom('')
+    setWhen({ day: 'now' })
+    setEditingId(null)
+  }
+
+  /** Entries saved for another day leave today's list, so say where they went. */
+  function noteIfNotToday(iso: string) {
+    if (dayKey(new Date(iso)) !== dayKey(new Date())) setSavedNote(savedForNote(iso))
+  }
+
+  /** Only offered while no timer session is running, so that session is never overwritten. */
+  function startEdit(l: Row) {
+    if (phase !== 'setup') return
+    setMode('log')
+    setType(l.session_type)
+    if ((DURATIONS as readonly number[]).includes(l.duration_min)) {
+      setMinutes(l.duration_min)
+      setCustom('')
+    } else setCustom(String(l.duration_min))
+    setCalmBefore(l.calm_before)
+    setCalmAfter(l.calm_after)
+    setNote(l.note ?? '')
+    setWhen(whenFromIso(l.logged_at))
+    setEditingId(l.id)
+    setError(null)
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      formRef.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus({ preventScroll: true })
+    })
+  }
+
+  function saveEdit(id: string, input: MeditationInput) {
+    setError(null)
+    startSaving(async () => {
+      const res = await store.update(id, input)
+      if (res.ok) {
+        setLogs((prev) =>
+          prev.map((l) => (l.id === id ? { ...res.data, _key: l._key } : l)).sort((a, b) => b.logged_at.localeCompare(a.logged_at)),
+        )
+        resetForm()
+        noteIfNotToday(res.data.logged_at)
+      } else setError(`Your changes weren’t saved: ${res.error}`)
+    })
   }
 
   function save(input: MeditationInput) {
@@ -236,11 +289,12 @@ export function MeditationTracker({
       calm_before: input.calm_before ?? null,
       calm_after: input.calm_after ?? null,
       note: input.note?.trim() || null,
-      logged_at: new Date().toISOString(),
+      logged_at: input.logged_at ?? new Date().toISOString(),
     }
     setError(null)
-    setLogs((prev) => [temp, ...prev])
+    setLogs((prev) => [temp, ...prev].sort((a, b) => b.logged_at.localeCompare(a.logged_at)))
     resetForm()
+    noteIfNotToday(temp.logged_at)
     startSaving(async () => {
       const res = await store.create(input)
       if (res.ok) setLogs((prev) => prev.map((l) => (l.id === temp.id ? { ...res.data, _key: temp.id } : l)))
@@ -251,17 +305,30 @@ export function MeditationTracker({
     })
   }
 
-  async function remove(id: string) {
+  const undo = useUndoDelete()
+
+  /** Removes it from the list now; it's really deleted once the 5-second "Undo" has passed. */
+  function remove(id: string) {
     const removed = logs.find((l) => l.id === id)
+    if (!removed) return
+    if (id === editingId) resetForm()
+    const restore = () => setLogs((prev) => (prev.some((l) => l.id === id) ? prev : [...prev, removed].sort((a, b) => b.logged_at.localeCompare(a.logged_at))))
     setLogs((prev) => prev.filter((l) => l.id !== id))
-    const res = await store.remove(id)
-    if (!res.ok) {
-      if (removed) setLogs((prev) => [...prev, removed].sort((a, b) => b.logged_at.localeCompare(a.logged_at)))
-      setError(`That session wasn’t removed: ${res.error}`)
-    }
+    undo.schedule({
+      label: 'Session removed',
+      restore,
+      commit: async () => {
+        const res = await store.remove(id)
+        if (!res.ok) {
+          restore()
+          setError(`That session wasn’t removed: ${res.error}`)
+        }
+      },
+    })
   }
 
   const todayKey = dayKey(now)
+  const editing = editingId ? logs.find((l) => l.id === editingId) : undefined
   const today = logs.filter((l) => dayKey(new Date(l.logged_at)) === todayKey)
   const todayMinutes = today.reduce((s, l) => s + l.duration_min, 0)
 
@@ -297,11 +364,35 @@ export function MeditationTracker({
   const customValid = custom !== '' && Number.isInteger(customMin) && customMin >= 1 && customMin <= MAX_MINUTES
   const logMinutes = customValid ? customMin : minutes
 
+  function logPast() {
+    const at = whenToIso(when)
+    if (editingId) {
+      // On an edit, an omitted time keeps the entry's own, so "Now" has to be sent explicitly.
+      saveEdit(editingId, {
+        duration_min: logMinutes,
+        session_type: type,
+        calm_before: calmBefore,
+        calm_after: calmAfter,
+        note,
+        logged_at: at ?? new Date().toISOString(),
+      })
+    } else save({ duration_min: logMinutes, session_type: type, calm_after: calmAfter, ...(at ? { logged_at: at } : {}) })
+  }
+
   return (
     <div className="space-y-5">
+      {undo.toast}
       {error && <p role="alert" className="omni-notice-error">{error}</p>}
 
-      <div className="rounded-2xl bg-white p-4 ring-1 ring-line sm:p-5">
+      <div ref={formRef} className="rounded-2xl bg-white p-4 ring-1 ring-line sm:p-5">
+        {editing && (
+          <p className="mb-3 flex items-center justify-between gap-3 rounded-xl bg-mist px-3 py-2 text-sm font-semibold">
+            <span>Editing your session from {time(editing.logged_at)}</span>
+            <button type="button" onClick={resetForm} className="font-bold text-muted hover:text-ink">
+              Cancel
+            </button>
+          </p>
+        )}
         {phase === 'setup' && (
           <div role="tablist" aria-label="How to log" className="mb-4 grid grid-cols-2 rounded-full bg-mist p-1 text-sm font-bold">
             {(['timer', 'log'] as const).map((m) => (
@@ -310,7 +401,11 @@ export function MeditationTracker({
                 type="button"
                 role="tab"
                 aria-selected={mode === m}
-                onClick={() => setMode(m)}
+                onClick={() => {
+                  // The timer always records a new session, so switching to it ends an edit.
+                  if (m === 'timer' && editingId) resetForm()
+                  setMode(m)
+                }}
                 className={`relative rounded-full py-2 transition ${mode === m ? 'text-ink' : 'text-muted hover:text-ink'}`}
               >
                 {mode === m && (
@@ -383,15 +478,33 @@ export function MeditationTracker({
                 </>
               ) : (
                 <>
+                  {/* Timer sessions also carry these; show them when editing so they can be changed, not lost. */}
+                  {editingId && <CalmPicker label="How calm were you before?" value={calmBefore} onChange={setCalmBefore} />}
                   <CalmPicker label="How calm did you feel after?" value={calmAfter} onChange={setCalmAfter} />
+                  {editingId && (
+                    <div>
+                      <label htmlFor="meditation-edit-note" className="sr-only">
+                        Note
+                      </label>
+                      <input
+                        id="meditation-edit-note"
+                        value={note}
+                        maxLength={1000}
+                        onChange={(e) => setNote(e.target.value)}
+                        placeholder="Add a note (optional)"
+                        className="omni-input"
+                      />
+                    </div>
+                  )}
+                  <WhenPicker value={when} onChange={setWhen} original={editing?.logged_at} />
                   <button
                     type="button"
-                    disabled={saving || (custom !== '' && !customValid)}
-                    onClick={() => save({ duration_min: logMinutes, session_type: type, calm_after: calmAfter })}
+                    disabled={saving || (custom !== '' && !customValid) || whenProblem(when) != null}
+                    onClick={logPast}
                     className="omni-btn-primary w-full"
                     style={{ background: ACCENT }}
                   >
-                    Log {formatMinutes(logMinutes)} of {SESSION_BY_ID[type].label.toLowerCase()}
+                    {editingId ? 'Save changes' : `Log ${formatMinutes(logMinutes)} of ${SESSION_BY_ID[type].label.toLowerCase()}`}
                   </button>
                 </>
               )}
@@ -504,6 +617,9 @@ export function MeditationTracker({
               </div>
             </motion.div>
           )}
+        <p role="status" className="mt-3 text-sm font-semibold text-emerald-700 empty:hidden">
+          {savedNote}
+        </p>
       </div>
 
       <div className="rounded-2xl bg-white p-4 ring-1 ring-line sm:p-5">
@@ -590,12 +706,21 @@ export function MeditationTracker({
                     </div>
                     <button
                       type="button"
+                      disabled={pending || saving || phase !== 'setup'}
+                      onClick={() => startEdit(l)}
+                      className={DELETE_BUTTON_CLASS}
+                      aria-label={`Edit ${formatMinutes(l.duration_min)} session from ${time(l.logged_at)}`}
+                    >
+                      <Pencil className="h-5 w-5" aria-hidden />
+                    </button>
+                    <button
+                      type="button"
                       disabled={pending}
                       onClick={() => remove(l.id)}
-                      className="rounded-full p-2 text-muted transition hover:bg-mist hover:text-alert disabled:opacity-30"
+                      className={DELETE_BUTTON_CLASS}
                       aria-label={`Remove ${formatMinutes(l.duration_min)} session from ${time(l.logged_at)}`}
                     >
-                      <Trash2 className="h-4 w-4" aria-hidden />
+                      <Trash2 className="h-5 w-5" aria-hidden />
                     </button>
                   </motion.li>
                 )

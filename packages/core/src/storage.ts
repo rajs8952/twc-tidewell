@@ -19,13 +19,17 @@ export interface LogStore<TLog, TInput, TSaved = TLog> {
   /** Entries in [from, to), newest first. */
   list(range: DateRange): Promise<ActionResult<TLog[]>>
   create(input: TInput): Promise<ActionResult<TSaved>>
+  /** Replaces an entry's details (and, with input.logged_at, its time). */
+  update(id: string, input: TInput): Promise<ActionResult<TSaved>>
   remove(id: string): Promise<ActionResult<null>>
 }
 
 /** Drinks. Unlike LogStore these throw on failure, matching lib/data.ts. */
 export interface WaterStore {
   list(from: Date, to: Date): Promise<DrinkLog[]>
-  add(beverage: BeverageId, amountMl: number): Promise<DrinkLog>
+  /** loggedAt (ISO): when it was drunk; omitted means now. */
+  add(beverage: BeverageId, amountMl: number, loggedAt?: string): Promise<DrinkLog>
+  update(id: string, change: { beverage: BeverageId; amountMl: number; loggedAt?: string }): Promise<DrinkLog>
   remove(id: string): Promise<void>
   /** 'YYYY-MM-DD' → effective ml, in the viewer's timezone. */
   dailyTotals(days?: number): Promise<Record<string, number>>
