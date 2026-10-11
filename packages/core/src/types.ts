@@ -14,6 +14,10 @@ export interface Profile {
   birth_year: number | null
   /** When the account was created (ISO); used to go easy on brand-new users. */
   created_at?: string | null
+  /** Personal goals (supabase/personal-goals.sql); absent before that's run, so use goalsOf(). */
+  goal_sleep_min?: number
+  goal_meditation_min?: number
+  goal_exercise_week_min?: number
 }
 
 export interface DrinkLog {

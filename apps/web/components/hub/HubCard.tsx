@@ -11,7 +11,7 @@ export function HubCard({ tracker, summary }: { tracker: TrackerModule; summary:
   const Icon = tracker.icon
   const pct = summary?.progress == null ? null : Math.round(summary.progress * 100)
   const label = summary
-    ? `${tracker.name}: ${summary.value}, ${summary.caption}${pct !== null ? `, ${pct}% complete` : ''}${summary.done ? ', done' : ''}.`
+    ? `${tracker.name}: ${summary.value}, ${summary.caption}${pct !== null ? `, ${pct}% of goal` : ''}${summary.done ? ', goal met' : summary.logged ? ', logged' : ''}.`
     : `${tracker.name}: loading.`
 
   return (
@@ -40,7 +40,11 @@ export function HubCard({ tracker, summary }: { tracker: TrackerModule; summary:
           </span>
           {summary?.done ? (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
-              <Check className="h-3 w-3" strokeWidth={3} aria-hidden /> Done
+              <Check className="h-3 w-3" strokeWidth={3} aria-hidden /> Goal met
+            </span>
+          ) : summary?.logged ? (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-mist px-2 py-0.5 text-[11px] font-bold text-ink ring-1 ring-line">
+              <Check className="h-3 w-3" strokeWidth={3} aria-hidden /> Logged
             </span>
           ) : (
             <ChevronRight className="h-4 w-4 shrink-0 text-muted transition group-hover:translate-x-0.5" aria-hidden />

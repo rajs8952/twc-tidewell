@@ -1,6 +1,6 @@
 'use client'
 
-import { Droplets, KeyRound, Loader2, Ruler, UserRound } from 'lucide-react'
+import { Droplets, KeyRound, Loader2, Ruler, Target, UserRound } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AvatarPicker } from '@/components/AvatarPicker'
@@ -19,6 +19,7 @@ import { getProfile } from '@/lib/data'
 import { updateProfileRow } from '@rajs8952/storage/supabase'
 import { errorMessage } from '@rajs8952/core/errors'
 import { calculateDailyGoal } from '@rajs8952/core/hydration'
+import { DEFAULT_GOALS, GOAL_LIMITS, validateGoals } from '@rajs8952/core/goals'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile } from '@rajs8952/core/types'
 import { trackProgress } from '@/lib/progress'
@@ -87,6 +88,12 @@ export default function ProfilePage() {
     }
     const custom = customOn ? form.custom_goal_ml : null
     if (customOn && !(custom && custom >= 500 && custom <= 8000)) return setError('Set a custom goal between 500 and 8,000 ml.')
+    // Personal goals exist once supabase/personal-goals.sql has run (the profile then carries them).
+    const hasGoals = form.goal_sleep_min !== undefined
+    if (hasGoals) {
+      const check = validateGoals({ sleepMin: form.goal_sleep_min ?? NaN, meditationMin: form.goal_meditation_min ?? NaN, exerciseWeekMin: form.goal_exercise_week_min ?? NaN })
+      if (!check.ok) return setError(check.error)
+    }
 
     setSaving(true)
     try {
@@ -103,6 +110,7 @@ export default function ProfilePage() {
         activity_level: form.activity_level,
         custom_goal_ml: custom,
         avatar_url: avatarUrl,
+        ...(hasGoals ? { goal_sleep_min: form.goal_sleep_min, goal_meditation_min: form.goal_meditation_min, goal_exercise_week_min: form.goal_exercise_week_min } : {}),
       })
       setForm(next)
       setAvatar(null)
@@ -241,6 +249,55 @@ export default function ProfilePage() {
             )}
           </ProfileSection>
 
+          {form.goal_sleep_min !== undefined && (
+            <ProfileSection id="goals" title="Your goals" description="What “goal met” means on Home. Logging always counts, whatever the number." icon={Target} accent={PILLAR_COLORS.exercise}>
+              <div className="space-y-4">
+                <GoalField
+                  id="goal-sleep"
+                  label="Sleep a night"
+                  unit="hours"
+                  step={0.5}
+                  min={GOAL_LIMITS.sleepMin.min / 60}
+                  max={GOAL_LIMITS.sleepMin.max / 60}
+                  value={form.goal_sleep_min === undefined ? '' : String((form.goal_sleep_min ?? 0) / 60)}
+                  onChange={(v) => set('goal_sleep_min', v === '' ? (NaN as number) : Math.round(Number(v) * 60))}
+                  hint="7–9 hours suits most adults."
+                />
+                <GoalField
+                  id="goal-meditation"
+                  label="Meditation a day"
+                  unit="min"
+                  min={GOAL_LIMITS.meditationMin.min}
+                  max={GOAL_LIMITS.meditationMin.max}
+                  value={form.goal_meditation_min === undefined ? '' : String(form.goal_meditation_min)}
+                  onChange={(v) => set('goal_meditation_min', v === '' ? (NaN as number) : Number(v))}
+                />
+                <GoalField
+                  id="goal-exercise"
+                  label="Exercise a week"
+                  unit="min"
+                  step={10}
+                  min={GOAL_LIMITS.exerciseWeekMin.min}
+                  max={GOAL_LIMITS.exerciseWeekMin.max}
+                  value={form.goal_exercise_week_min === undefined ? '' : String(form.goal_exercise_week_min)}
+                  onChange={(v) => set('goal_exercise_week_min', v === '' ? (NaN as number) : Number(v))}
+                  hint="The WHO suggests at least 150 minutes of moderate activity a week."
+                />
+                <button
+                  type="button"
+                  className="text-sm font-bold text-tide-600 hover:underline"
+                  onClick={() => {
+                    set('goal_sleep_min', DEFAULT_GOALS.sleepMin)
+                    set('goal_meditation_min', DEFAULT_GOALS.meditationMin)
+                    set('goal_exercise_week_min', DEFAULT_GOALS.exerciseWeekMin)
+                  }}
+                >
+                  Use the recommended goals
+                </button>
+              </div>
+            </ProfileSection>
+          )}
+
           {error && <p role="alert" className="notice-error">{error}</p>}
           {saved && <p role="status" className="notice-ok">Profile saved.</p>}
 
@@ -256,5 +313,25 @@ export default function ProfilePage() {
       </div>
 
     </>
+  )
+}
+
+/** One number goal with its unit and an optional hint. */
+function GoalField({ id, label, unit, value, onChange, min, max, step = 1, hint }: { id: string; label: string; unit: string; value: string; onChange: (v: string) => void; min: number; max: number; step?: number; hint?: string }) {
+  return (
+    <div>
+      <label htmlFor={id} className="label">
+        {label}
+      </label>
+      <div className="relative">
+        <input id={id} type="number" inputMode="decimal" min={min} max={max} step={step} value={value} onChange={(e) => onChange(e.target.value)} className="input pr-16" aria-describedby={hint ? `${id}-hint` : undefined} />
+        <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted">{unit}</span>
+      </div>
+      {hint && (
+        <p id={`${id}-hint`} className="mt-1 text-xs text-muted">
+          {hint}
+        </p>
+      )}
+    </div>
   )
 }

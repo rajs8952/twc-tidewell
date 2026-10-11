@@ -71,11 +71,14 @@ const shortWhen = (iso: string) => {
 export function ExerciseTracker({
   adapter,
   profileWeightKg,
+  weeklyGoalMin = WEEKLY_TARGET_MIN,
   initialData,
 }: {
   /** Where this tracker reads and writes; defaults to the <TrackerStorageProvider>'s storage. */
   adapter?: TrackerStorage['exercise']
   profileWeightKg?: number
+  /** Minutes a week counted as "goal met" (the user's personal goal); defaults to the WHO's 150. */
+  weeklyGoalMin?: number
   /** Prefetched by the dashboard; omit to load standalone. */
   initialData?: ActionResult<ExerciseLog[]> | null
 }) {
@@ -283,7 +286,7 @@ export function ExerciseTracker({
   }
 
   const recent = logs.slice(0, 5)
-  const targetPct = Math.min(week.minutes / WEEKLY_TARGET_MIN, 1)
+  const targetPct = Math.min(week.minutes / weeklyGoalMin, 1)
 
   return (
     <div className="space-y-5">
@@ -497,15 +500,15 @@ export function ExerciseTracker({
                 <span className="font-display text-2xl font-bold tabular-nums" style={{ color: ACCENT }}>
                   {formatMinutes(week.minutes)}
                 </span>
-                <span className="font-semibold text-muted">of {WEEKLY_TARGET_MIN} min active</span>
+                <span className="font-semibold text-muted">of {weeklyGoalMin} min active</span>
               </div>
               <div
                 className="mt-2 h-2.5 overflow-hidden rounded-full bg-mist"
                 role="progressbar"
                 aria-label="Active minutes toward the weekly guideline"
                 aria-valuemin={0}
-                aria-valuemax={WEEKLY_TARGET_MIN}
-                aria-valuenow={Math.min(week.minutes, WEEKLY_TARGET_MIN)}
+                aria-valuemax={weeklyGoalMin}
+                aria-valuenow={Math.min(week.minutes, weeklyGoalMin)}
               >
                 <motion.div
                   className="h-full rounded-full"
@@ -516,9 +519,11 @@ export function ExerciseTracker({
                 />
               </div>
               <p className="mt-1.5 text-xs text-muted">
-                {week.minutes >= WEEKLY_TARGET_MIN
-                  ? 'Weekly guideline met. Great work.'
-                  : `${WEEKLY_TARGET_MIN - week.minutes} min to the WHO weekly guideline.`}
+                {week.minutes >= weeklyGoalMin
+                  ? 'Weekly goal met. Great work.'
+                  : weeklyGoalMin === WEEKLY_TARGET_MIN
+                    ? `${weeklyGoalMin - week.minutes} min to the WHO weekly guideline.`
+                    : `${weeklyGoalMin - week.minutes} min to your weekly goal.`}
               </p>
             </div>
             <ol className="mt-4 grid h-20 grid-cols-7 items-end gap-2" aria-label="Active minutes per day this week">

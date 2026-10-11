@@ -191,6 +191,9 @@ export function toProfile(r: Record<string, unknown>): Profile {
     height_cm: r.height_cm == null ? null : Number(r.height_cm),
     birth_year: r.birth_year == null ? null : Number(r.birth_year),
     created_at: (r.created_at as string | null) ?? null,
+    ...(r.goal_sleep_min == null ? {} : { goal_sleep_min: Number(r.goal_sleep_min) }),
+    ...(r.goal_meditation_min == null ? {} : { goal_meditation_min: Number(r.goal_meditation_min) }),
+    ...(r.goal_exercise_week_min == null ? {} : { goal_exercise_week_min: Number(r.goal_exercise_week_min) }),
   }
 }
 

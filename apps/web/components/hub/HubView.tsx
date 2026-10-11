@@ -23,6 +23,7 @@ import { TRACKERS, type TrackerId } from '@/lib/trackers'
 import { useDismissed } from '@/lib/useDismissed'
 import { useProfile } from '@/lib/useProfile'
 import { weightRange } from '@rajs8952/core/weight'
+import { goalsOf } from '@rajs8952/core/goals'
 import { trackProgress } from '@/lib/progress'
 
 /** The Home Hub: one at-a-glance card per tracker, each linking to its page. */
@@ -63,7 +64,7 @@ export function HubView() {
   const summaries: Partial<Record<TrackerId, HubSummary>> = useMemo(() => {
     if (!trackerData || waterMl === null || !profile) return {}
     const water = waterMl < 0 ? null : { todayMl: waterMl, goalMl: effectiveGoal(profile) }
-    return hubSummaries(trackerData, water)
+    return hubSummaries(trackerData, water, new Date(), goalsOf(profile))
   }, [trackerData, waterMl, profile])
 
   // Alerts from the latest mood, sleep and weight; each can be dismissed (or, if critical, acknowledged) once.
@@ -78,7 +79,8 @@ export function HubView() {
   const banners = visible.filter((i) => i.severity !== 'CRITICAL')
 
   const loaded = Object.keys(summaries).length > 0
-  const doneCount = TRACKERS.filter((t) => summaries[t.id]?.done).length
+  // The strip counts what's been tracked today; goals show on each card's ring.
+  const loggedCount = TRACKERS.filter((t) => summaries[t.id]?.logged).length
   const firstName = profile?.full_name.split(' ')[0]
 
   return (
@@ -123,11 +125,11 @@ export function HubView() {
                   <span
                     key={t.id}
                     className="h-2 w-5 rounded-full"
-                    style={{ background: summaries[t.id]?.done ? t.accent : '#D3E2E0' }}
+                    style={{ background: summaries[t.id]?.logged ? t.accent : '#D3E2E0' }}
                   />
                 ))}
               </span>
-              {doneCount} of {TRACKERS.length} done
+              {loggedCount} of {TRACKERS.length} logged
             </>
           ) : (
             'Loading…'

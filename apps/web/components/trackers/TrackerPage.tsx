@@ -9,6 +9,7 @@ import { TrackerBoundary } from '@rajs8952/ui'
 import { WeightTracker } from '@rajs8952/tracker-weight'
 import { TRACKERS, type TrackerId } from '@/lib/trackers'
 import { useProfile } from '@/lib/useProfile'
+import { goalsOf } from '@rajs8952/core/goals'
 
 function Weight() {
   const { profile, setProfile } = useProfile()
@@ -22,7 +23,7 @@ function Weight() {
 
 function Exercise() {
   const { profile } = useProfile()
-  return <ExerciseTracker profileWeightKg={profile?.weight_kg} />
+  return <ExerciseTracker profileWeightKg={profile?.weight_kg} weeklyGoalMin={goalsOf(profile).exerciseWeekMin} />
 }
 
 /** Water has its own section (app/(app)/water: Today · Stats · Garden). */

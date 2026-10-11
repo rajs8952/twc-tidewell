@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EXERCISE_TARGET_MIN, hubSummaries, MEDITATION_TARGET_MIN, type TrackerData } from '../hub'
+import { EXERCISE_WEEK_TARGET_MIN, hubSummaries, MEDITATION_TARGET_MIN, type TrackerData } from '../hub'
 import { TRACKERS } from '../registry'
 
 // Wednesday 7 Oct 2026, 2 pm local.
@@ -42,7 +42,8 @@ describe('hubSummaries', () => {
     const s = hubSummaries(data, null, now)
     expect(s.mood).toMatchObject({ done: true, value: 'Good', caption: '1 check-in today' })
     expect(s.meditation).toMatchObject({ progress: 5 / MEDITATION_TARGET_MIN, done: false, value: '5 min' })
-    expect(s.exercise).toMatchObject({ progress: 1, done: true, value: '45 min', caption: `of ${EXERCISE_TARGET_MIN} min today` })
+    // Exercise is a weekly goal: 45 of 150 min this week, logged today.
+    expect(s.exercise).toMatchObject({ progress: 45 / EXERCISE_WEEK_TARGET_MIN, logged: true, done: false, value: '45 min', caption: `of ${EXERCISE_WEEK_TARGET_MIN} min this week` })
   })
 
   it('completes sleep from 7 hours ending this morning', () => {
@@ -50,8 +51,9 @@ describe('hubSummaries', () => {
       ...empty,
       sleep: { ok: true as const, data: [{ id: 's', bed_at: at(6, 23), wake_at: at(7, 7), duration_min: hours * 60, quality: 4, awakenings: null, note: null, logged_at: at(7, 7) }] },
     })
-    expect(hubSummaries(night(7.5), null, now).sleep).toMatchObject({ done: true, value: '7h 30m', caption: 'last night' })
-    expect(hubSummaries(night(6), null, now).sleep).toMatchObject({ done: false })
+    expect(hubSummaries(night(7.5), null, now).sleep).toMatchObject({ logged: true, done: true, value: '7h 30m', caption: 'last night · goal 7h 00m' })
+    // Logged but short of the goal: still logged.
+    expect(hubSummaries(night(6), null, now).sleep).toMatchObject({ logged: true, done: false })
   })
 
   it('keeps weight done for a week after a weigh-in', () => {
@@ -67,5 +69,25 @@ describe('hubSummaries', () => {
     expect(s.sleep).toMatchObject({ progress: null, value: '—', caption: 'Couldn’t load right now' })
     expect(s.water.progress).toBeNull()
     expect(s.mood.progress).toBe(0)
+  })
+
+  it('counts the whole week for exercise: rest days still show progress, last week doesn’t count', () => {
+    const w = (id: string, day: number, mins: number) => ({ id, activity: 'running' as const, duration_min: mins, intensity: 'moderate' as const, calories_kcal: null, distance_km: null, note: null, logged_at: at(day) })
+    // Mon 5 and Tue 6 this week, Sun 4 last week; nothing today (Wed 7).
+    const s = hubSummaries({ ...empty, exercise: { ok: true, data: [w('a', 5, 60), w('b', 6, 100), w('c', 4, 90)] } }, null, now).exercise
+    expect(s).toMatchObject({ logged: false, done: true, progress: 1, value: '2h 40m' })
+  })
+
+  it('uses personal goals', () => {
+    const goals = { sleepMin: 8 * 60, meditationMin: 20, exerciseWeekMin: 300 }
+    const data: TrackerData = {
+      ...empty,
+      sleep: { ok: true, data: [{ id: 's', bed_at: at(6, 23), wake_at: at(7, 7), duration_min: 450, quality: 4, awakenings: null, note: null, logged_at: at(7, 7) }] },
+      meditation: { ok: true, data: [{ id: 'm', duration_min: 10, session_type: 'breathing', calm_before: null, calm_after: null, note: null, logged_at: at(7) }] },
+    }
+    const s = hubSummaries(data, null, now, goals)
+    expect(s.sleep).toMatchObject({ logged: true, done: false, caption: 'last night · goal 8h 00m' })
+    expect(s.meditation).toMatchObject({ logged: true, done: false, progress: 0.5, caption: 'of 20 min today' })
+    expect(s.exercise).toMatchObject({ caption: 'of 300 min this week' })
   })
 })
