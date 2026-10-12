@@ -22,10 +22,11 @@ import type { WeightLog } from '@rajs8952/core/weight'
 /** Who an action points at; the host supplies the actual contact for each. */
 export type ContactRole = 'eap' | 'therapist' | 'dietitian'
 
-export type Severity = 'CRITICAL' | 'WARNING' | 'SUGGESTION' | 'NORMAL'
+/** CHEER: good news worth a moment of celebration (a milestone, coming back after a break). */
+export type Severity = 'CRITICAL' | 'WARNING' | 'SUGGESTION' | 'CHEER' | 'NORMAL'
 
 /** Highest first; used to pick the one nudge to show when several apply. */
-export const SEVERITY_ORDER: Severity[] = ['CRITICAL', 'WARNING', 'SUGGESTION', 'NORMAL']
+export const SEVERITY_ORDER: Severity[] = ['CRITICAL', 'WARNING', 'SUGGESTION', 'CHEER', 'NORMAL']
 
 export const RULES = {
   /** Mood scores at or below this are critical (1 = Awful on the 1–5 scale). */
@@ -56,17 +57,32 @@ export interface InterventionContext {
 }
 
 export interface InterventionAction {
-  /** call: dial the contact; chat: message them; book: open their booking link. */
-  kind: 'call' | 'chat' | 'book'
+  /** call: dial the contact; chat: message them; book: open their booking link; open: go to a page in the app (href). */
+  kind: 'call' | 'chat' | 'book' | 'open'
   label: string
-  contact: ContactRole
+  /** Who call/chat/book reach. */
+  contact?: ContactRole
+  /** Where 'open' goes, e.g. '/water'. */
+  href?: string
 }
 
 export interface Intervention {
   severity: Severity
   metric: MetricType
   /** Stable id for the rule that fired, e.g. for analytics or tests. */
-  rule: 'mood-critical' | 'sleep-short' | 'sleep-long' | 'bmi-high' | 'normal'
+  rule:
+    | 'mood-critical'
+    | 'sleep-short'
+    | 'sleep-long'
+    | 'bmi-high'
+    | 'normal'
+    | 'mood-pattern'
+    | 'stress-pattern'
+    | 'lapse'
+    | 'welcome-back'
+    | 'exercise-nudge'
+    | 'water-nudge'
+    | 'streak-milestone'
   title: string
   message: string
   /** Most important first. Empty for NORMAL. */
@@ -237,3 +253,5 @@ export function latestInterventions(
 
   return out.sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity))
 }
+
+export { patternInterventions, type PatternInput } from './patterns'

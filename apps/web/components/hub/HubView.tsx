@@ -9,6 +9,7 @@ import { getTrackerData } from '@/app/actions/dashboard'
 import { Avatar } from '@/components/Avatar'
 import { FirstWeekChecklist } from '@/components/hub/FirstWeekChecklist'
 import { GardenCard } from '@/components/hub/GardenCard'
+import { WeeklyRecap } from '@/components/hub/WeeklyRecap'
 import { HubCard } from '@/components/hub/HubCard'
 import { WellnessTeam } from '@/components/hub/WellnessTeam'
 import { InterventionBanner } from '@/components/interventions/InterventionBanner'
@@ -16,14 +17,15 @@ import { getDrinkLogs } from '@rajs8952/storage/supabase'
 import { errorMessage } from '@rajs8952/core/errors'
 import { exerciseRange } from '@rajs8952/core/exercise'
 import { hubSummaries, type HubSummary, type TrackerData } from '@rajs8952/trackers/hub'
-import { addDays, dayKey, greeting, startOfDay } from '@rajs8952/core/dates'
+import { addDays, dayKey, greeting, startOfDay, startOfWeek } from '@rajs8952/core/dates'
 import { effectiveGoal } from '@rajs8952/core/hydration'
-import { latestInterventions } from '@rajs8952/interventions'
+import { SEVERITY_ORDER, latestInterventions, patternInterventions } from '@rajs8952/interventions'
 import { meditationRange } from '@rajs8952/core/meditation'
 import { MOODS, moodRange, type MoodLog, type MoodState } from '@rajs8952/core/mood'
 import { MoodFace } from '@rajs8952/tracker-mood'
 import { useTrackerStorage } from '@rajs8952/ui'
 import { activeStreak, dayStreak, loadActivity, waterStreak, weekStreak, type Activity } from '@/lib/activity'
+import { computeRecap, loadRecent, type RecentEntries } from '@/lib/recap'
 import { sleepRange } from '@rajs8952/core/sleep'
 import { createClient } from '@/lib/supabase/client'
 import { TRACKERS, type TrackerId } from '@/lib/trackers'
@@ -48,6 +50,7 @@ export function HubView() {
   const [trackerData, setTrackerData] = useState<TrackerData | null>(null)
   const [waterMl, setWaterMl] = useState<number | null>(null)
   const [activity, setActivity] = useState<Activity | null>(null)
+  const [recent, setRecent] = useState<RecentEntries | null>(null)
   const storage = useTrackerStorage()
   /** Quick logging from the cards: which button is saving, and a short confirmation. */
   const [quickBusy, setQuickBusy] = useState<string | null>(null)
@@ -78,6 +81,10 @@ export function HubView() {
     // Streak history (a few months of "which days"), loaded alongside.
     loadActivity(supabase, now)
       .then((a) => alive && setActivity(a))
+      .catch(() => {})
+    // The last two weeks' entries, for the weekly recap and the pattern nudges.
+    loadRecent(supabase, now)
+      .then((r) => alive && setRecent(r))
       .catch(() => {})
     return () => {
       alive = false
@@ -130,11 +137,34 @@ export function HubView() {
   const interventions = useMemo(() => {
     if (!trackerData || !profile) return []
     const data = <T,>(r: { ok: true; data: T[] } | { ok: false }) => (r.ok ? r.data : undefined)
-    return latestInterventions({ mood: data(trackerData.mood), sleep: data(trackerData.sleep), weight: data(trackerData.weight) }, profile)
-  }, [trackerData, profile])
+    const latest = latestInterventions({ mood: data(trackerData.mood), sleep: data(trackerData.sleep), weight: data(trackerData.weight) }, profile)
+    if (!activity || !recent) return latest
+    // Patterns over the last week: low-mood or high-stress runs, lapses, comebacks, milestones.
+    const goal = effectiveGoal(profile)
+    const activeDays = new Set<string>([...Object.values(activity.days).flatMap((set) => [...set]), ...Object.keys(activity.waterTotals).filter((k) => activity.waterTotals[k]! > 0)])
+    const last7 = Array.from({ length: 7 }, (_, i) => dayKey(addDays(new Date(), -i)))
+    const weekStart = startOfWeek(new Date()).getTime()
+    const exerciseWeekMin = trackerData.exercise.ok ? trackerData.exercise.data.filter((l) => new Date(l.logged_at).getTime() >= weekStart).reduce((s, l) => s + l.duration_min, 0) : null
+    const patterns = patternInterventions({
+      moods: recent.mood,
+      activeDays,
+      waterDaysLast7: last7.filter((k) => (activity.waterTotals[k] ?? 0) > 0).length,
+      water: waterMl === null || waterMl < 0 ? null : { todayMl: waterMl, goalMl: goal },
+      exerciseWeekMin,
+      waterGoalStreak: waterStreak(activity.waterTotals, goal),
+      accountAgeDays: profile.created_at ? (Date.now() - Date.parse(profile.created_at)) / 86_400_000 : 30,
+    })
+    return [...latest, ...patterns].sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity))
+  }, [trackerData, profile, activity, recent, waterMl])
   const visible = ready ? interventions.filter((i) => !isDismissed(i.key)) : []
   const crisis = visible.find((i) => i.severity === 'CRITICAL') ?? null
-  const banners = visible.filter((i) => i.severity !== 'CRITICAL')
+  // At most two banners at once, most important first, so Home doesn't turn into a wall of advice.
+  const banners = visible.filter((i) => i.severity !== 'CRITICAL').slice(0, 2)
+
+  const recap = useMemo(
+    () => (recent && activity && profile ? computeRecap(recent, activity.waterTotals, effectiveGoal(profile), goalsOf(profile)) : null),
+    [recent, activity, profile],
+  )
 
   const loaded = Object.keys(summaries).length > 0
   // Focus trackers (chosen on the welcome screen) come first.
@@ -247,6 +277,8 @@ export function HubView() {
           ))}
         </AnimatePresence>
       </div>
+
+      {recap && <WeeklyRecap recap={recap} />}
 
       {profile && trackerData && (
         <FirstWeekChecklist

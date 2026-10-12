@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, useReducedMotion } from 'framer-motion'
-import { CalendarCheck, Lightbulb, LifeBuoy, MessageCircleHeart, Phone, TriangleAlert, X } from 'lucide-react'
+import { ArrowRight, CalendarCheck, Lightbulb, LifeBuoy, MessageCircleHeart, Phone, PartyPopper, TriangleAlert, X } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -14,8 +14,10 @@ import { EMERGENCY_NUMBER, WELLNESS_BY_ID, contactHref, telHref } from '@/lib/we
  *    close button and ignores Esc and backdrop clicks; it only closes
  *    through an explicit "I'm okay for now", so it can't be lost by accident
  *    but never traps someone who needs to leave.
- *  - WARNING / SUGGESTION: a dismissible inline banner whose button opens
- *    the right team's inbox ("Talk to Dietitian" / "Talk to Therapist").
+ *  - WARNING / SUGGESTION / CHEER: a dismissible inline banner. Its button
+ *    opens the right team's inbox ("Talk to Dietitian" / "Talk to Therapist")
+ *    or, for 'open' actions, a page in the app ("Log water"). CHEER is
+ *    good news and may have no button at all.
  *  - NORMAL: nothing.
  * ------------------------------------------------------------------ */
 
@@ -35,6 +37,7 @@ export function InterventionBanner({ intervention, onDismiss }: { intervention: 
 const TONE = {
   WARNING: { label: 'Heads up', icon: TriangleAlert, box: 'bg-amber-50 ring-amber-200', icon_: 'bg-amber-100 text-amber-800', tag: 'text-amber-800' },
   SUGGESTION: { label: 'Suggestion', icon: Lightbulb, box: 'bg-tide-50 ring-tide-200', icon_: 'bg-tide-100 text-tide-700', tag: 'text-tide-700' },
+  CHEER: { label: 'Nice one', icon: PartyPopper, box: 'bg-emerald-50 ring-emerald-200', icon_: 'bg-emerald-100 text-emerald-800', tag: 'text-emerald-800' },
 } as const
 
 function InlineBanner({ intervention, onDismiss }: { intervention: Intervention; onDismiss: () => void }) {
@@ -42,10 +45,17 @@ function InlineBanner({ intervention, onDismiss }: { intervention: Intervention;
   const Icon = tone.icon
   const titleId = useId()
   const action = intervention.actions[0]
-  const href = (action && contactHref(action.contact, 'book')) ?? TEAM_PAGE
-  // Named after who it opens a conversation with; other contacts keep a generic label.
-  const label = action?.contact === 'dietitian' ? 'Talk to Dietitian' : action?.contact === 'therapist' ? 'Talk to Therapist' : 'Contact the wellness team'
-  const ActionIcon = action && action.contact !== 'eap' ? MessageCircleHeart : CalendarCheck
+  const opens = action?.kind === 'open' && !!action.href
+  const href = opens ? action!.href! : ((action?.contact && contactHref(action.contact, 'book')) ?? TEAM_PAGE)
+  // In-app pages use the action's own label; contacts are named after who it opens a conversation with.
+  const label = opens
+    ? action!.label
+    : action?.contact === 'dietitian'
+      ? 'Talk to Dietitian'
+      : action?.contact === 'therapist'
+        ? 'Talk to Therapist'
+        : 'Contact the wellness team'
+  const ActionIcon = opens ? ArrowRight : action && action.contact !== 'eap' ? MessageCircleHeart : CalendarCheck
 
   return (
     <motion.section
@@ -69,15 +79,17 @@ function InlineBanner({ intervention, onDismiss }: { intervention: Intervention;
         </div>
       </div>
 
-      <Link
-        href={href}
-        {...(isExternal(href) ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-        className="btn-primary shrink-0 self-start sm:self-center"
-      >
-        <ActionIcon className="h-4 w-4" aria-hidden />
-        {label}
-        {isExternal(href) && <span className="sr-only">(opens in a new tab)</span>}
-      </Link>
+      {action && (
+        <Link
+          href={href}
+          {...(isExternal(href) ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+          className="btn-primary shrink-0 self-start sm:self-center"
+        >
+          <ActionIcon className="h-4 w-4" aria-hidden />
+          {label}
+          {isExternal(href) && <span className="sr-only">(opens in a new tab)</span>}
+        </Link>
+      )}
 
       <button
         type="button"
@@ -93,7 +105,7 @@ function InlineBanner({ intervention, onDismiss }: { intervention: Intervention;
 
 /* ---------- CRITICAL ---------- */
 
-const ACTION_ICON = { call: Phone, chat: MessageCircleHeart, book: CalendarCheck } as const
+const ACTION_ICON = { call: Phone, chat: MessageCircleHeart, book: CalendarCheck, open: ArrowRight } as const
 
 function CrisisDialog({ intervention, onAcknowledge }: { intervention: Intervention; onAcknowledge: () => void }) {
   const reduce = useReducedMotion()
@@ -104,7 +116,7 @@ function CrisisDialog({ intervention, onAcknowledge }: { intervention: Intervent
 
   // Only actions with real contact details become buttons.
   const actions = intervention.actions
-    .map((a) => ({ ...a, href: contactHref(a.contact, a.kind) }))
+    .map((a) => ({ ...a, href: a.kind === 'open' ? (a.href ?? null) : a.contact ? contactHref(a.contact, a.kind) : null }))
     .filter((a): a is InterventionAction & { href: string } => a.href != null)
   const eapPhone = WELLNESS_BY_ID.eap.phone
 

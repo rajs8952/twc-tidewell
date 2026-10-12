@@ -20,6 +20,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
  *     logged, weighed in this week…) are skipped: lib/reminder-skip.ts.
  *  4. Each remaining device gets a Web Push; subscriptions the push service
  *     reports gone (404/410) are deleted.
+ *  5. Monday mornings: the weekly recap notification (claim_weekly_recaps(),
+ *     supabase/weekly-recap.sql), once a week per person.
  *
  * Uses the Supabase service role (server only) because it works across all
  * users; the key never leaves the server.
@@ -61,6 +63,14 @@ export async function GET(req: Request) {
 
   const results = await mapLimit(due, CONCURRENCY, async (row) => ({ row, result: await sendPush(row, reminderPayload(row.tracker_type)) }))
 
+  // Weekly recap: "Your week in OmniWell is ready". Optional until weekly-recap.sql has run.
+  const recaps = await admin.rpc('claim_weekly_recaps', { p_now: now.toISOString() })
+  if (recaps.error && recaps.error.code !== 'PGRST202') console.error('[cron/notify] weekly recap claim failed', recaps.error)
+  const recapRows = (recaps.data ?? []) as { user_id: string; subscription_id: string; endpoint: string; p256dh: string; auth: string }[]
+  const recapPayload = { title: 'Your week in OmniWell', body: 'See how last week went, and what to aim for this week.', icon: '/icon/192', badge: '/icon/192', url: '/dashboard#week', tag: 'weekly-recap' }
+  const recapResults = await mapLimit(recapRows, CONCURRENCY, async (row) => ({ row, result: await sendPush(row, recapPayload) }))
+  for (const r of recapResults) results.push({ row: { ...r.row, schedule_id: '', tracker_type: 'mood' }, result: r.result })
+
   const gone = results.filter((r) => !r.result.ok && r.result.gone).map((r) => r.row.subscription_id)
   if (gone.length) {
     const { error: delError } = await admin.from('push_subscriptions').delete().in('id', gone)
@@ -74,6 +84,7 @@ export async function GET(req: Request) {
     at: now.toISOString(),
     devices: due.length,
     skippedAlreadyDone: claimed.length - due.length,
+    weeklyRecaps: recapRows.length,
     sent: results.filter((r) => r.result.ok).length,
     removedExpired: gone.length,
     failed: failed.length,

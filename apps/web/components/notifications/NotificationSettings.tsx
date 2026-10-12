@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, BellOff, BellRing, Check, Loader2, Send } from 'lucide-react'
+import { Bell, BellOff, BellRing, CalendarRange, Check, Loader2, Send } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { deletePushSubscription, getNotificationSchedules, savePushSubscription, saveNotificationSchedule, sendTestNotification } from '@/app/actions/notifications'
 import { ProfileSection } from '@/components/profile/ProfileSection'
@@ -9,6 +9,7 @@ import { REMINDER_HINT, REPEAT_OPTIONS, defaultEndFor, remindersPerDay, type Not
 import { trackProgress } from '@/lib/progress'
 import { pushStatus, subscribeToPush, type PushState } from '@/lib/push-client'
 import { TRACKERS } from '@/lib/trackers'
+import { createClient } from '@/lib/supabase/client'
 
 /* ------------------------------------------------------------------
  * Reminder settings: a master switch that allows notifications on this
@@ -124,6 +125,9 @@ export function NotificationSettings() {
   const [pushError, setPushError] = useState<string | null>(null)
   const [pushNote, setPushNote] = useState<string | null>(null)
   /** Typed times waiting to save, per tracker and field ("water:notify_time"). */
+  /** The Monday weekly recap notification (supabase/weekly-recap.sql); null until known or if not set up. */
+  const [recapOn, setRecapOn] = useState<boolean | null>(null)
+  const [recapStatus, setRecapStatus] = useState<RowStatus | null>(null)
   const timeTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const pendingTimes = useRef<Record<string, string>>({})
 
@@ -138,9 +142,27 @@ export function NotificationSettings() {
         if (state === 'on' && subscription) await savePushSubscription(subscription.toJSON(), navigator.userAgent)
       })
       .catch(() => setPush('unsupported'))
+    const supabase = createClient()
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return
+      const { data: row, error } = await supabase.from('profiles').select('weekly_recap').eq('id', data.user.id).maybeSingle<{ weekly_recap: boolean }>()
+      if (!error && row) setRecapOn(row.weekly_recap)
+    })
     const timers = timeTimers.current
     return () => Object.values(timers).forEach((t) => clearTimeout(t))
   }, [])
+
+  async function toggleRecap(on: boolean) {
+    setRecapOn(on)
+    setRecapStatus({ kind: 'saving' })
+    const supabase = createClient()
+    const { data } = await supabase.auth.getUser()
+    const { error } = await supabase.from('profiles').update({ weekly_recap: on }).eq('id', data.user?.id ?? '')
+    if (error) {
+      setRecapOn(!on)
+      setRecapStatus({ kind: 'error', message: 'Couldn’t save. Try again.' })
+    } else setRecapStatus({ kind: 'saved' })
+  }
 
   const save = useCallback(async (tracker: TrackerType, change: Omit<Parameters<typeof saveNotificationSchedule>[0], 'tracker_type'>) => {
     setStatus((s) => ({ ...s, [tracker]: { kind: 'saving' } }))
@@ -352,6 +374,31 @@ export function NotificationSettings() {
               )
             })}
           </ul>
+          {recapOn !== null && (
+            <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-line">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#4A5BC4]/10 text-[#4A5BC4]">
+                <CalendarRange className="h-5 w-5" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold">Weekly recap</p>
+                <p className="text-xs text-muted">Mondays at 9 am: how last week went</p>
+              </div>
+              <span className="w-16 text-right text-[11px] font-semibold" aria-live="polite">
+                {recapStatus?.kind === 'saving' && <span className="text-muted">Saving…</span>}
+                {recapStatus?.kind === 'saved' && (
+                  <span className="inline-flex items-center gap-0.5 text-emerald-700">
+                    <Check className="h-3 w-3" aria-hidden /> Saved
+                  </span>
+                )}
+              </span>
+              <Toggle checked={recapOn} onChange={toggleRecap} label="Weekly recap notifications" accent="#4A5BC4" />
+              {recapStatus?.kind === 'error' && (
+                <p role="alert" className="w-full text-xs font-semibold text-alert">
+                  {recapStatus.message}
+                </p>
+              )}
+            </div>
+          )}
           {anyOn && push !== 'on' && push !== 'checking' && (
             <p className="mt-3 text-xs text-muted">Your choices are saved. You’ll get them once browser notifications are on for a device.</p>
           )}
