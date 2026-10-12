@@ -1,11 +1,16 @@
 'use server'
 
 import { birthYearFromAge } from '@rajs8952/core/biometrics'
+import { randomBytes } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { headers } from 'next/headers'
 import { COACH_CAPACITY_MAX, isAppRole, validateNewUser, validatePassword, type ActionResult, type AdminProfileDetails, type AdminUser, type AppRole } from '@/lib/admin'
 import { isTeam, type Team } from '@/lib/messages'
 import { SIGNED_OUT, isUuid, signedIn } from '@/lib/supabase/actions'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { IMPORT_BATCH, readImport, type ImportRow } from '@/lib/csv-import'
+import { EmailNotConfiguredError, sendEmail } from '@/lib/email'
+import { inviteEmail } from '@/lib/invite-email'
 
 /* ------------------------------------------------------------------
  * Admin portal server actions (Supabase Auth Admin API).
@@ -308,4 +313,66 @@ export async function adminGetUsers(): Promise<ActionResult<AdminUser[]>> {
       }))
       .sort((a, b) => b.created_at.localeCompare(a.created_at)),
   }
+}
+
+/* ---------- Bulk import ---------- */
+
+export type ImportOutcome = 'invited' | 'created_no_email' | 'exists' | 'failed'
+
+/**
+ * Creates accounts from a checked CSV and emails each person an invitation.
+ * Every row is checked again here. Accounts start with a long random
+ * password nobody knows; people choose their own with an emailed code.
+ * Existing emails are skipped, never changed.
+ */
+export async function adminImportUsers(rows: Pick<ImportRow, 'name' | 'email' | 'role' | 'team'>[]): Promise<ActionResult<{ email: string; outcome: ImportOutcome; detail?: string }[]>> {
+  if (!Array.isArray(rows) || rows.length === 0 || rows.length > IMPORT_BATCH) return { ok: false, error: `Send between 1 and ${IMPORT_BATCH} rows at a time.` }
+  const ctx = await requireAdmin()
+  if ('error' in ctx) return { ok: false, error: ctx.error }
+  const { admin } = ctx
+
+  // The same checks as the browser ran, on a rebuilt CSV, so nothing unchecked gets through.
+  const quote = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const csv = ['name,email,role,team', ...rows.map((r) => [r?.name, r?.email, r?.role, r?.team ?? ''].map(quote).join(','))].join('\n')
+  const parsed = readImport(csv)
+  if (parsed.error) return { ok: false, error: parsed.error }
+
+  const origin = headers().get('origin')
+  const site = origin && /^https:\/\/omniwell-app\.vercel\.app$|^http:\/\/localhost:\d+$/.test(origin) ? origin : 'https://omniwell-app.vercel.app'
+  const results: { email: string; outcome: ImportOutcome; detail?: string }[] = []
+
+  for (const row of parsed.rows) {
+    if (row.problem) {
+      results.push({ email: row.email, outcome: 'failed', detail: row.problem })
+      continue
+    }
+    const { data, error } = await admin.auth.admin.createUser({
+      email: row.email,
+      password: randomBytes(24).toString('base64url'),
+      email_confirm: true,
+      user_metadata: { full_name: row.name },
+    })
+    if (error || !data.user) {
+      const msg = error?.message ?? ''
+      results.push(/already (been )?registered|already exists/i.test(msg) ? { email: row.email, outcome: 'exists', detail: 'Already has an account; left unchanged.' } : { email: row.email, outcome: 'failed', detail: friendlyAuthError(msg || 'Couldn’t create the account.') })
+      continue
+    }
+    try {
+      const { error: profileError } = await admin.from('profiles').upsert({ id: data.user.id, full_name: row.name }, { onConflict: 'id' })
+      if (profileError) throw new Error(`Couldn’t save the profile: ${profileError.message}`)
+      await applyRole(admin, data.user.id, row.role, row.team ?? undefined, row.name)
+    } catch (e) {
+      await admin.auth.admin.deleteUser(data.user.id).catch(() => {})
+      results.push({ email: row.email, outcome: 'failed', detail: `${(e as Error).message} Not created.` })
+      continue
+    }
+    audit(ctx, 'import user', data.user.id, row.role)
+    try {
+      await sendEmail({ to: row.email, subject: 'You’re invited to OmniWell', ...inviteEmail(row.name, row.email, site) })
+      results.push({ email: row.email, outcome: 'invited' })
+    } catch (e) {
+      results.push({ email: row.email, outcome: 'created_no_email', detail: e instanceof EmailNotConfiguredError ? 'Email isn’t configured on the server.' : 'The invitation email couldn’t be sent; they can still use “Set up your account” on the log-in page.' })
+    }
+  }
+  return { ok: true, data: results }
 }

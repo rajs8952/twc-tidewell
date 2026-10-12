@@ -105,10 +105,11 @@ export async function POST(request: Request) {
       }
       break
     case 'recovery':
-      subject = `${d.token} is your OmniWell password reset code`
+      // Also used to set up an invited account (admin import), so it's worded for both.
+      subject = `${d.token} is your OmniWell code`
       content = {
-        heading: 'Reset your password',
-        paragraphs: [hi, 'We received a request to reset the password for your OmniWell account. Enter this code on the log-in screen to choose a new password. It works once and expires in 10 minutes.'],
+        heading: 'Choose your password',
+        paragraphs: [hi, 'Enter this code in OmniWell to choose your password. It works once and expires in 10 minutes.'],
         code: d.token,
         footer: 'If you didn’t ask for this, you can ignore this email; your password won’t change. Never share this code; OmniWell will never ask you for it.',
       }

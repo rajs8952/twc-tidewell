@@ -1,6 +1,7 @@
 'use client'
 
-import { Ban, ChevronLeft, ChevronRight, Gauge, KeyRound, Undo2, RotateCw, Search, ShieldCheck, UserCog, UserPlus, Users, UserCheck } from 'lucide-react'
+import Link from 'next/link'
+import { Ban, ChevronLeft, FileUp, ChevronRight, Gauge, KeyRound, Undo2, RotateCw, Search, ShieldCheck, UserCog, UserPlus, Users, UserCheck } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { adminGetUsers } from '@/app/actions/admin'
 import { errorMessage } from '@rajs8952/core/errors'
@@ -234,6 +235,9 @@ export function AdminPortal() {
           <button type="button" onClick={() => trackProgress(load())} className="btn-secondary px-4" aria-label="Refresh the list">
             <RotateCw className="h-4 w-4" aria-hidden />
           </button>
+          <Link href="/admin/import" className="btn-secondary">
+            <FileUp className="h-4 w-4" aria-hidden /> Import CSV
+          </Link>
           <button type="button" onClick={() => setAdding(true)} className="btn-primary">
             <UserPlus className="h-4 w-4" aria-hidden /> Add user
           </button>

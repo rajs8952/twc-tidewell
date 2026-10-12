@@ -22,8 +22,14 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   /** Logging in; asking for a reset code, then entering it; or confirming an unconfirmed account with its code. */
   const [mode, setMode] = useState<'login' | 'forgot' | 'reset-code' | 'confirm-code'>('login')
+  /** Arrived from an invitation (/login?setup=1): the same code flow, worded as setting up a new account. */
+  const [setup, setSetup] = useState(false)
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('setup') === '1') {
+      setSetup(true)
+      setMode('forgot')
+    }
     if (new URLSearchParams(window.location.search).get('error') === 'confirm') {
       setError('That email link has expired or was already used. Log in, or use “Forgot password?” to get a code.')
     }
@@ -121,8 +127,12 @@ export default function LoginPage() {
           </div>
         ) : (
           <>
-            <h1 className="mt-6 text-3xl font-extrabold sm:text-4xl">Forgot your password?</h1>
-            <p className="mt-2 text-muted">Enter your email and we’ll send you a code to choose a new one.</p>
+            <h1 className="mt-6 text-3xl font-extrabold sm:text-4xl">{setup ? 'Set up your account' : 'Forgot your password?'}</h1>
+            <p className="mt-2 text-muted">
+              {setup
+                ? 'Enter the work email your invitation was sent to, and we’ll send you a 6-digit code to choose your password.'
+                : 'Enter your email and we’ll send you a code to choose a new one.'}
+            </p>
             <form onSubmit={onForgot} className="mt-8 space-y-4">
               <div>
                 <label htmlFor="reset-email" className="label">Email</label>
