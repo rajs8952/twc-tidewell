@@ -14,7 +14,10 @@ import { Dialog } from '@/components/Dialog'
  * (app/actions/admin.ts), which checks the caller is an admin again.
  * ------------------------------------------------------------------ */
 
-export const ROLE_LABEL: Record<AppRole, string> = { user: 'User', coach: 'Coach', admin: 'Admin' }
+export const ROLE_LABEL: Record<AppRole, string> = { user: 'User', coach: 'Coach', hr: 'HR', admin: 'Admin' }
+
+/** "a user", "an admin", "an HR user": for confirmations. */
+export const roleWithArticle = (r: AppRole) => ({ user: 'a user', coach: 'a coach', hr: 'an HR user', admin: 'an admin' })[r]
 
 /** A strong random password from the browser's secure generator; no look-alike characters. */
 function generatePassword(length = 16) {
@@ -111,12 +114,12 @@ function TeamPicker({ value, onChange }: { value: Team | ''; onChange: (t: Team)
 }
 
 function RolePicker({ value, onChange }: { value: AppRole; onChange: (r: AppRole) => void }) {
-  const hint: Record<AppRole, string> = { user: 'Uses the app', coach: 'Answers a team’s chats', admin: 'Manages users' }
+  const hint: Record<AppRole, string> = { user: 'Uses the app', coach: 'Answers a team’s chats', hr: 'Sees company totals', admin: 'Manages users' }
   return (
     <fieldset>
       <legend className="label">Role</legend>
-      <div className="grid grid-cols-3 gap-2">
-        {(['user', 'coach', 'admin'] as AppRole[]).map((r) => (
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {(['user', 'coach', 'hr', 'admin'] as AppRole[]).map((r) => (
           <label key={r} className={`cursor-pointer rounded-2xl border px-2 py-2.5 text-center transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-tide-500 ${value === r ? 'border-ink bg-mist' : 'border-line hover:border-ink/30'}`}>
             <input type="radio" name="role" value={r} checked={value === r} onChange={() => onChange(r)} className="sr-only" />
             <span className="block text-sm font-bold">{ROLE_LABEL[r]}</span>
@@ -344,7 +347,7 @@ export function RoleDialog({ user, onClose, onDone }: { user: AdminUser | null; 
     try {
       const res = await adminSetUserRole(user.id, role, role === 'coach' ? (team as Team) : undefined)
       if (!res.ok) return setError(res.error)
-      onDone({ ...user, role, team: role === 'coach' ? (team as Team) : null }, `${user.full_name || user.email} is now ${role === 'coach' ? `a ${TEAMS[team as Team].label.toLowerCase()} coach` : `a${role === 'admin' ? 'n' : ''} ${ROLE_LABEL[role].toLowerCase()}`}.`)
+      onDone({ ...user, role, team: role === 'coach' ? (team as Team) : null }, `${user.full_name || user.email} is now ${role === 'coach' ? `a ${TEAMS[team as Team].label.toLowerCase()} coach` : roleWithArticle(role)}.`)
       setForId(null)
       onClose()
     } catch {

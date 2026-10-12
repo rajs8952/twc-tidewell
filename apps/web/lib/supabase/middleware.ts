@@ -17,6 +17,7 @@ const APP_ROUTES = [
   '/therapist',
   '/dietitian',
   '/admin',
+  '/hr',
   '/update-password',
   '/welcome',
 ]

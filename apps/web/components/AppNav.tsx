@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { BookOpen, BriefcaseMedical, House, LayoutGrid, MessageCircle, ShieldCheck, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react'
+import { BarChart3, BookOpen, BriefcaseMedical, House, LayoutGrid, MessageCircle, ShieldCheck, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
@@ -28,6 +28,7 @@ const INSIGHTS = { href: '/insights', label: 'Insights', icon: Sparkles, accent:
 const PROGRAMMES = { href: '/programmes', label: 'Programmes', icon: BookOpen, accent: '#B9650E' }
 const PROFILE = { href: '/profile', label: 'Profile', icon: UserRound, accent: '#0F2F37' }
 const ADMIN = { href: '/admin', label: 'Admin', icon: ShieldCheck, accent: '#0F2F37' }
+const HR = { href: '/hr', label: 'Company insights', icon: BarChart3, accent: '#1F6E64' }
 // The six trackers, then tools such as the BMI calculator (in the menu only, not on the Hub).
 const TRACKER_LINKS = [
   ...TRACKERS.map((t) => ({ href: t.href, label: t.name, icon: t.icon, accent: t.accent })),
@@ -118,6 +119,7 @@ function Sidebar({ pathname, unread }: { pathname: string; unread: number }) {
         </ul>
         <ul className="mt-auto space-y-1 pt-4">
           {staffTeam && <SideLink item={{ href: TEAMS[staffTeam].portalPath, label: 'Coach portal', icon: BriefcaseMedical, accent: TEAMS[staffTeam].accent }} pathname={pathname} />}
+          {(role === 'admin' || role === 'hr') && <SideLink item={HR} pathname={pathname} />}
           {role === 'admin' && <SideLink item={ADMIN} pathname={pathname} />}
           <SideLink item={PROFILE} pathname={pathname} />
         </ul>

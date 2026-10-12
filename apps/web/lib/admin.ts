@@ -10,9 +10,12 @@ import { isTeam, type Team } from './messages'
 
 export type { ActionResult } from '@rajs8952/core/types'
 
-export type AppRole = 'admin' | 'coach' | 'user'
-export const APP_ROLES: AppRole[] = ['user', 'coach', 'admin']
-export const isAppRole = (v: unknown): v is AppRole => v === 'admin' || v === 'coach' || v === 'user'
+export type AppRole = 'admin' | 'coach' | 'user' | 'hr'
+export const APP_ROLES: AppRole[] = ['user', 'coach', 'hr', 'admin']
+export const isAppRole = (v: unknown): v is AppRole => v === 'admin' || v === 'coach' || v === 'user' || v === 'hr'
+
+/** Who can open the company dashboard (/hr). */
+export const canSeeHrDashboard = (r: AppRole | null | undefined) => r === 'admin' || r === 'hr'
 
 /** Profile fields an admin can fill in when creating someone. */
 export interface AdminProfileDetails {
@@ -74,7 +77,7 @@ export function validateNewUser(input: { email: unknown; password: unknown; role
   if (!email.ok) return email
   const password = validatePassword(input.password)
   if (!password.ok) return password
-  if (!isAppRole(input.role)) return fail('Choose a role: user, coach or admin.')
+  if (!isAppRole(input.role)) return fail('Choose a role: user, coach, HR or admin.')
 
   const p = (input.profile ?? {}) as Partial<AdminProfileDetails>
   const full_name = typeof p.full_name === 'string' ? p.full_name.trim() : ''

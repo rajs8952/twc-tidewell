@@ -1,0 +1,57 @@
+import { BarChart3, House, ShieldCheck } from 'lucide-react'
+import Link from 'next/link'
+import { myRole } from '@/app/actions/roles'
+import { Logo } from '@/components/Logo'
+import { LogoutButton } from '@/components/profile/LogoutButton'
+import { canSeeHrDashboard } from '@/lib/admin'
+
+/**
+ * Header and access check for the company dashboard (/hr): HR and admins
+ * only. The role is checked on the server, and the data itself comes from
+ * hr_dashboard(), which checks again and returns totals only.
+ */
+export async function HrShell({ children }: { children: React.ReactNode }) {
+  const role = await myRole()
+  return (
+    <div className="min-h-dvh">
+      <header className="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard" aria-label="OmniWell home" className="rounded-xl">
+              <Logo />
+            </Link>
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#1F6E64] px-2.5 py-1 text-xs font-bold text-white">
+              <BarChart3 className="h-3.5 w-3.5" aria-hidden /> Company insights
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {role === 'admin' && (
+              <Link href="/admin" className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-bold text-ink ring-1 ring-line transition hover:bg-mist">
+                <ShieldCheck className="h-4 w-4" aria-hidden />
+                <span className="hidden sm:inline">Admin</span>
+              </Link>
+            )}
+            <Link href="/dashboard" className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-bold text-ink ring-1 ring-line transition hover:bg-mist">
+              <House className="h-4 w-4" aria-hidden />
+              <span className="hidden sm:inline">OmniWell app</span>
+            </Link>
+            <LogoutButton compact />
+          </div>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-8">
+        {canSeeHrDashboard(role) ? (
+          children
+        ) : (
+          <div className="mx-auto max-w-md rounded-3xl bg-white p-6 text-center ring-1 ring-line">
+            <h1 className="text-xl font-extrabold">This area is for HR and administrators</h1>
+            <p className="mt-2 text-sm text-muted">Your account doesn’t have access to company insights. If you think it should, ask an OmniWell administrator.</p>
+            <Link href="/dashboard" className="btn-primary mt-5">
+              Go to OmniWell
+            </Link>
+          </div>
+        )}
+      </main>
+    </div>
+  )
+}

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AvatarPicker } from '@/components/AvatarPicker'
 import { InstallCard } from '@/components/pwa/InstallCard'
 import { AdminCard } from '@/components/admin/AdminCard'
+import { HrCard } from '@/components/hr/HrCard'
 import { CoachPortalCard } from '@/components/therapist/CoachPortalCard'
 import { NotificationSettings } from '@/components/notifications/NotificationSettings'
 import { ActivityPicker, GenderPicker, GoalPreview, HeightInput, WeightInput } from '@rajs8952/ui'
@@ -207,6 +208,7 @@ export default function ProfilePage() {
           </ProfileSection>
 
           <CoachPortalCard />
+          <HrCard />
           <AdminCard />
           <InstallCard />
         </div>

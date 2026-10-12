@@ -8,7 +8,7 @@ import type { AdminUser, AppRole } from '@/lib/admin'
 import { TEAMS } from '@/lib/messages'
 import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
-import { ActivationDialog, AddUserDialog, CapacityDialog, ROLE_LABEL, ReleaseChatsDialog, ResetPasswordDialog, RoleDialog } from './UserDialogs'
+import { ActivationDialog, AddUserDialog, CapacityDialog, ROLE_LABEL, ReleaseChatsDialog, ResetPasswordDialog, RoleDialog, roleWithArticle } from './UserDialogs'
 
 /* ------------------------------------------------------------------
  * Admin portal: everyone's account, role and status, with add user,
@@ -61,11 +61,12 @@ function Pager({ page, pages, total, onPage }: { page: number; pages: number; to
     </nav>
   )
 }
-const FILTER_LABEL: Record<Filter, string> = { all: 'All', user: 'Users', coach: 'Coaches', admin: 'Admins', deactivated: 'Deactivated' }
+const FILTER_LABEL: Record<Filter, string> = { all: 'All', user: 'Users', coach: 'Coaches', hr: 'HR', admin: 'Admins', deactivated: 'Deactivated' }
 
 const ROLE_STYLE: Record<AppRole, string> = {
   admin: 'bg-ink text-white',
   coach: 'bg-[#EDE9FB] text-[#4B3A9E]',
+  hr: 'bg-[#E3F1EE] text-[#1F6E64]',
   user: 'bg-mist text-ink',
 }
 
@@ -192,6 +193,7 @@ export function AdminPortal() {
       all: list.length,
       user: list.filter((u) => u.role === 'user').length,
       coach: list.filter((u) => u.role === 'coach').length,
+      hr: list.filter((u) => u.role === 'hr').length,
       admin: list.filter((u) => u.role === 'admin').length,
       deactivated: list.filter((u) => u.deactivated).length,
     }
@@ -271,7 +273,7 @@ export function AdminPortal() {
             <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name or email" className="input py-2.5 pl-10" />
           </label>
           <div role="tablist" aria-label="Filter by role" className="flex flex-wrap gap-1.5">
-            {(['all', 'user', 'coach', 'admin', 'deactivated'] as Filter[]).map((f) => (
+            {(['all', 'user', 'coach', 'hr', 'admin', 'deactivated'] as Filter[]).map((f) => (
               <button
                 key={f}
                 type="button"
@@ -372,7 +374,7 @@ export function AdminPortal() {
         onCreated={(u) => {
           setUsers((list) => [u, ...(list ?? [])])
           setAdding(false)
-          setToast(`${u.full_name} was added as ${u.role === 'coach' && u.team ? `a ${TEAMS[u.team].label.toLowerCase()} coach` : `a${u.role === 'admin' ? 'n' : ''} ${ROLE_LABEL[u.role].toLowerCase()}`}. They can log in now.`)
+          setToast(`${u.full_name} was added as ${u.role === 'coach' && u.team ? `a ${TEAMS[u.team].label.toLowerCase()} coach` : roleWithArticle(u.role)}. They can log in now.`)
         }}
       />
       <RoleDialog user={roleFor} onClose={() => setRoleFor(null)} onDone={(u, msg) => { replace(u); setToast(msg) }} />
