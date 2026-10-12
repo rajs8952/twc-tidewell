@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { Webhook } from 'standardwebhooks'
 import { EmailNotConfiguredError, layout, sendEmail } from '@/lib/email'
+import { safePath } from '@/lib/safe-path'
 
 /*
  * Supabase "Send Email Hook": Supabase calls this instead of sending auth
@@ -56,7 +57,7 @@ function siteFrom(redirectTo: string, siteUrl: string) {
 function nextFrom(redirectTo: string) {
   try {
     const next = new URL(redirectTo).searchParams.get('next')
-    return next && next.startsWith('/') && !next.startsWith('//') ? next : null
+    return next ? safePath(next, '') || null : null
   } catch {
     return null
   }

@@ -8,6 +8,7 @@ import { requestPasswordReset } from '@/app/actions/password'
 import { AuthShell } from '@/components/AuthShell'
 import { flushPendingAvatar } from '@/lib/avatar'
 import { BRAND } from '@/lib/brand'
+import { safePath } from '@/lib/safe-path'
 import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
@@ -45,7 +46,7 @@ export default function LoginPage() {
     }
     await flushPendingAvatar(supabase, data.user.id)
     const next = new URLSearchParams(window.location.search).get('next')
-    router.replace(next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard')
+    router.replace(safePath(next))
     router.refresh()
   }
 

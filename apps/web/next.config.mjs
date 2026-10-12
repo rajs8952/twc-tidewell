@@ -40,6 +40,20 @@ const nextConfig = {
   async headers() {
     return [
       {
+        // Every page: no framing by other sites (clickjacking, especially of the coach and
+        // admin portals), no MIME sniffing, no full URLs leaked to other sites, and no
+        // camera, microphone or location access (photos come through the file picker).
+        source: '/:path*',
+        headers: [
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
+        ],
+      },
+      {
         // The browser must always fetch the newest service worker, or updates stall.
         source: '/sw.js',
         headers: [

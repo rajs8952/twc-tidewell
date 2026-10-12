@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import type { PrecacheEntry, SerwistGlobalConfig } from 'serwist'
 import { CacheFirst, ExpirationPlugin, NetworkOnly, Serwist, StaleWhileRevalidate } from 'serwist'
+import { safePath } from '../lib/safe-path'
 
 /* ------------------------------------------------------------------
  * OmniWell service worker (built by @serwist/next into public/sw.js).
@@ -87,7 +88,6 @@ interface ReminderPayload {
 }
 
 /** Only paths inside the app may be opened from a notification. */
-const safePath = (url: unknown) => (typeof url === 'string' && url.startsWith('/') && !url.startsWith('//') ? url : '/dashboard')
 
 self.addEventListener('push', (event) => {
   let data: ReminderPayload = {}

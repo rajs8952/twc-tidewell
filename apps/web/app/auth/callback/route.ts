@@ -1,5 +1,6 @@
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { NextResponse, type NextRequest } from 'next/server'
+import { safePath } from '@/lib/safe-path'
 import { createClient } from '@/lib/supabase/server'
 
 /*
@@ -20,18 +21,14 @@ import { createClient } from '@/lib/supabase/server'
 const OTP_TYPES: readonly EmailOtpType[] = ['signup', 'invite', 'magiclink', 'recovery', 'email_change', 'email']
 const isOtpType = (v: string | null): v is EmailOtpType => !!v && (OTP_TYPES as readonly string[]).includes(v)
 
-/** Only same-site paths, so a crafted link can't bounce people to another site after confirming. */
-function safeNext(next: string | null) {
-  return next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : '/dashboard'
-}
-
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl
   const tokenHash = searchParams.get('token_hash')
   const type = searchParams.get('type')
   const code = searchParams.get('code')
   // Password-reset links go on to choose a new password, even if the template doesn't say so.
-  const next = safeNext(searchParams.get('next') ?? (type === 'recovery' ? '/update-password' : null))
+  // Only same-site paths, so a crafted link can't bounce people to another site after confirming.
+  const next = safePath(searchParams.get('next') ?? (type === 'recovery' ? '/update-password' : null))
   const supabase = createClient()
 
   if (tokenHash && isOtpType(type)) {
