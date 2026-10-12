@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { BriefcaseMedical, House, LayoutGrid, MessageCircle, ShieldCheck, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react'
+import { BookOpen, BriefcaseMedical, House, LayoutGrid, MessageCircle, ShieldCheck, Sparkles, UserRound, X, type LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
@@ -15,16 +15,17 @@ import { BMI_TOOL, TRACKERS } from '@/lib/trackers'
 
 /* ------------------------------------------------------------------
  * App navigation.
- *  - lg+: labelled sidebar (Home, the six trackers, Chats, Insights, Profile)
+ *  - lg+: labelled sidebar (Home, the six trackers, Chats, Insights, Programmes, Profile)
  *  - md:  the same links as a compact icon rail
  *  - phones: bottom bar (Home · Trackers · Chats · Insights · Profile);
- *    "Trackers" opens a sheet with all six, since eight tabs don't fit.
+ *    "Trackers" opens a sheet with all six (plus BMI and Programmes), since they don't fit.
  *  The water Garden and Stats live inside /water (Today · Stats · Garden).
  * ------------------------------------------------------------------ */
 
 const HOME = { href: '/dashboard', label: 'Home', icon: House, accent: '#0F2F37' }
 const CHATS = { href: '/messages', label: 'Chats', icon: MessageCircle, accent: '#008069' }
 const INSIGHTS = { href: '/insights', label: 'Insights', icon: Sparkles, accent: '#6A55C9' }
+const PROGRAMMES = { href: '/programmes', label: 'Programmes', icon: BookOpen, accent: '#B9650E' }
 const PROFILE = { href: '/profile', label: 'Profile', icon: UserRound, accent: '#0F2F37' }
 const ADMIN = { href: '/admin', label: 'Admin', icon: ShieldCheck, accent: '#0F2F37' }
 // The six trackers, then tools such as the BMI calculator (in the menu only, not on the Hub).
@@ -113,6 +114,7 @@ function Sidebar({ pathname, unread }: { pathname: string; unread: number }) {
         <ul className="space-y-1">
           <SideLink item={{ ...CHATS, badge: unread }} pathname={pathname} />
           <SideLink item={INSIGHTS} pathname={pathname} />
+          <SideLink item={PROGRAMMES} pathname={pathname} />
         </ul>
         <ul className="mt-auto space-y-1 pt-4">
           {staffTeam && <SideLink item={{ href: TEAMS[staffTeam].portalPath, label: 'Coach portal', icon: BriefcaseMedical, accent: TEAMS[staffTeam].accent }} pathname={pathname} />}
@@ -171,7 +173,7 @@ function TrackerSheet({ open, onClose, pathname }: { open: boolean; onClose: () 
               </button>
             </div>
             <ul className="grid grid-cols-3 gap-2">
-              {TRACKER_LINKS.map((t) => {
+              {[...TRACKER_LINKS, PROGRAMMES].map((t) => {
                 const active = isActive(pathname, t.href)
                 const Icon = t.icon
                 return (

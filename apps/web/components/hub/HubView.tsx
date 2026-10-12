@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { getTrackerData } from '@/app/actions/dashboard'
 import { Avatar } from '@/components/Avatar'
 import { FirstWeekChecklist } from '@/components/hub/FirstWeekChecklist'
+import { ForYouToday } from '@/components/hub/ForYouToday'
 import { GardenCard } from '@/components/hub/GardenCard'
 import { WeeklyRecap } from '@/components/hub/WeeklyRecap'
 import { HubCard } from '@/components/hub/HubCard'
@@ -326,6 +327,8 @@ export function HubView() {
           <GardenCard totals={activity.waterTotals} goal={effectiveGoal(profile)} />
         </div>
       )}
+
+      {profile && <ForYouToday focus={focus} />}
 
       <section id="wellness-team" aria-labelledby="wellness-team-title" className="mt-10 scroll-mt-6">
         <div className="mb-4">
