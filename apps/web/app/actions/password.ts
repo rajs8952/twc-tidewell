@@ -8,11 +8,11 @@ import { createClient } from '@/lib/supabase/server'
 
 /*
  * Password management for everyone (not just admins):
- *   requestPasswordReset  "Forgot password?" on the login page
- *   updatePassword        /update-password, reached from the reset email or Profile
+ *   requestPasswordReset  "Forgot password?" on the login page: emails a 6-digit code
+ *   updatePassword        /update-password, reached after entering that code, or from Profile
  */
 
-/** Where the reset link sends people: the email callback, which signs them in and moves on to /update-password. */
+/** Only used by older reset links still in inboxes: the callback signs them in and moves on to /update-password. */
 function resetRedirect() {
   // Server actions are POSTs, and Next.js already checks their Origin matches the host.
   const origin = headers().get('origin') ?? 'https://omniwell-app.vercel.app'
@@ -20,7 +20,7 @@ function resetRedirect() {
 }
 
 /**
- * Emails a reset link. Always answers the same way whether or not the email
+ * Emails a reset code. Always answers the same way whether or not the email
  * has an account, so the form can't be used to find out who is registered.
  */
 export async function requestPasswordReset(email: string): Promise<ActionResult<null>> {
@@ -46,7 +46,7 @@ export async function updatePassword(newPassword: string, confirmPassword: strin
   if (newPassword !== confirmPassword) return { ok: false, error: 'The two passwords don’t match.' }
 
   const session = await signedIn()
-  if (!session) return { ok: false, error: 'Your reset link has expired. Request a new one from the login page.' }
+  if (!session) return { ok: false, error: 'Your reset code has expired. Use “Forgot password?” on the login page to get a new one.' }
 
   const { error } = await session.supabase.auth.updateUser({ password: parsed.value })
   if (error) {

@@ -73,17 +73,18 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
  * a footer. Returns matching HTML and text versions (text helps
  * deliverability and screen readers).
  */
-export function layout({ heading, paragraphs, button, footer }: { heading: string; paragraphs: string[]; button?: { label: string; url: string }; footer: string }) {
+export function layout({ heading, paragraphs, button, code, footer }: { heading: string; paragraphs: string[]; button?: { label: string; url: string }; /** A one-time code, shown large. */ code?: string; footer: string }) {
   const html = `<!doctype html><html><body style="margin:0;background:#eef3f4;padding:24px 12px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;color:#17303a">
 <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:16px;padding:28px 24px">
   <div style="height:4px;border-radius:4px;background:linear-gradient(90deg,#2f7bd6,#7c6bd6,#e05a7a,#e9851f,#2a9d8f);margin-bottom:20px"></div>
   <p style="margin:0 0 4px;font-weight:800;font-size:15px">OmniWell</p>
   <h1 style="margin:0 0 14px;font-size:22px;line-height:1.25">${escapeHtml(heading)}</h1>
   ${paragraphs.map((p) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.55">${escapeHtml(p)}</p>`).join('\n  ')}
+  ${code ? `<p style="margin:20px 0;text-align:center"><span style="display:inline-block;background:#eef3f4;border-radius:14px;padding:14px 22px;font:800 32px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:10px;color:#17303a">${escapeHtml(code)}</span></p>` : ''}
   ${button ? `<p style="margin:20px 0"><a href="${escapeHtml(button.url)}" style="display:inline-block;background:#17303a;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:999px">${escapeHtml(button.label)}</a></p>
   <p style="margin:0 0 12px;font-size:12px;color:#5b6b73;word-break:break-all">Or paste this link into your browser: ${escapeHtml(button.url)}</p>` : ''}
   <p style="margin:18px 0 0;font-size:12px;color:#5b6b73">${escapeHtml(footer)}</p>
 </div></body></html>`
-  const text = [heading, '', ...paragraphs, ...(button ? ['', `${button.label}: ${button.url}`] : []), '', footer].join('\n')
+  const text = [heading, '', ...paragraphs, ...(code ? ['', `Your code: ${code}`] : []), ...(button ? ['', `${button.label}: ${button.url}`] : []), '', footer].join('\n')
   return { html, text }
 }

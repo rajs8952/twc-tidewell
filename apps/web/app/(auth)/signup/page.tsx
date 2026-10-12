@@ -1,12 +1,13 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowLeft, Loader2, MailCheck } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useMemo, useState, type FormEvent } from 'react'
 import { AuthShell } from '@/components/AuthShell'
 import { AvatarPicker } from '@/components/AvatarPicker'
+import { VerifyCode, codeError } from '@/components/auth/VerifyCode'
 import { ActivityPicker, GenderPicker, HeightInput, WeightInput } from '@rajs8952/ui'
 import { BmiReadout } from '@rajs8952/tracker-bmi'
 import { stashPendingAvatar, uploadAvatar } from '@/lib/avatar'
@@ -14,7 +15,7 @@ import { HEIGHT_CM } from '@rajs8952/core/biometrics'
 import type { Activity, Gender } from '@rajs8952/core/hydration'
 import { createClient } from '@/lib/supabase/client'
 
-type Step = 'account' | 'body' | 'check-email'
+type Step = 'account' | 'body' | 'verify'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -69,24 +70,31 @@ export default function SignupPage() {
       return setError('An account with this email already exists. Log in instead.')
     }
 
-    if (data.session && data.user) {
-      if (avatar) {
-        try {
-          await uploadAvatar(supabase, data.user.id, avatar.blob)
-        } catch {
-          await stashPendingAvatar(avatar.blob)
-        }
-      }
-      // First stop for a new account: choose a focus and reminders.
-      router.replace('/welcome')
-      router.refresh()
-      return
-    }
+    if (data.session && data.user) return finish(data.user.id)
 
-    // Email confirmation is on: keep the photo locally until the first login.
+    // Email confirmation is on: we emailed a 6-digit code. Keep the photo locally in case they finish on another device.
     if (avatar) await stashPendingAvatar(avatar.blob)
     setLoading(false)
-    setStep('check-email')
+    setStep('verify')
+  }
+
+  /** Signed in (straight away, or once the code is accepted): add the photo, then the welcome screen. */
+  async function finish(userId: string) {
+    if (avatar) {
+      try {
+        await uploadAvatar(supabase, userId, avatar.blob)
+      } catch {
+        await stashPendingAvatar(avatar.blob)
+      }
+    }
+    // First stop for a new account: choose a focus and reminders.
+    router.replace('/welcome')
+    router.refresh()
+  }
+
+  async function resendCode() {
+    const { error: e } = await supabase.auth.resend({ type: 'signup', email: email.trim() })
+    return e ? codeError(e) : null
   }
 
   const slide = {
@@ -164,17 +172,21 @@ export default function SignupPage() {
           </motion.div>
         )}
 
-        {step === 'check-email' && (
-          <motion.div key="check" {...slide} className="text-center">
-            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-tide-100 text-tide-600">
-              <MailCheck className="h-8 w-8" aria-hidden />
-            </span>
-            <h1 className="mt-6 text-3xl font-extrabold">Check your inbox</h1>
-            <p className="mt-2 text-muted">
-              We sent a confirmation link to <span className="font-bold text-ink">{email}</span>. Open it to finish setting up.
-              {avatar && ' Your photo will be added the first time you log in.'}
-            </p>
-            <Link href="/login" className="btn-secondary mt-8">Go to log in</Link>
+        {step === 'verify' && (
+          <motion.div key="verify" {...slide}>
+            <VerifyCode
+              email={email.trim()}
+              type="signup"
+              onVerified={async () => {
+                const { data } = await supabase.auth.getUser()
+                if (data.user) await finish(data.user.id)
+              }}
+              onResend={resendCode}
+              onChangeEmail={() => {
+                setError(null)
+                setStep('account')
+              }}
+            />
           </motion.div>
         )}
       </AnimatePresence>

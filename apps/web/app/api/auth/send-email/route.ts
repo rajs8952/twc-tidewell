@@ -12,8 +12,9 @@ import { safePath } from '@/lib/safe-path'
  *
  * Every request is signed by Supabase (Standard Webhooks); anything without
  * a valid, recent signature is refused, so nobody else can make OmniWell send
- * email. Links go to /auth/callback with a token_hash, which the callback
- * verifies (app/auth/callback/route.ts).
+ * email. Sign-up and password-reset emails carry a 6-digit code, entered in
+ * the app (components/auth/VerifyCode.tsx). Invite and magic-link emails
+ * still link to /auth/callback with a token_hash (app/auth/callback/route.ts).
  */
 
 export const dynamic = 'force-dynamic'
@@ -94,21 +95,22 @@ export async function POST(request: Request) {
   let content: Parameters<typeof layout>[0]
   switch (type) {
     case 'signup':
-      subject = 'Confirm your OmniWell account'
+      // A code, not a link: company email scanners open links in advance, which would use them up.
+      subject = `${d.token} is your OmniWell code`
       content = {
         heading: 'Confirm your email',
-        paragraphs: [hi, 'Welcome to OmniWell. Confirm your email address to finish setting up your account.'],
-        button: { label: 'Confirm email', url: link(d.token_hash, 'signup') },
-        footer: 'If you didn’t sign up for OmniWell, you can ignore this email.',
+        paragraphs: [hi, 'Welcome to OmniWell. Enter this code on the sign-up screen to finish setting up your account. It expires in 10 minutes.'],
+        code: d.token,
+        footer: 'If you didn’t sign up for OmniWell, you can ignore this email. Never share this code; OmniWell will never ask you for it.',
       }
       break
     case 'recovery':
-      subject = 'Reset your OmniWell password'
+      subject = `${d.token} is your OmniWell password reset code`
       content = {
         heading: 'Reset your password',
-        paragraphs: [hi, 'We received a request to reset the password for your OmniWell account. The link works once and expires in about an hour.'],
-        button: { label: 'Choose a new password', url: link(d.token_hash, 'recovery') },
-        footer: 'If you didn’t ask for this, you can ignore this email. Your password won’t change.',
+        paragraphs: [hi, 'We received a request to reset the password for your OmniWell account. Enter this code on the log-in screen to choose a new password. It works once and expires in 10 minutes.'],
+        code: d.token,
+        footer: 'If you didn’t ask for this, you can ignore this email; your password won’t change. Never share this code; OmniWell will never ask you for it.',
       }
       break
     case 'magiclink':
@@ -133,7 +135,8 @@ export async function POST(request: Request) {
       subject = 'Your OmniWell verification code'
       content = {
         heading: 'Your verification code',
-        paragraphs: [hi, `Enter this code in OmniWell to confirm it’s you: ${d.token}`, 'It expires in a few minutes.'],
+        paragraphs: [hi, 'Enter this code in OmniWell to confirm it’s you. It expires in a few minutes.'],
+        code: d.token,
         footer: 'If you didn’t ask for this, someone may be trying to use your account. Change your password.',
       }
       break
