@@ -16,8 +16,17 @@ import { createClient } from '@/lib/supabase/client'
 export const CODE_LENGTH = 6
 const RESEND_SECONDS = 60
 
+/** The request never got an answer (dropped connection, phone switching apps, offline), as opposed to a wrong code. */
+export function isNetworkError(e: { name?: string; message: string; status?: number }) {
+  const m = e.message.toLowerCase()
+  return e.name === 'AuthRetryableFetchError' || m.includes('failed to fetch') || m.includes('load failed') || m.includes('network') || (e.status === 0 && !m.includes('expired'))
+}
+
+const NETWORK_MESSAGE = 'Couldn’t reach OmniWell. Check your connection, then try again; your code is still valid.'
+
 /** Supabase's errors, in plain words. */
-export function codeError(e: { code?: string; message: string; status?: number }) {
+export function codeError(e: { name?: string; code?: string; message: string; status?: number }) {
+  if (isNetworkError(e)) return NETWORK_MESSAGE
   const m = e.message.toLowerCase()
   if (e.code === 'otp_expired' || m.includes('expired') || m.includes('invalid')) return 'That code is wrong or has expired. Check it, or send a new one.'
   if (e.status === 429 || m.includes('rate limit') || m.includes('security purposes')) return 'Too many tries just now. Wait a minute and try again.'
@@ -61,11 +70,32 @@ export function VerifyCode({
     setBusy(true)
     setError(null)
     setNotice(null)
-    const { error: e } = await supabase.auth.verifyOtp({ email, token, type })
+    // A dropped connection (common on phones after switching to the mail app for the code)
+    // is retried quietly: a lost request never used the code up.
+    let e: Parameters<typeof codeError>[0] | null = null
+    let dropped = false
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, attempt * 1000))
+      try {
+        e = (await supabase.auth.verifyOtp({ email, token, type })).error
+      } catch (err) {
+        e = { name: 'NetworkError', message: err instanceof Error ? err.message : 'Failed to fetch' }
+      }
+      if (!e || !isNetworkError(e)) break
+      dropped = true
+    }
+    // If an earlier attempt got through but its answer was lost, the code is now used up,
+    // yet that attempt already signed them in.
+    if (e && dropped && !isNetworkError(e)) {
+      const { data } = await supabase.auth.getSession()
+      if (data.session?.user.email?.toLowerCase() === email.toLowerCase()) e = null
+    }
     if (e) {
       setBusy(false)
       setError(codeError(e))
-      setCode('')
+      // Keep the code after a connection problem so they can just try again; clear a wrong one.
+      if (isNetworkError(e)) lastTried.current = ''
+      else setCode('')
       inputRef.current?.focus()
       return
     }
