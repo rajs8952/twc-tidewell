@@ -7,7 +7,7 @@ export const BRAND = {
   name: 'OmniWell',
   tagline: 'Your whole wellbeing, in one place',
   description:
-    'Track water, sleep, mood, meditation, exercise and weight in one calm app, then see how your habits connect.',
+    'Build healthy habits across water, sleep, mood, meditation, exercise and weight, see how they connect, and talk privately with your company’s therapist and dietitian, all in one calm app.',
   /** Browser UI colour (address bar, PWA splash). Matches the app background. */
   themeColor: '#EDF4F3',
   backgroundColor: '#F6F9F8',

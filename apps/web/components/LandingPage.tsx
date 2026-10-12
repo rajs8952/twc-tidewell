@@ -1,4 +1,4 @@
-import { ArrowRight, Lock, Sparkles } from 'lucide-react'
+import { ArrowRight, BarChart3, BookOpen, CalendarRange, Check, EyeOff, Flame, Lightbulb, Lock, MessageCircleHeart, ShieldAlert, Sparkles, Target, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { BrandBackdrop } from './BrandBackdrop'
 import { InsightCard } from './insights/InsightCard'
@@ -9,12 +9,12 @@ import { BMI_TOOL, TRACKERS, type TrackerId } from '@/lib/trackers'
 
 /** One concrete line per pillar for the feature grid. */
 const HIGHLIGHTS: Record<TrackerId, string> = {
-  water: 'A glass that fills as you drink, with streaks and a garden that grows with you.',
-  mood: 'Five-face check-ins with energy, stress and the feelings behind them.',
+  water: 'A glass that fills as you drink, one-tap +250 ml from Home, and a garden that grows with your streak.',
+  mood: 'Five-face check-ins with energy, stress and the feelings behind them, right from Home.',
   meditation: 'A guided breathing timer, or log a session you did elsewhere.',
-  sleep: 'Bedtime, wake time and how well you slept, against a 7–9 hour guide.',
+  sleep: 'Bedtime, wake time and how well you slept, against your own goal.',
   weight: 'A calm trend line over weeks, in kg or lb.',
-  exercise: 'Nine activities, with calories estimated from your weight.',
+  exercise: 'Nine activities and a weekly goal, so a rest day never counts against you.',
 }
 
 /** A sample finding, rendered with the real insight card. */
@@ -36,6 +36,23 @@ const SAMPLE: Headline = {
     ],
   },
 }
+
+/** What turns logging into a habit. */
+const HABIT_FEATURES = [
+  { icon: Target, title: 'Your own goals', text: 'Set sleep, meditation and a weekly exercise goal. Every card shows “Logged” or “Goal met”, so progress is always clear.' },
+  { icon: Flame, title: 'Streaks and a growing garden', text: 'Days in a row for every tracker, and a plant that blooms with each water-goal day.' },
+  { icon: Zap, title: 'One tap from Home', text: 'Add a glass of water or check in your mood without opening a tracker. Log for earlier today or yesterday, and fix any entry.' },
+  { icon: CalendarRange, title: 'Your week, every Monday', text: 'A short recap of last week next to the week before, with the one thing that went best.' },
+  { icon: Lightbulb, title: 'Nudges that notice', text: 'Gentle suggestions when things slip, a cheer when you’re back on track, and reminders that stop once you’re done.' },
+  { icon: BookOpen, title: 'Short programmes', text: 'Sleep reset, Stress reset, Hydration kickstart and Move more: one small step a day, plus a daily tip.' },
+] as const
+
+const PROGRAMMES = [
+  { name: 'Sleep reset', days: 7, color: PILLAR_COLORS.sleep },
+  { name: 'Stress reset', days: 7, color: PILLAR_COLORS.mood },
+  { name: 'Hydration kickstart', days: 5, color: PILLAR_COLORS.water },
+  { name: 'Move more', days: 7, color: PILLAR_COLORS.exercise },
+]
 
 /** The six pillars circling the mark. */
 function PillarOrbit() {
@@ -64,6 +81,36 @@ function PillarOrbit() {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/** A static picture of the care-team chat (sample names), in the app's own style. */
+function ChatPreview() {
+  return (
+    <div className="overflow-hidden rounded-3xl bg-white shadow-[0_24px_60px_-30px_rgba(15,47,55,0.45)] ring-1 ring-line" aria-label="Example conversation with a therapist (sample)">
+      <div className="flex items-center gap-3 border-b border-line px-4 py-3">
+        <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#6A55C9] text-sm font-bold text-white">
+          AR
+          <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-bold leading-tight">Dr. Ananya Rao</p>
+          <p className="text-xs text-muted">
+            <span className="font-bold text-[#6A55C9]">Therapist</span> · Online · usually replies within a day
+          </p>
+        </div>
+        <span className="hidden shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold text-[#B8402B] ring-1 ring-[#E8B4A9] sm:inline-flex">
+          <ShieldAlert className="h-3.5 w-3.5" aria-hidden /> Need help now?
+        </span>
+      </div>
+      <div className="space-y-2 bg-[#F4F7F8] px-4 py-4 text-[14px] leading-relaxed">
+        <p className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-[#1A6DB5] px-3.5 py-2.5 text-white">I’ve been overwhelmed with deadlines and I’m not sleeping well.</p>
+        <p className="w-fit max-w-[85%] rounded-2xl rounded-bl-md bg-white px-3.5 py-2.5 ring-1 ring-line">
+          Thank you for reaching out. Can we look at what a typical evening looks like for you right now?
+        </p>
+        <p className="text-right text-[11px] font-semibold text-muted">Seen by Ananya</p>
+      </div>
     </div>
   )
 }
@@ -99,12 +146,19 @@ export function LandingPage() {
                     <span key={k} className="h-3 w-3 rounded-full ring-2 ring-white" style={{ background: PILLAR_COLORS[k] }} />
                   ))}
                 </span>
-                Six habits. One calm place.
+                Habits, insights and real support
               </p>
               <h1 className="mt-5 text-[2.6rem] font-extrabold leading-[1.04] sm:text-6xl">
                 Your whole wellbeing, <span className="text-brand-gradient">in one place.</span>
               </h1>
               <p className="mt-5 max-w-xl text-lg text-muted">{BRAND.description}</p>
+              <ul className="mt-5 grid max-w-xl gap-2 text-sm font-semibold text-ink/85 sm:grid-cols-2">
+                {['Six trackers, one tap to log', 'Goals, streaks and a weekly recap', 'Programmes and a daily tip', 'Private chat with a therapist or dietitian'].map((t) => (
+                  <li key={t} className="flex items-center gap-2">
+                    <Check className="h-4 w-4 shrink-0 text-[#1F6E64]" strokeWidth={3} aria-hidden /> {t}
+                  </li>
+                ))}
+              </ul>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link href="/signup" className="btn-primary px-6 py-3.5 text-base">
                   Create your free account <ArrowRight className="h-4 w-4" aria-hidden />
@@ -114,7 +168,7 @@ export function LandingPage() {
                 </Link>
               </div>
               <p className="mt-5 flex items-center gap-2 text-sm text-muted">
-                <Lock className="h-4 w-4" aria-hidden /> Private by default. Only you can see your entries.
+                <Lock className="h-4 w-4" aria-hidden /> Private by default. Only you see your entries, and your chats are only with your coach.
               </p>
             </div>
             <div>
@@ -135,7 +189,10 @@ export function LandingPage() {
             <h2 id="features-title" className="text-3xl font-extrabold sm:text-4xl">
               Six trackers that work together
             </h2>
-            <p className="mt-3 text-lg text-muted">Each one takes seconds to log. Together they show you the bigger picture. And a BMI calculator when you want to check where you stand.</p>
+            <p className="mt-3 text-lg text-muted">
+              Each one takes seconds to log, for now or earlier, and every entry can be edited. Together they show you the bigger picture. And a BMI calculator when you want to
+              check where you stand.
+            </p>
           </div>
           <ul className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {TRACKERS.map((t) => {
@@ -143,10 +200,7 @@ export function LandingPage() {
               return (
                 <li key={t.id} className="relative overflow-hidden rounded-3xl bg-white p-6 ring-1 ring-line">
                   <span className="absolute inset-x-0 top-0 h-1" style={{ background: t.accent }} aria-hidden />
-                  <span
-                    className="flex h-12 w-12 items-center justify-center rounded-2xl"
-                    style={{ background: `${t.accent}1A`, color: t.accent }}
-                  >
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl" style={{ background: `${t.accent}1A`, color: t.accent }}>
                     <Icon className="h-6 w-6" aria-hidden />
                   </span>
                   <h3 className="mt-4 text-xl font-bold">{t.name}</h3>
@@ -184,6 +238,39 @@ export function LandingPage() {
           </div>
         </section>
 
+        {/* Habits */}
+        <section aria-labelledby="habits-title" className="mx-auto max-w-6xl px-5 pb-16 sm:px-8 lg:pb-20">
+          <div className="max-w-2xl">
+            <h2 id="habits-title" className="text-3xl font-extrabold sm:text-4xl">
+              Built to become a habit
+            </h2>
+            <p className="mt-3 text-lg text-muted">Pick what you want to work on when you sign up, and {BRAND.name} keeps you going from there.</p>
+          </div>
+          <ul className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {HABIT_FEATURES.map((f) => {
+              const Icon = f.icon
+              return (
+                <li key={f.title} className="rounded-3xl bg-white p-6 ring-1 ring-line">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-mist text-[#1F6E64]">
+                    <Icon className="h-5 w-5" aria-hidden />
+                  </span>
+                  <h3 className="mt-4 text-lg font-bold">{f.title}</h3>
+                  <p className="mt-1 text-sm text-muted">{f.text}</p>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-3xl bg-white/60 p-4 ring-1 ring-line">
+            <span className="mr-1 text-sm font-bold">Programmes:</span>
+            {PROGRAMMES.map((p) => (
+              <span key={p.name} className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-sm font-semibold ring-1 ring-line">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} aria-hidden />
+                {p.name} <span className="font-normal text-muted">· {p.days} days</span>
+              </span>
+            ))}
+          </div>
+        </section>
+
         {/* Insights */}
         <section aria-labelledby="insights-title" className="mx-auto max-w-6xl px-5 pb-16 sm:px-8 lg:pb-24">
           <div className="grid items-center gap-10 rounded-[2rem] bg-white/60 p-6 ring-1 ring-line sm:p-10 lg:grid-cols-2">
@@ -195,18 +282,82 @@ export function LandingPage() {
                 See how your habits connect
               </h2>
               <p className="mt-3 text-lg text-muted">
-                After a week of logging, {BRAND.name} looks for patterns across your trackers and explains them in plain words. No charts to
-                decode, no statistics to interpret.
+                From your second entry, {BRAND.name} shows how each habit is going. Over time it finds patterns across your trackers and explains them in plain words. No charts
+                to decode, no statistics to interpret.
               </p>
               <ul className="mt-6 space-y-2 text-ink/80">
-                <li>• Does more water mean better sleep?</li>
-                <li>• Do longer nights lift your mood the next day?</li>
-                <li>• Explore any two habits side by side, whenever you want the detail.</li>
+                <li>• Your last 30 days for all six trackers, at a glance.</li>
+                <li>• Habits that go together: do you sleep longer after days you exercise?</li>
+                <li>• Does more water mean better sleep, or a better mood?</li>
               </ul>
             </div>
             <div aria-label="Example insight">
               <InsightCard headline={SAMPLE} />
             </div>
+          </div>
+        </section>
+
+        {/* Care team */}
+        <section aria-labelledby="care-title" className="mx-auto max-w-6xl px-5 pb-16 sm:px-8 lg:pb-24">
+          <div className="grid items-center gap-10 lg:grid-cols-2">
+            <div className="order-2 lg:order-1">
+              <ChatPreview />
+              <p className="mt-2 text-center text-xs text-muted">Sample conversation</p>
+            </div>
+            <div className="order-1 lg:order-2">
+              <p className="inline-flex items-center gap-1.5 text-sm font-bold text-[#6A55C9]">
+                <MessageCircleHeart className="h-4 w-4" aria-hidden /> Your care team
+              </p>
+              <h2 id="care-title" className="mt-2 text-3xl font-extrabold sm:text-4xl">
+                Real people, when you need them
+              </h2>
+              <p className="mt-3 text-lg text-muted">
+                Message your company’s therapist or dietitian privately, from the app. You keep the same coach each time, so you never have to start your story again.
+              </p>
+              <ul className="mt-6 space-y-3 text-ink/85">
+                <li className="flex gap-2">
+                  <Check className="mt-1 h-4 w-4 shrink-0 text-[#1F6E64]" strokeWidth={3} aria-hidden /> Replies within a day, and you can see when your message has been read.
+                </li>
+                <li className="flex gap-2">
+                  <Check className="mt-1 h-4 w-4 shrink-0 text-[#1F6E64]" strokeWidth={3} aria-hidden /> Share a photo, like a meal or a sleep tracker screen.
+                </li>
+                <li className="flex gap-2">
+                  <ShieldAlert className="mt-1 h-4 w-4 shrink-0 text-[#B8402B]" aria-hidden /> Support right away when it’s urgent: the EAP helpline is one tap away in every
+                  chat, and a hard day in your mood check-in brings it straight up.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* For companies */}
+        <section aria-labelledby="company-title" className="mx-auto max-w-6xl px-5 pb-16 sm:px-8">
+          <div className="grid gap-8 rounded-[2rem] bg-white p-6 ring-1 ring-line sm:p-10 lg:grid-cols-[1.1fr_1fr]">
+            <div>
+              <p className="inline-flex items-center gap-1.5 text-sm font-bold text-[#1F6E64]">
+                <BarChart3 className="h-4 w-4" aria-hidden /> For your company
+              </p>
+              <h2 id="company-title" className="mt-2 text-3xl font-extrabold sm:text-4xl">
+                See the trends, never the person
+              </h2>
+              <p className="mt-3 text-lg text-muted">
+                HR sees anonymised company totals: how many people use {BRAND.name}, which habits they build, mood and stress trends, and how quickly the wellness team replies.
+              </p>
+            </div>
+            <ul className="space-y-3 self-center text-ink/85">
+              <li className="flex gap-2">
+                <EyeOff className="mt-1 h-4 w-4 shrink-0 text-[#1F6E64]" aria-hidden /> Totals only, with any group of fewer than 5 people hidden. No names, entries or
+                messages, ever.
+              </li>
+              <li className="flex gap-2">
+                <Check className="mt-1 h-4 w-4 shrink-0 text-[#1F6E64]" strokeWidth={3} aria-hidden /> Invite your whole team from a spreadsheet; everyone sets their own
+                password.
+              </li>
+              <li className="flex gap-2">
+                <Check className="mt-1 h-4 w-4 shrink-0 text-[#1F6E64]" strokeWidth={3} aria-hidden /> Coaches get a fair, shared queue; admins see workload and reply times at
+                a glance.
+              </li>
+            </ul>
           </div>
         </section>
 
@@ -216,7 +367,7 @@ export function LandingPage() {
             <BrandBackdrop tone="deep" />
             <div className="relative">
               <h2 className="text-3xl font-extrabold text-white sm:text-4xl">Start with one habit. See the whole picture.</h2>
-              <p className="mx-auto mt-3 max-w-xl text-white/80">Free to use. Set up in about a minute.</p>
+              <p className="mx-auto mt-3 max-w-xl text-white/80">Free to use. Set up in about a minute, on your phone or computer.</p>
               <Link href="/signup" className="btn mt-8 bg-white px-6 py-3.5 text-base text-ink hover:bg-white/90">
                 Create your free account <ArrowRight className="h-4 w-4" aria-hidden />
               </Link>
