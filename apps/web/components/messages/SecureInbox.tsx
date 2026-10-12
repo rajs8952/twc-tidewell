@@ -1,18 +1,16 @@
 'use client'
 
-import { Apple, MessageCircleHeart, MessageSquarePlus, Phone, PenSquare } from 'lucide-react'
+import { Apple, ChevronDown, Lock, MessageCircleHeart, MessageSquarePlus, PenSquare, ShieldAlert } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChatAvatar,
-  ChatFilters,
   ChatFrame,
   ChatHeader,
-  ChatIconButton,
   ChatListHeader,
   ChatListItem,
-  ChatNotice,
   ChatPlaceholder,
   ChatSearch,
+  ChatSystemNote,
   Composer,
   MessageList,
   receiptState,
@@ -34,9 +32,9 @@ import { useSignedImages } from '@/lib/useSignedImages'
 import { WELLNESS_BY_ID, telHref } from '@/lib/wellness-team'
 
 /* ------------------------------------------------------------------
- * The employee's secure inbox, laid out like WhatsApp Web: their
- * conversations with the therapist and dietitian teams on the left, the
- * open conversation on the right. Asynchronous by design (no WebSockets
+ * The employee's secure inbox ("Your care team"): one card per coach
+ * they're talking to, with earlier conversations folded inside, past
+ * conversations below, and the open conversation on the right. Asynchronous by design (no WebSockets
  * or Realtime): the open chat is polled every few seconds while active
  * (lib/useLivePolling.ts), and data goes straight to Supabase under
  * row-level security (lib/chat-data.ts).
@@ -65,7 +63,21 @@ interface Pending {
   textSent?: boolean
 }
 
-type Filter = 'all' | Team
+/** Optional starting points for a new conversation; a chip fills in the first line. */
+const TOPICS: Record<Team, string[]> = {
+  therapist: ['Stress at work', 'Sleep', 'Low mood', 'Anxiety', 'Relationships', 'Something else'],
+  dietitian: ['Healthy eating', 'Energy through the day', 'Weight', 'Meal planning', 'Something else'],
+}
+const starterFor = (topic: string) => (topic === 'Something else' ? '' : `I’d like to talk about ${topic.charAt(0).toLowerCase()}${topic.slice(1)}. `)
+
+const firstName = (name: string | null | undefined) => name?.replace(/^(dr|mr|mrs|ms)\.?\s+/i, '').split(/\s+/)[0] || undefined
+
+/** What the card says about where the conversation is. */
+function statusWord(c: ChatSummary, unread: boolean) {
+  if (!isOpenStatus(c.status)) return 'Closed'
+  if (unread) return 'New reply'
+  return c.status === 'unassigned' ? `Waiting for a ${TEAMS[c.team].label.toLowerCase()}` : 'Ongoing'
+}
 
 const SEEN_KEY = storageKey('chat-seen')
 function readSeen(): Record<string, string> {
@@ -93,23 +105,34 @@ function routingLine(team: Team, status: ThreadStatus) {
   return 'OmniWell wellness team · replies within 24 business hours'
 }
 
-function Disclaimer({ team }: { team: Team }) {
+/** The one-line privacy note under the header; opens to the full reply-time and crisis note. */
+function PrivacyStrip({ team }: { team: Team }) {
   const phone = WELLNESS_BY_ID.eap.phone
+  const who = TEAMS[team].label.toLowerCase()
   return (
-    <ChatNotice>
-      This is a secure asynchronous inbox. A {TEAMS[team].label.toLowerCase()} will reply within 24 business hours.{' '}
-      <strong>
-        If you are in crisis, call the EAP hotline immediately at{' '}
-        {phone ? (
-          <a href={telHref(phone)} className="whitespace-nowrap underline underline-offset-2">
-            {phone}
-          </a>
-        ) : (
-          'your local emergency number'
-        )}
-        .
-      </strong>
-    </ChatNotice>
+    <details className="group rounded-xl bg-mist px-3 py-1.5 text-xs text-muted">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 [&::-webkit-details-marker]:hidden">
+        <Lock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <span className="flex-1">Private to you and your {who}. Not for emergencies.</span>
+        <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" aria-hidden />
+      </summary>
+      <p className="mt-1.5 leading-relaxed">
+        This is a secure, asynchronous inbox: a {who} will reply within 24 business hours.{' '}
+        <strong className="text-ink">
+          If you are in crisis, call the EAP helpline now
+          {phone ? (
+            <>
+              {' '}
+              on{' '}
+              <a href={telHref(phone)} className="whitespace-nowrap underline underline-offset-2">
+                {phone}
+              </a>
+            </>
+          ) : null}
+          , or 112 in an emergency.
+        </strong>
+      </p>
+    </details>
   )
 }
 
@@ -132,7 +155,8 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
   const [draft, setDraft] = useState('')
   const [attachment, setAttachment] = useState<{ blob: Blob; previewUrl: string; note: string } | { preparing: true } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [filter, setFilter] = useState<Filter>('all')
+  /** Which team's earlier conversations are unfolded in the list. */
+  const [expanded, setExpanded] = useState<Team | null>(null)
   const [query, setQuery] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
   const [seen, setSeen] = useState<Record<string, string>>({})
@@ -356,13 +380,19 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
 
   /* ----- view ----- */
 
-  const visibleChats = (chats ?? []).filter((c) => {
-    if (filter !== 'all' && c.team !== filter) return false
-    const q = query.trim().toLowerCase()
-    return !q || TEAMS[c.team].label.toLowerCase().includes(q) || (c.coach_name?.toLowerCase().includes(q) ?? false) || (c.last?.content.toLowerCase().includes(q) ?? false)
-  })
+  const q = query.trim().toLowerCase()
+  const visibleChats = (chats ?? []).filter(
+    (c) => !q || TEAMS[c.team].label.toLowerCase().includes(q) || (c.coach_name?.toLowerCase().includes(q) ?? false) || (c.last?.content.toLowerCase().includes(q) ?? false),
+  )
+  // One card per ongoing conversation (normally one per team, thanks to sticky routing);
+  // closed ones fold into that team's card, or sit under "Past conversations".
+  const current = visibleChats.filter((c) => isOpenStatus(c.status))
+  const closedChats = visibleChats.filter((c) => !isOpenStatus(c.status))
+  const currentTeams = new Set(current.map((c) => c.team))
+  const past = closedChats.filter((c) => !currentTeams.has(c.team))
 
   const threadId = active?.kind === 'thread' ? active.id : null
+  const coachFirst = firstName(activeChat?.coach_name)
   const views: ChatMessageView[] = [
     ...messages.map((m) => ({
       id: m.id,
@@ -371,6 +401,10 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
       createdAt: m.created_at,
       state: receiptState(m.created_at, activeChat?.coach_delivered_at, activeChat?.coach_read_at),
       image: m.media_url ? { src: imageUrls.get(m.media_url) ?? null } : undefined,
+      avatar:
+        m.sender_role === 'therapist' && activeChat ? (
+          <ChatAvatar color={TEAM_LOOK[activeChat.team].color} icon={TEAM_LOOK[activeChat.team].icon} src={activeChat.coach_avatar_url} size="xs" />
+        ) : undefined,
     })),
     ...pending
       .filter((p) => (threadId ? p.threadId === threadId : active?.kind === 'new' && !p.threadId && p.team === activeTeam))
@@ -379,22 +413,49 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
   const closed = !!activeChat && !isOpenStatus(activeChat.status)
   const look = activeTeam ? TEAM_LOOK[activeTeam] : null
 
+  const isUnread = (c: ChatSummary) => !!c.last && c.last.sender_role === 'therapist' && (!seen[c.id] || seen[c.id] < c.last.created_at) && threadId !== c.id
+  const previewOf = (c: ChatSummary) =>
+    c.last ? `${c.last.sender_role === 'user' ? 'You: ' : ''}${c.last.media_url ? (c.last.content ? `📷 ${c.last.content}` : PHOTO_PREVIEW) : c.last.content}` : 'No messages yet'
+
+  /** A compact row for a closed conversation (inside a coach card, or under Past). */
+  const pastRow = (c: ChatSummary) => (
+    <li key={c.id} className="px-3">
+      <button
+        type="button"
+        onClick={() => open({ kind: 'thread', id: c.id })}
+        aria-current={threadId === c.id ? 'true' : undefined}
+        className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition hover:bg-mist ${threadId === c.id ? 'bg-mist' : ''}`}
+      >
+        <span className="min-w-0">
+          <span className="block truncate font-semibold text-ink">{c.coach_name ?? TEAMS[c.team].label}</span>
+          <span className="block truncate text-xs text-muted">Closed · {previewOf(c)}</span>
+        </span>
+        <span className="shrink-0 text-xs text-muted">{listTime(c.last?.created_at ?? c.created_at)}</span>
+      </button>
+    </li>
+  )
+
   const sidebar = (
     <>
       <ChatListHeader
-        title="Chats"
+        title="Your care team"
         actions={
           <div className="relative">
-            <ChatIconButton label="New chat" onClick={() => setMenuOpen((o) => !o)}>
-              <MessageSquarePlus className="h-5 w-5" aria-hidden />
-            </ChatIconButton>
+            <button
+              type="button"
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-expanded={menuOpen}
+              className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-2 text-sm font-bold text-white"
+            >
+              <MessageSquarePlus className="h-4 w-4" aria-hidden /> New
+            </button>
             {menuOpen && (
-              <ul role="menu" className="absolute right-0 top-11 z-20 w-56 overflow-hidden rounded-lg bg-white py-2 shadow-xl ring-1 ring-black/5">
+              <ul role="menu" className="absolute right-0 top-11 z-20 w-60 overflow-hidden rounded-2xl bg-white py-2 shadow-xl ring-1 ring-line">
                 {(Object.keys(TEAMS) as Team[]).map((t) => (
                   <li key={t}>
-                    <button type="button" role="menuitem" onClick={() => open({ kind: 'new', team: t })} className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm hover:bg-[#F5F6F6]">
-                      <ChatAvatar color={TEAM_LOOK[t].color} icon={TEAM_LOOK[t].icon} size="sm" />
-                      New chat with {TEAMS[t].label.toLowerCase()}
+                    <button type="button" role="menuitem" onClick={() => open({ kind: 'new', team: t })} className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-semibold text-ink hover:bg-mist">
+                      <ChatAvatar color={TEAM_LOOK[t].color} icon={TEAM_LOOK[t].icon} size="xs" />
+                      Talk to a {TEAMS[t].label.toLowerCase()}
                     </button>
                   </li>
                 ))}
@@ -403,78 +464,107 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
           </div>
         }
       />
-      <ChatSearch value={query} onChange={setQuery} placeholder="Search chats" />
-      <ChatFilters<Filter>
-        value={filter}
-        onChange={setFilter}
-        options={[
-          { id: 'all', label: 'All' },
-          { id: 'therapist', label: 'Therapist' },
-          { id: 'dietitian', label: 'Dietitian' },
-        ]}
-      />
-      <ul className="flex-1 overflow-y-auto" aria-label="Your conversations">
+      <ChatSearch value={query} onChange={setQuery} placeholder="Search messages" />
+      <div className="flex-1 overflow-y-auto pb-3 pt-1">
         {chats === null ? (
-          Array.from({ length: 3 }, (_, i) => (
-            <li key={i} className="flex items-center gap-3 px-3 py-3">
-              <span className="h-12 w-12 rounded-full bg-[#F0F2F5] motion-safe:animate-pulse" />
-              <span className="flex-1 space-y-2">
-                <span className="block h-3.5 w-24 rounded bg-[#F0F2F5] motion-safe:animate-pulse" />
-                <span className="block h-3 w-40 rounded bg-[#F0F2F5] motion-safe:animate-pulse" />
-              </span>
-            </li>
-          ))
+          <ul aria-label="Loading conversations">
+            {Array.from({ length: 2 }, (_, i) => (
+              <li key={i} className="mx-3 my-2 flex items-center gap-3 rounded-2xl p-3 ring-1 ring-line">
+                <span className="h-12 w-12 rounded-full bg-mist motion-safe:animate-pulse" />
+                <span className="flex-1 space-y-2">
+                  <span className="block h-3.5 w-24 rounded bg-mist motion-safe:animate-pulse" />
+                  <span className="block h-3 w-40 rounded bg-mist motion-safe:animate-pulse" />
+                </span>
+              </li>
+            ))}
+          </ul>
         ) : visibleChats.length === 0 ? (
-          <li className="px-6 py-10 text-center text-sm text-[#54656F]">
+          <div className="px-6 py-10 text-center text-sm text-muted">
             {query ? (
-              'No chats match your search.'
+              'No conversations match your search.'
             ) : (
               <>
                 No conversations yet. Who would you like to talk to?
                 <span className="mt-4 flex flex-col items-center gap-2">
                   {(Object.keys(TEAMS) as Team[]).map((t) => (
-                    <button key={t} type="button" onClick={() => open({ kind: 'new', team: t })} className="inline-flex w-56 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-white" style={{ background: TEAM_LOOK[t].color }}>
-                      <PenSquare className="h-4 w-4" aria-hidden /> Talk to {TEAMS[t].label}
+                    <button key={t} type="button" onClick={() => open({ kind: 'new', team: t })} className="inline-flex w-56 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold text-white" style={{ background: TEAM_LOOK[t].color }}>
+                      <PenSquare className="h-4 w-4" aria-hidden /> Talk to a {TEAMS[t].label.toLowerCase()}
                     </button>
                   ))}
                 </span>
               </>
             )}
-          </li>
+          </div>
         ) : (
-          visibleChats.map((c) => {
-            const unread = !!c.last && c.last.sender_role === 'therapist' && (!seen[c.id] || seen[c.id] < c.last.created_at) && threadId !== c.id
-            return (
-              <ChatListItem
-                key={c.id}
-                active={threadId === c.id}
-                onClick={() => open({ kind: 'thread', id: c.id })}
-                avatar={<ChatAvatar color={TEAM_LOOK[c.team].color} icon={TEAM_LOOK[c.team].icon} src={c.coach_avatar_url} online={c.coach_online && isOpenStatus(c.status)} />}
-                title={c.coach_name ?? TEAMS[c.team].label}
-                time={listTime(c.last?.created_at ?? c.created_at)}
-                preview={
-                  <>
-                    {!isOpenStatus(c.status) && <span className="font-semibold">Closed · </span>}
-                    {c.last ? `${c.last.sender_role === 'user' ? 'You: ' : ''}${c.last.media_url ? (c.last.content ? `📷 ${c.last.content}` : PHOTO_PREVIEW) : c.last.content}` : 'No messages yet'}
-                  </>
-                }
-                badge={unread ? <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#25D366] ring-2 ring-white" aria-label="New reply" /> : undefined}
-              />
-            )
-          })
+          <>
+            <ul aria-label="Your conversations">
+              {current.map((c) => {
+                const unread = isUnread(c)
+                const earlier = closedChats.filter((x) => x.team === c.team)
+                const open_ = expanded === c.team
+                return (
+                  <li key={c.id}>
+                    <ul>
+                      <ChatListItem
+                        active={threadId === c.id}
+                        accent={TEAM_LOOK[c.team].color}
+                        onClick={() => open({ kind: 'thread', id: c.id })}
+                        avatar={<ChatAvatar color={TEAM_LOOK[c.team].color} icon={TEAM_LOOK[c.team].icon} src={c.coach_avatar_url} online={c.coach_online} />}
+                        title={c.coach_name ?? TEAMS[c.team].label}
+                        meta={
+                          <span style={{ color: TEAM_LOOK[c.team].color }}>
+                            {c.coach_name ? `${TEAMS[c.team].label} · ` : ''}
+                            {statusWord(c, unread)}
+                          </span>
+                        }
+                        time={listTime(c.last?.created_at ?? c.created_at)}
+                        preview={<span className={unread ? 'font-semibold text-ink' : undefined}>{previewOf(c)}</span>}
+                        badge={unread ? <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#C42B1C]" aria-label="New reply" /> : undefined}
+                      />
+                      {earlier.length > 0 && (
+                        <li className="px-3">
+                          <button
+                            type="button"
+                            onClick={() => setExpanded(open_ ? null : c.team)}
+                            aria-expanded={open_}
+                            className="ml-3 flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-muted hover:bg-mist"
+                          >
+                            <ChevronDown className={`h-3.5 w-3.5 transition ${open_ ? '' : '-rotate-90'}`} aria-hidden />
+                            {earlier.length === 1 ? '1 earlier conversation' : `${earlier.length} earlier conversations`}
+                          </button>
+                        </li>
+                      )}
+                      {open_ && earlier.map(pastRow)}
+                    </ul>
+                  </li>
+                )
+              })}
+            </ul>
+            {past.length > 0 && (
+              <>
+                <p className="mt-5 px-6 text-xs font-bold uppercase tracking-wide text-muted">Past conversations</p>
+                <ul className="mt-1" aria-label="Past conversations">
+                  {past.map(pastRow)}
+                </ul>
+              </>
+            )}
+          </>
         )}
-      </ul>
+      </div>
     </>
   )
 
+  const eapPhone = WELLNESS_BY_ID.eap.phone
+  const startedOn = activeChat ? new Date(activeChat.created_at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : null
+
   const main =
     !active || !activeTeam || !look ? (
-      <ChatPlaceholder icon={MessageCircleHeart} title="OmniWell Messages">
-        Choose a chat on the left, or start a new one.
+      <ChatPlaceholder icon={MessageCircleHeart} title="Your care team">
+        Choose a conversation on the left, or start a new one. Everything here is private to you and your coach.
         <span className="mt-4 flex flex-wrap justify-center gap-2">
           {(Object.keys(TEAMS) as Team[]).map((t) => (
-            <button key={t} type="button" onClick={() => open({ kind: 'new', team: t })} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white" style={{ background: TEAM_LOOK[t].color }}>
-              <PenSquare className="h-4 w-4" aria-hidden /> Talk to {TEAMS[t].label}
+            <button key={t} type="button" onClick={() => open({ kind: 'new', team: t })} className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-white" style={{ background: TEAM_LOOK[t].color }}>
+              <PenSquare className="h-4 w-4" aria-hidden /> Talk to a {TEAMS[t].label.toLowerCase()}
             </button>
           ))}
         </span>
@@ -483,35 +573,93 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
       <>
         <ChatHeader
           onBack={() => setMobileShowChat(false)}
-          avatar={<ChatAvatar color={look.color} icon={look.icon} size="sm" src={activeChat?.coach_avatar_url} online={!closed && activeChat?.coach_online} />}
-          title={activeChat?.coach_name ?? TEAMS[activeTeam].label}
+          avatar={<ChatAvatar color={look.color} icon={look.icon} src={activeChat?.coach_avatar_url} online={!closed && activeChat?.coach_online} />}
+          title={activeChat?.coach_name ?? (active.kind === 'new' ? `Talk to a ${TEAMS[activeTeam].label.toLowerCase()}` : TEAMS[activeTeam].label)}
           subtitle={
-            closed
-              ? 'Conversation closed'
-              : activeChat?.coach_online
-                ? <span className="font-semibold text-[#0A7C3E]">Online</span>
-                : activeChat?.coach_name
-                  ? [activeChat.coach_title || `Your ${TEAMS[activeTeam].label.toLowerCase()}`, 'replies within 24 business hours'].join(' · ')
-                  : activeChat
-                    ? routingLine(activeTeam, activeChat.status)
-                    : 'OmniWell wellness team · replies within 24 business hours'
+            <>
+              <span className="font-bold" style={{ color: look.color }}>
+                {activeChat?.coach_title || TEAMS[activeTeam].label}
+              </span>
+              {' · '}
+              {closed
+                ? 'Conversation closed'
+                : activeChat?.coach_online
+                  ? 'Online · usually replies within a day'
+                  : activeChat?.status === 'unassigned'
+                    ? `Waiting for the next available ${TEAMS[activeTeam].label.toLowerCase()}`
+                    : 'Usually replies within a day'}
+            </>
           }
           actions={
-            WELLNESS_BY_ID.eap.phone ? (
-              <ChatIconButton label={`Call the EAP on ${WELLNESS_BY_ID.eap.phone}`} href={telHref(WELLNESS_BY_ID.eap.phone)}>
-                <Phone className="h-5 w-5" aria-hidden />
-              </ChatIconButton>
+            eapPhone ? (
+              <a
+                href={telHref(eapPhone)}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-bold text-[#B8402B] ring-1 ring-[#E8B4A9] transition hover:bg-[#FBEDEA]"
+                aria-label={`Need help now? Call the EAP helpline on ${eapPhone}`}
+              >
+                <ShieldAlert className="h-4 w-4" aria-hidden />
+                <span className="sm:hidden">Help now</span>
+                <span className="max-sm:hidden">Need help now?</span>
+              </a>
             ) : undefined
           }
+          below={<PrivacyStrip team={activeTeam} />}
         />
         <MessageList
           messages={views}
           loading={loadingThread}
-          notice={<Disclaimer team={activeTeam} />}
+          readerName={coachFirst}
+          notice={
+            activeChat ? (
+              <ChatSystemNote>
+                Conversation started{activeChat.coach_name ? ` with ${activeChat.coach_name}` : ''} · {startedOn}
+              </ChatSystemNote>
+            ) : undefined
+          }
           empty={
-            <div className="mx-auto mt-6 max-w-sm rounded-lg bg-white/90 px-4 py-3 text-center text-sm text-[#3B4A54] shadow-sm">
-              <p className="font-semibold">Write to a {TEAMS[activeTeam].label.toLowerCase()}</p>
-              <p className="mt-1">{TEAMS[activeTeam].intro}</p>
+            <div className="mx-auto mt-2 max-w-md rounded-3xl bg-white p-5 ring-1 ring-line">
+              <p className="text-sm font-bold text-muted">New conversation</p>
+              <p className="mt-0.5 font-display text-xl font-extrabold text-ink">Who would you like to talk to?</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {(Object.keys(TEAMS) as Team[]).map((t) => {
+                  const on = t === activeTeam
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => !on && open({ kind: 'new', team: t })}
+                      aria-pressed={on}
+                      className="rounded-2xl p-3 text-left ring-1 transition"
+                      style={on ? { background: `${TEAM_LOOK[t].color}14`, boxShadow: `inset 0 0 0 2px ${TEAM_LOOK[t].color}`, ['--tw-ring-color' as string]: 'transparent' } : { ['--tw-ring-color' as string]: '#D3E2E0' }}
+                    >
+                      <ChatAvatar color={TEAM_LOOK[t].color} icon={TEAM_LOOK[t].icon} size="xs" />
+                      <span className="mt-2 block font-bold text-ink">{TEAMS[t].label}</span>
+                      <span className="block text-xs text-muted">{t === 'therapist' ? 'Stress, mood, sleep, relationships' : 'Food, energy, weight, habits'}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="mt-4 text-sm font-bold text-ink">
+                What’s it about? <span className="font-normal text-muted">(optional)</span>
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {TOPICS[activeTeam].map((topic) => {
+                  const starter = starterFor(topic)
+                  const on = !!starter && draft.startsWith(starter)
+                  return (
+                    <button
+                      key={topic}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setDraft((d) => (on ? d.slice(starter.length) : starter + d.replace(/^I’d like to talk about [^.]*\. /, '')))}
+                      className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${on ? 'bg-ink text-white' : 'bg-mist text-ink ring-1 ring-line hover:bg-white'}`}
+                    >
+                      {topic}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="mt-4 text-xs text-muted">{TEAMS[activeTeam].intro} You’ll usually hear back within a day. If you’re in danger, call the EAP helpline or 112 now.</p>
             </div>
           }
         />
@@ -524,10 +672,10 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
           </p>
         )}
         {closed ? (
-          <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 px-4 py-3 text-sm text-[#54656F]" style={{ background: '#F0F2F5' }}>
+          <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 border-t border-line bg-white px-4 py-3 text-sm text-muted">
             This conversation has been closed. You can still read it.
-            <button type="button" onClick={() => open({ kind: 'new', team: activeTeam })} className="inline-flex items-center gap-1.5 rounded-full bg-[#008069] px-4 py-2 font-semibold text-white">
-              <PenSquare className="h-4 w-4" aria-hidden /> Start a new chat
+            <button type="button" onClick={() => open({ kind: 'new', team: activeTeam })} className="inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 font-bold text-white">
+              <PenSquare className="h-4 w-4" aria-hidden /> Start a new conversation
             </button>
           </div>
         ) : (
@@ -540,6 +688,7 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
             onSend={send}
             maxLength={MAX_MESSAGE_LENGTH}
             disabled={chats === null}
+            placeholder={coachFirst ? `Write to ${coachFirst}…` : `Write to a ${TEAMS[activeTeam].label.toLowerCase()}…`}
             onAttach={attach}
             onRemoveAttachment={clearAttachment}
             attachment={attachment ? ('previewUrl' in attachment ? { previewUrl: attachment.previewUrl, note: attachment.note } : { previewUrl: '', preparing: true }) : null}
@@ -557,8 +706,8 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
       sidebar={sidebar}
       main={main}
       showMain={mobileShowChat}
-      // Phones: full screen above the bottom navigation (58px + safe area), like the WhatsApp app.
-      // Larger screens: a card filling the page, like WhatsApp Web.
+      // Phones: full screen above the bottom navigation (58px + safe area).
+      // Larger screens: a card filling the page.
       className="fixed inset-x-0 top-0 bottom-[calc(3.625rem+env(safe-area-inset-bottom))] z-30 max-md:rounded-none max-md:shadow-none max-md:ring-0 md:static md:h-[calc(100dvh-5rem)] md:min-h-[480px]"
     />
   )

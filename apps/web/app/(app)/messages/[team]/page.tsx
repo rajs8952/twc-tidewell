@@ -12,7 +12,7 @@ export function generateMetadata({ params }: { params: { team: string } }): Meta
 
 /**
  * The secure inbox, opened on one team's chat: /messages/therapist or
- * /messages/dietitian. The chat window fills the page like WhatsApp Web,
+ * /messages/dietitian. The chat window fills the page,
  * with both teams' conversations in its list.
  */
 export default function TeamMessagesPage({ params }: { params: { team: string } }) {

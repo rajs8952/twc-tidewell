@@ -35,8 +35,8 @@ import { useLivePolling } from '@/lib/useLivePolling'
 import { useSignedImages } from '@/lib/useSignedImages'
 
 /* ------------------------------------------------------------------
- * Wellness-team portal (therapists or dietitians), laid out like
- * WhatsApp Web: the team's queue of employee conversations on the left,
+ * Wellness-team portal (therapists or dietitians), in the same "care
+ * conversation" design as the employee inbox: the team's queue of employee conversations on the left,
  * the open conversation on the right. Sticky Queue: "Mine" holds the
  * coach's own conversations; "Pool" holds unassigned ones any coach of
  * the team can claim, up to their capacity (app/actions/routing.ts).
@@ -78,7 +78,7 @@ function listTime(iso: string) {
 function StatusBadge({ item }: { item: QueueItem }) {
   if (!isOpenStatus(item.status)) {
     return (
-      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[#54656F]">
+      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-[#557178]">
         <Lock className="h-3 w-3" aria-hidden /> Closed
       </span>
     )
@@ -94,7 +94,7 @@ function StatusBadge({ item }: { item: QueueItem }) {
   if (item.waiting_since) {
     const overdue = hoursSince(item.waiting_since) >= REPLY_TARGET_HOURS
     return (
-      <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold text-white ${overdue ? 'bg-[#C42B1C]' : 'bg-[#008069]'}`}>
+      <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold text-white ${overdue ? 'bg-[#C42B1C]' : 'bg-[#1A6DB5]'}`}>
         <Clock className="h-3 w-3" aria-hidden />
         {overdue ? 'Overdue ' : ''}
         {waitLabel(item.waiting_since)}
@@ -102,7 +102,7 @@ function StatusBadge({ item }: { item: QueueItem }) {
     )
   }
   return (
-    <span className="inline-flex shrink-0 items-center gap-0.5 text-xs font-semibold text-[#0A5C4A]">
+    <span className="inline-flex shrink-0 items-center gap-0.5 text-xs font-semibold text-[#185690]">
       <CheckCheck className="h-3.5 w-3.5" aria-hidden /> Replied
     </span>
   )
@@ -113,14 +113,14 @@ function CapacityBar({ coach, busy, onToggle }: { coach: CoachProfile; busy: boo
   const full = coach.current_load >= coach.max_capacity
   const pct = coach.max_capacity ? Math.min(100, (coach.current_load / coach.max_capacity) * 100) : 100
   return (
-    <div className="flex shrink-0 items-center gap-3 border-b border-[#E9EDEF] px-4 py-2 text-xs text-[#3B4A54]">
+    <div className="flex shrink-0 items-center gap-3 border-b border-[#D3E2E0] px-4 py-2 text-xs text-[#557178]">
       <div className="min-w-0 flex-1">
         <p className="font-semibold">
           Your load <span className="tabular-nums">{coach.current_load} / {coach.max_capacity}</span>
           {full && <span className="ml-1.5 text-[#8C1D13]">· Full</span>}
         </p>
-        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#E9EDEF]" role="meter" aria-label="Conversations in progress" aria-valuemin={0} aria-valuemax={coach.max_capacity} aria-valuenow={coach.current_load}>
-          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: full ? '#C42B1C' : '#008069' }} />
+        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[#D3E2E0]" role="meter" aria-label="Conversations in progress" aria-valuemin={0} aria-valuemax={coach.max_capacity} aria-valuenow={coach.current_load}>
+          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: full ? '#C42B1C' : '#1A6DB5' }} />
         </div>
       </div>
       <label className="flex shrink-0 cursor-pointer items-center gap-2 font-semibold" title="When off, you get no new conversations: returning employees' new chats go to the pool, and you can't claim from it.">
@@ -131,7 +131,7 @@ function CapacityBar({ coach, busy, onToggle }: { coach: CoachProfile; busy: boo
           aria-checked={coach.is_accepting_new}
           disabled={busy}
           onClick={onToggle}
-          className={`relative h-5 w-9 rounded-full transition disabled:opacity-50 ${coach.is_accepting_new ? 'bg-[#008069]' : 'bg-[#8696A0]'}`}
+          className={`relative h-5 w-9 rounded-full transition disabled:opacity-50 ${coach.is_accepting_new ? 'bg-[#1A6DB5]' : 'bg-[#8696A0]'}`}
         >
           <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${coach.is_accepting_new ? 'left-[18px]' : 'left-0.5'}`} />
         </button>
@@ -415,6 +415,7 @@ export function TherapistPortal({ team }: { team: Team }) {
         state: mine ? receiptState(m.created_at, receipts?.user_delivered_at, receipts?.user_read_at) : ('sent' as const),
         author: mine && m.sender_id && me && m.sender_id !== me ? colleague : undefined,
         image: m.media_url ? { src: imageUrls.get(m.media_url) ?? null } : undefined,
+        avatar: !mine && item ? <ChatAvatar color={colorFor(item.user_id)} initials={initialsOf(item.user_name)} size="xs" /> : undefined,
       }
     }),
     ...pending
@@ -449,15 +450,15 @@ export function TherapistPortal({ team }: { team: Team }) {
         {queue === null ? (
           Array.from({ length: 4 }, (_, i) => (
             <li key={i} className="flex items-center gap-3 px-3 py-3">
-              <span className="h-12 w-12 rounded-full bg-[#F0F2F5] motion-safe:animate-pulse" />
+              <span className="h-12 w-12 rounded-full bg-[#EDF4F3] motion-safe:animate-pulse" />
               <span className="flex-1 space-y-2">
-                <span className="block h-3.5 w-28 rounded bg-[#F0F2F5] motion-safe:animate-pulse" />
-                <span className="block h-3 w-44 rounded bg-[#F0F2F5] motion-safe:animate-pulse" />
+                <span className="block h-3.5 w-28 rounded bg-[#EDF4F3] motion-safe:animate-pulse" />
+                <span className="block h-3 w-44 rounded bg-[#EDF4F3] motion-safe:animate-pulse" />
               </span>
             </li>
           ))
         ) : shown.length === 0 ? (
-          <li className="px-6 py-10 text-center text-sm text-[#54656F]">
+          <li className="px-6 py-10 text-center text-sm text-[#557178]">
             {q ? 'No conversations match your search.' : filter === 'pool' ? 'The pool is empty. Nobody is waiting to be picked up.' : filter === 'mine' ? 'No conversations of yours are open. Claim one from the Pool.' : 'No conversations here.'}
           </li>
         ) : (
@@ -491,7 +492,7 @@ export function TherapistPortal({ team }: { team: Team }) {
     <>
       <ChatHeader
         onBack={() => setActiveId(null)}
-        avatar={item ? <ChatAvatar color={colorFor(item.user_id)} initials={initialsOf(item.user_name)} size="sm" /> : <ChatAvatar color="#54656F" initials="?" size="sm" />}
+        avatar={item ? <ChatAvatar color={colorFor(item.user_id)} initials={initialsOf(item.user_name)} size="sm" /> : <ChatAvatar color="#557178" initials="?" size="sm" />}
         title={item?.user_name ?? 'Conversation'}
         subtitle={item ? [item.user_email, owner ?? (open ? (item.waiting_since ? `waiting ${waitLabel(item.waiting_since)}` : 'replied') : 'closed')].filter(Boolean).join(' · ') : undefined}
         actions={
@@ -501,7 +502,7 @@ export function TherapistPortal({ team }: { team: Team }) {
               type="button"
               onClick={() => (open ? setConfirmClose(true) : toggleStatus())}
               disabled={statusBusy}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-[#3B4A54] transition hover:bg-black/5 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-[#557178] ring-1 ring-line transition hover:bg-mist disabled:opacity-50"
             >
               {statusBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : open ? <Lock className="h-4 w-4" aria-hidden /> : <LockOpen className="h-4 w-4" aria-hidden />}
               {open ? 'Close' : 'Reopen'}
@@ -512,12 +513,13 @@ export function TherapistPortal({ team }: { team: Team }) {
       <MessageList
         messages={views}
         loading={loadingThread}
+        readerName={item?.user_name.split(/\s+/)[0] || undefined}
         notice={
           <ChatNotice>
             {unclaimed ? `Every ${label.toLowerCase()} coach can see this until someone claims it.` : 'Only you and the employee can see this conversation.'} Refer anyone in crisis to the EAP hotline or emergency services (112).
           </ChatNotice>
         }
-        empty={<p className="mt-8 text-center text-sm text-[#54656F]">No messages yet.</p>}
+        empty={<p className="mt-8 text-center text-sm text-[#557178]">No messages yet.</p>}
       />
       <p className="sr-only" aria-live="polite">
         {announcement}
@@ -528,7 +530,7 @@ export function TherapistPortal({ team }: { team: Team }) {
         </p>
       )}
       {item && unclaimed ? (
-        <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 px-4 py-3 text-center text-sm text-[#3B4A54]" style={{ background: '#F0F2F5' }}>
+        <div className="flex shrink-0 flex-wrap items-center justify-center gap-3 px-4 py-3 text-center text-sm text-[#557178]" style={{ background: '#EDF4F3' }}>
           <span>
             {paused
               ? 'You’re not accepting new conversations. Switch on “Accepting new” to claim this.'
@@ -540,14 +542,14 @@ export function TherapistPortal({ team }: { team: Team }) {
             type="button"
             onClick={claim}
             disabled={claiming || full || paused}
-            className="inline-flex items-center gap-1.5 rounded-full bg-[#008069] px-4 py-2 font-semibold text-white disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[#1A6DB5] px-4 py-2 font-semibold text-white disabled:opacity-50"
           >
             {claiming ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Hand className="h-4 w-4" aria-hidden />}
             Claim
           </button>
         </div>
       ) : item && !open ? (
-        <div className="shrink-0 px-4 py-3 text-center text-sm text-[#54656F]" style={{ background: '#F0F2F5' }}>
+        <div className="shrink-0 px-4 py-3 text-center text-sm text-[#557178]" style={{ background: '#EDF4F3' }}>
           This conversation is closed. Reopen it to reply.
         </div>
       ) : (

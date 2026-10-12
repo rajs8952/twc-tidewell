@@ -1,28 +1,30 @@
 'use client'
 
-import { AlertCircle, ArrowLeft, Check, CheckCheck, Clock, ImagePlus, Loader2, Lock, Search, SendHorizontal, X, type LucideIcon } from 'lucide-react'
+import { AlertCircle, ArrowLeft, ImagePlus, Loader2, Lock, Search, SendHorizontal, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'
 
 /* ------------------------------------------------------------------
- * Chat building blocks in a WhatsApp Web style, shared by the employee
- * inbox (components/messages/SecureInbox.tsx) and the staff portal
- * (components/therapist/TherapistPortal.tsx):
+ * OmniWell's chat building blocks ("care conversation" design), shared by
+ * the employee inbox (components/messages/SecureInbox.tsx) and the staff
+ * portal (components/therapist/TherapistPortal.tsx):
  *   ChatFrame     two panes: chat list | conversation (one at a time on phones)
- *   ChatList*     list header, search and rows
- *   ChatHeader    the conversation's top bar
- *   MessageList   patterned wallpaper, date chips, bubbles with time and ticks
- *   Composer      pill input with a round send button
+ *   ChatList*     list header, search and card rows
+ *   ChatHeader    the conversation's top bar, with an optional strip below
+ *   MessageList   a calm background, grouped messages with one time per
+ *                 group, and "Sent / Delivered / Seen" in words
+ *   Composer      a soft input with a labelled Send button
  * Colours keep text at 4.5:1 or more against its background.
  * ------------------------------------------------------------------ */
 
 const C = {
-  panel: '#F0F2F5',
-  line: '#E9EDEF',
-  wallpaper: '#EFEAE2',
-  outgoing: '#D9FDD3',
-  text: '#111B21',
-  meta: '#54656F',
-  accent: '#008069',
+  panel: '#FFFFFF',
+  soft: '#F4F7F8',
+  mist: '#EDF4F3',
+  line: '#D3E2E0',
+  outgoing: '#1A6DB5',
+  text: '#0F2F37',
+  meta: '#557178',
+  accent: '#1A6DB5',
 }
 
 /* ---------- Frame ---------- */
@@ -30,7 +32,7 @@ const C = {
 export function ChatFrame({ sidebar, main, showMain, className = '' }: { sidebar: ReactNode; main: ReactNode; showMain: boolean; className?: string }) {
   return (
     // Chats update themselves; pull to refresh would only reload the page and lose a draft.
-    <div data-no-pull-refresh className={`flex overflow-hidden rounded-2xl bg-white shadow-[0_6px_24px_-12px_rgba(11,20,26,0.35)] ring-1 ring-black/5 ${className}`}>
+    <div data-no-pull-refresh className={`flex overflow-hidden rounded-3xl bg-white shadow-[0_16px_40px_-28px_rgba(15,47,55,0.45)] ring-1 ring-line ${className}`}>
       <aside className={`${showMain ? 'hidden md:flex' : 'flex'} w-full flex-col border-r md:w-[340px] md:shrink-0 lg:w-[380px]`} style={{ borderColor: C.line }}>
         {sidebar}
       </aside>
@@ -44,11 +46,11 @@ export function ChatFrame({ sidebar, main, showMain, className = '' }: { sidebar
 /** The right pane before a chat is chosen. */
 export function ChatPlaceholder({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children?: ReactNode }) {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 border-b-[6px] px-8 text-center" style={{ background: '#F8F9FA', borderColor: C.accent }}>
-      <span className="flex h-20 w-20 items-center justify-center rounded-full" style={{ background: C.panel, color: C.meta }}>
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center" style={{ background: C.soft }}>
+      <span className="flex h-20 w-20 items-center justify-center rounded-3xl bg-white ring-1 ring-line" style={{ color: C.accent }}>
         <Icon className="h-9 w-9" aria-hidden />
       </span>
-      <p className="text-2xl font-light" style={{ color: C.text }}>
+      <p className="font-display text-2xl font-extrabold" style={{ color: C.text }}>
         {title}
       </p>
       <div className="max-w-md text-sm" style={{ color: C.meta }}>
@@ -60,20 +62,20 @@ export function ChatPlaceholder({ icon: Icon, title, children }: { icon: LucideI
 
 /* ---------- Avatars ---------- */
 
-export function ChatAvatar({ color, icon: Icon, initials, size = 'md', src, online }: { color: string; icon?: LucideIcon; initials?: string; size?: 'sm' | 'md'; src?: string | null; online?: boolean }) {
-  const box = size === 'sm' ? 'h-10 w-10 text-sm' : 'h-12 w-12 text-base'
+export function ChatAvatar({ color, icon: Icon, initials, size = 'md', src, online }: { color: string; icon?: LucideIcon; initials?: string; size?: 'xs' | 'sm' | 'md'; src?: string | null; online?: boolean }) {
+  const box = size === 'xs' ? 'h-8 w-8 text-xs' : size === 'sm' ? 'h-10 w-10 text-sm' : 'h-12 w-12 text-base'
   return (
-    <span className={`relative flex shrink-0 ${box}`} aria-hidden>
+    <span className={`relative flex shrink-0 self-start ${box}`} aria-hidden>
       {src ? (
         // A coach's profile photo (public avatars bucket); a plain <img> keeps it simple and cacheable.
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt="" className="h-full w-full rounded-full object-cover" loading="lazy" />
       ) : (
         <span className="flex h-full w-full items-center justify-center rounded-full font-bold text-white" style={{ background: color }}>
-          {Icon ? <Icon className={size === 'sm' ? 'h-5 w-5' : 'h-6 w-6'} /> : initials}
+          {Icon ? <Icon className={size === 'xs' ? 'h-4 w-4' : size === 'sm' ? 'h-5 w-5' : 'h-6 w-6'} /> : initials}
         </span>
       )}
-      {online && <span className={`absolute bottom-0 right-0 rounded-full bg-[#25D366] ring-2 ring-white ${size === 'sm' ? 'h-2.5 w-2.5' : 'h-3 w-3'}`} />}
+      {online && <span className={`absolute bottom-0 right-0 rounded-full bg-emerald-500 ring-2 ring-white ${size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'}`} />}
     </span>
   )
 }
@@ -90,8 +92,8 @@ export const initialsOf = (name: string) =>
 
 export function ChatListHeader({ title, actions }: { title: string; actions?: ReactNode }) {
   return (
-    <div className="flex h-[60px] shrink-0 items-center justify-between gap-2 px-4" style={{ background: C.panel }}>
-      <h2 className="text-lg font-bold" style={{ color: C.text }}>
+    <div className="flex shrink-0 items-center justify-between gap-2 px-5 pb-2 pt-5" style={{ background: C.panel }}>
+      <h2 className="font-display text-2xl font-extrabold" style={{ color: C.text }}>
         {title}
       </h2>
       <div className="flex items-center gap-1">{actions}</div>
@@ -102,11 +104,11 @@ export function ChatListHeader({ title, actions }: { title: string; actions?: Re
 export function ChatSearch({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
   const id = useId()
   return (
-    <div className="shrink-0 border-b px-3 py-2" style={{ borderColor: C.line }}>
+    <div className="shrink-0 px-4 py-2">
       <label htmlFor={id} className="sr-only">
         {placeholder}
       </label>
-      <div className="flex items-center gap-3 rounded-lg px-3" style={{ background: C.panel }}>
+      <div className="flex items-center gap-3 rounded-2xl px-3" style={{ background: C.mist }}>
         <Search className="h-4 w-4 shrink-0" style={{ color: C.meta }} aria-hidden />
         <input
           id={id}
@@ -114,7 +116,7 @@ export function ChatSearch({ value, onChange, placeholder }: { value: string; on
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-[#54656F]"
+          className="h-10 w-full bg-transparent text-sm outline-none placeholder:text-[#557178]"
           style={{ color: C.text }}
         />
       </div>
@@ -122,10 +124,10 @@ export function ChatSearch({ value, onChange, placeholder }: { value: string; on
   )
 }
 
-/** Filter chips under the search box, like WhatsApp's All / Unread. */
+/** Filter chips under the search box. */
 export function ChatFilters<T extends string>({ value, options, onChange }: { value: T; options: { id: T; label: string; count?: number }[]; onChange: (v: T) => void }) {
   return (
-    <div role="tablist" aria-label="Filter conversations" className="flex shrink-0 gap-2 overflow-x-auto px-3 py-2">
+    <div role="tablist" aria-label="Filter conversations" className="flex shrink-0 gap-2 overflow-x-auto px-4 py-2">
       {options.map((o) => {
         const on = o.id === value
         return (
@@ -136,7 +138,7 @@ export function ChatFilters<T extends string>({ value, options, onChange }: { va
             aria-selected={on}
             onClick={() => onChange(o.id)}
             className="shrink-0 rounded-full px-3 py-1 text-sm font-semibold transition"
-            style={on ? { background: '#D9FDD3', color: '#0A5C4A' } : { background: C.panel, color: C.meta }}
+            style={on ? { background: C.text, color: '#FFFFFF' } : { background: C.mist, color: C.meta }}
           >
             {o.label}
             {o.count ? <span className="ml-1 tabular-nums">{o.count}</span> : null}
@@ -150,41 +152,48 @@ export function ChatFilters<T extends string>({ value, options, onChange }: { va
 export function ChatListItem({
   avatar,
   title,
+  meta,
   preview,
   time,
   badge,
   active,
+  accent = C.accent,
   onClick,
 }: {
   avatar: ReactNode
   title: string
+  /** A coloured line under the title, e.g. "Therapist · Ongoing". */
+  meta?: ReactNode
   preview: ReactNode
   time?: string
   badge?: ReactNode
   active: boolean
+  /** The selected card's tint and ring (e.g. the team colour). */
+  accent?: string
   onClick: () => void
 }) {
   return (
-    <li>
+    <li className="px-3 py-1">
       <button
         type="button"
         onClick={onClick}
         aria-current={active ? 'true' : undefined}
-        className="flex w-full items-center gap-3 px-3 text-left transition hover:bg-[#F5F6F6] focus-visible:bg-[#F5F6F6] focus-visible:outline-none"
-        style={active ? { background: C.panel } : undefined}
+        className="flex w-full items-start gap-3 rounded-2xl p-3 text-left ring-1 transition hover:bg-[#F7FAFA] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1"
+        style={active ? { background: `${accent}14`, ['--tw-ring-color' as string]: accent, boxShadow: `inset 0 0 0 1px ${accent}` } : { ['--tw-ring-color' as string]: C.line }}
       >
         {avatar}
-        <span className="flex min-w-0 flex-1 flex-col border-b py-3" style={{ borderColor: C.line }}>
+        <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-[15px] font-semibold" style={{ color: C.text }}>
+            <span className="truncate text-[15px] font-bold" style={{ color: C.text }}>
               {title}
             </span>
             {time && (
-              <span className="shrink-0 text-xs" style={{ color: C.meta }}>
+              <span className="shrink-0 text-xs font-semibold" style={{ color: C.meta }}>
                 {time}
               </span>
             )}
           </span>
+          {meta && <span className="truncate text-xs font-bold">{meta}</span>}
           <span className="mt-0.5 flex items-center justify-between gap-2">
             <span className="truncate text-sm" style={{ color: C.meta }}>
               {preview}
@@ -199,33 +208,51 @@ export function ChatListItem({
 
 /* ---------- Conversation header ---------- */
 
-export function ChatHeader({ avatar, title, subtitle, onBack, actions }: { avatar: ReactNode; title: string; subtitle?: ReactNode; onBack?: () => void; actions?: ReactNode }) {
+export function ChatHeader({
+  avatar,
+  title,
+  subtitle,
+  onBack,
+  actions,
+  below,
+}: {
+  avatar: ReactNode
+  title: string
+  subtitle?: ReactNode
+  onBack?: () => void
+  actions?: ReactNode
+  /** A strip under the header (e.g. the privacy note). */
+  below?: ReactNode
+}) {
   return (
-    <header className="flex h-[60px] shrink-0 items-center gap-3 px-3 sm:px-4" style={{ background: C.panel }}>
-      {onBack && (
-        <button type="button" onClick={onBack} className="-ml-1 rounded-full p-2 md:hidden" style={{ color: C.meta }} aria-label="Back to chats">
-          <ArrowLeft className="h-5 w-5" aria-hidden />
-        </button>
-      )}
-      {avatar}
-      <div className="min-w-0 flex-1">
-        <h2 className="truncate text-base font-semibold leading-tight" style={{ color: C.text }}>
-          {title}
-        </h2>
-        {subtitle && (
-          <p className="truncate text-xs" style={{ color: C.meta }}>
-            {subtitle}
-          </p>
+    <header className="shrink-0 border-b px-3 py-3 sm:px-4" style={{ background: C.panel, borderColor: C.line }}>
+      <div className="flex items-center gap-3">
+        {onBack && (
+          <button type="button" onClick={onBack} className="-ml-1 rounded-full p-2 md:hidden" style={{ color: C.meta }} aria-label="Back to chats">
+            <ArrowLeft className="h-5 w-5" aria-hidden />
+          </button>
         )}
+        {avatar}
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-base font-bold leading-tight" style={{ color: C.text }}>
+            {title}
+          </h2>
+          {subtitle && (
+            <p className="truncate text-xs" style={{ color: C.meta }}>
+              {subtitle}
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">{actions}</div>
       </div>
-      <div className="flex shrink-0 items-center gap-1">{actions}</div>
+      {below && <div className="mt-2.5">{below}</div>}
     </header>
   )
 }
 
 /** Round icon button for header actions. */
 export function ChatIconButton({ label, onClick, href, children }: { label: string; onClick?: () => void; href?: string; children: ReactNode }) {
-  const cls = 'flex h-10 w-10 items-center justify-center rounded-full transition hover:bg-black/5'
+  const cls = 'flex h-10 w-10 items-center justify-center rounded-full transition hover:bg-mist'
   return href ? (
     <a href={href} className={cls} style={{ color: C.meta }} aria-label={label} title={label}>
       {children}
@@ -246,12 +273,14 @@ export interface ChatMessageView {
   createdAt: string
   /** Shown above the first bubble of a group, e.g. "Another therapist" on a colleague's reply. */
   author?: string
-  /** Own messages: sending → sent (✓) → delivered (✓✓) → read (blue ✓✓); or failed. */
+  /** Own messages: sending → sent → delivered → read (“Seen”); or failed. Shown in words under the latest one. */
   state?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed'
   error?: string
   onRetry?: () => void
   /** An attached image; `src` is null while its signed link is loading. */
   image?: { src: string | null }
+  /** Their messages: a small avatar beside the last message of each group. */
+  avatar?: ReactNode
 }
 
 const dayLabel = (iso: string) => {
@@ -265,25 +294,15 @@ const dayLabel = (iso: string) => {
 }
 export const timeLabel = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
-/** Messages from the same side within this long share one tail. */
+/** Messages from the same side within this long form one group (one time label). */
 const GROUP_MS = 5 * 60_000
 
-/** The small curved tail on the first bubble of a group. */
-function Tail({ mine }: { mine: boolean }) {
-  return (
-    <svg viewBox="0 0 8 13" width="8" height="13" aria-hidden className={`absolute top-0 ${mine ? '-right-2' : '-left-2 -scale-x-100'}`}>
-      <path d="M0 0h8L1.5 9.4A2 2 0 0 1 0 8.8z" fill={mine ? C.outgoing : '#FFFFFF'} />
-    </svg>
-  )
-}
-
-function Ticks({ state }: { state: ChatMessageView['state'] }) {
-  if (state === 'sending') return <Clock className="h-3.5 w-3.5" aria-label="Sending" />
-  if (state === 'failed') return <AlertCircle className="h-3.5 w-3.5 text-[#C42B1C]" aria-label="Not sent" />
-  if (state === 'delivered') return <CheckCheck className="h-4 w-4" aria-label="Delivered" />
-  // WhatsApp's read blue, darkened slightly to stay readable on the green bubble.
-  if (state === 'read') return <CheckCheck className="h-4 w-4 text-[#0B83C8]" aria-label="Read" />
-  return <Check className="h-3.5 w-3.5" aria-label="Sent" />
+function statusWords(state: ChatMessageView['state'], readerName?: string) {
+  if (state === 'sending') return 'Sending…'
+  if (state === 'read') return readerName ? `Seen by ${readerName}` : 'Seen'
+  if (state === 'delivered') return 'Delivered'
+  if (state === 'sent') return 'Sent'
+  return null
 }
 
 /**
@@ -299,9 +318,11 @@ export function receiptState(createdAt: string, deliveredAt: string | null | und
 
 /**
  * The scrolling conversation. Keeps the newest message in view unless
- * the reader has scrolled up. `notice` is the yellow chip pinned at the top.
+ * the reader has scrolled up. `notice` sits at the top of the thread.
+ * `readerName` turns the receipt under the latest own message into
+ * "Seen by Ananya".
  */
-export function MessageList({ messages, notice, empty, loading }: { messages: ChatMessageView[]; notice?: ReactNode; empty?: ReactNode; loading?: boolean }) {
+export function MessageList({ messages, notice, empty, loading, readerName }: { messages: ChatMessageView[]; notice?: ReactNode; empty?: ReactNode; loading?: boolean; readerName?: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
   const lastCount = useRef(0)
@@ -317,6 +338,11 @@ export function MessageList({ messages, notice, empty, loading }: { messages: Ch
     if (stick.current || mineJustSent) el.scrollTop = el.scrollHeight
   }, [messages])
 
+  const gutter = messages.some((m) => !m.mine && m.avatar)
+  const lastMine = [...messages].reverse().find((m) => m.mine)?.id
+  const sameGroup = (a: ChatMessageView | undefined, b: ChatMessageView | undefined) =>
+    !!a && !!b && a.mine === b.mine && a.author === b.author && dayLabel(a.createdAt) === dayLabel(b.createdAt) && Math.abs(Date.parse(b.createdAt) - Date.parse(a.createdAt)) <= GROUP_MS
+
   let lastDay = ''
   return (
     <div
@@ -325,60 +351,55 @@ export function MessageList({ messages, notice, empty, loading }: { messages: Ch
         const el = ref.current
         if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120
       }}
-      className="relative flex-1 overflow-y-auto px-[4%] py-3 sm:px-[6%]"
-      style={{
-        backgroundColor: C.wallpaper,
-        // A faint dotted texture in the spirit of WhatsApp's wallpaper (no image needed).
-        backgroundImage: 'radial-gradient(rgba(84,101,111,0.09) 1px, transparent 1.2px), radial-gradient(rgba(84,101,111,0.06) 1px, transparent 1.2px)',
-        backgroundSize: '22px 22px, 22px 22px',
-        backgroundPosition: '0 0, 11px 11px',
-      }}
+      className="relative flex-1 overflow-y-auto px-3 py-4 sm:px-[5%]"
+      style={{ backgroundColor: C.soft }}
       aria-busy={loading}
     >
-      {notice && <div className="mx-auto mb-3 mt-1 max-w-xl">{notice}</div>}
+      {notice && <div className="mx-auto mb-3 max-w-xl">{notice}</div>}
       {loading ? (
         <div className="space-y-2" aria-label="Loading messages">
-          <div className="ml-auto h-10 w-1/2 rounded-lg bg-white/70 motion-safe:animate-pulse" />
-          <div className="h-14 w-2/3 rounded-lg bg-white/70 motion-safe:animate-pulse" />
-          <div className="ml-auto h-10 w-2/5 rounded-lg bg-white/70 motion-safe:animate-pulse" />
+          <div className="ml-auto h-10 w-1/2 rounded-2xl bg-white motion-safe:animate-pulse" />
+          <div className="h-14 w-2/3 rounded-2xl bg-white motion-safe:animate-pulse" />
+          <div className="ml-auto h-10 w-2/5 rounded-2xl bg-white motion-safe:animate-pulse" />
         </div>
       ) : messages.length === 0 ? (
         empty
       ) : (
         <ol className="flex flex-col">
           {messages.map((m, i) => {
-            const prev = messages[i - 1]
             const day = dayLabel(m.createdAt)
             const newDay = day !== lastDay
             lastDay = day
-            const first = newDay || !prev || prev.mine !== m.mine || prev.author !== m.author || new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() > GROUP_MS
+            const first = !sameGroup(messages[i - 1], m)
+            const last = !sameGroup(m, messages[i + 1])
+            const status = m.mine && m.id === lastMine && m.state !== 'failed' ? statusWords(m.state, readerName) : null
             return (
-              <li key={m.id} className={first ? 'mt-3' : 'mt-0.5'}>
+              <li key={m.id} className={first ? 'mt-3' : 'mt-1'}>
                 {newDay && (
-                  <div className="my-2 flex justify-center">
-                    <span className="rounded-lg bg-white px-3 py-1 text-xs font-medium uppercase tracking-wide shadow-sm" style={{ color: C.meta }}>
+                  <div className="my-3 flex justify-center">
+                    <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold ring-1 ring-line" style={{ color: C.meta }}>
                       {day}
                     </span>
                   </div>
                 )}
-                <div className={`flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
+                {first && m.author && (
+                  <p className={`mb-1 text-xs font-bold ${m.mine ? 'text-right' : gutter ? 'pl-10' : ''}`} style={{ color: C.meta }}>
+                    {m.author}
+                  </p>
+                )}
+                <div className={`flex items-end gap-2 ${m.mine ? 'justify-end' : 'justify-start'}`}>
+                  {!m.mine && gutter && <span className="w-8 shrink-0">{last && m.avatar}</span>}
                   <div
-                    className={`relative max-w-[85%] rounded-lg text-[14.5px] leading-[1.35] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] sm:max-w-[65%] ${m.image ? 'p-1' : 'px-2.5 pb-1.5 pt-1.5'} ${first ? (m.mine ? 'rounded-tr-none' : 'rounded-tl-none') : ''}`}
-                    style={{ background: m.mine ? C.outgoing : '#FFFFFF', color: C.text }}
+                    className={`max-w-[82%] rounded-2xl text-[15px] leading-relaxed sm:max-w-[65%] ${m.image ? 'p-1' : 'px-3.5 py-2.5'} ${last ? (m.mine ? 'rounded-br-md' : 'rounded-bl-md') : ''} ${m.mine ? '' : 'shadow-[0_1px_2px_rgba(15,47,55,.06)] ring-1 ring-line'}`}
+                    style={{ background: m.mine ? C.outgoing : '#FFFFFF', color: m.mine ? '#FFFFFF' : C.text }}
                   >
-                    {first && <Tail mine={m.mine} />}
-                    {first && m.author && (
-                      <p className="mb-0.5 text-xs font-semibold" style={{ color: C.accent }}>
-                        {m.author}
-                      </p>
-                    )}
                     <span className="sr-only">{m.mine ? 'You' : (m.author ?? 'They')}: </span>
                     {m.image && (
                       <button
                         type="button"
                         onClick={() => m.image?.src && setViewing(m.image.src)}
                         disabled={!m.image.src}
-                        className="block overflow-hidden rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#008069]"
+                        className="block overflow-hidden rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                         aria-label="Open the attached image"
                       >
                         {m.image.src ? (
@@ -386,29 +407,23 @@ export function MessageList({ messages, notice, empty, loading }: { messages: Ch
                           <img src={m.image.src} alt="Attached image" loading="lazy" className="block max-h-[320px] w-full min-w-[160px] max-w-[300px] bg-black/5 object-cover" />
                         ) : (
                           <span className="flex h-48 w-[240px] items-center justify-center bg-black/5" aria-label="Loading image">
-                            <Loader2 className="h-6 w-6 animate-spin text-[#54656F]" aria-hidden />
+                            <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
                           </span>
                         )}
                       </button>
                     )}
-                    {m.content && (
-                      <span className={m.image ? 'block px-1.5 pb-1 pt-1' : undefined}>
-                        <span className="whitespace-pre-wrap break-words">{m.content}</span>
-                        {/* Invisible spacer so the time never overlaps the last line of text. */}
-                        <span className="inline-block w-[72px]" aria-hidden />
-                      </span>
-                    )}
-                    <span
-                      className={`absolute flex items-center gap-1 text-[11px] ${m.image && !m.content ? 'bottom-2 right-2.5 rounded-full bg-black/45 px-1.5 py-0.5 text-white' : 'bottom-1 right-2'}`}
-                      style={m.image && !m.content ? undefined : { color: C.meta }}
-                    >
-                      <time dateTime={m.createdAt}>{timeLabel(m.createdAt)}</time>
-                      {m.mine && <Ticks state={m.state} />}
-                    </span>
+                    {m.content && <span className={`whitespace-pre-wrap break-words ${m.image ? 'block px-2.5 pb-1.5 pt-1.5' : ''}`}>{m.content}</span>}
                   </div>
                 </div>
+                {(last || status) && m.state !== 'failed' && (
+                  <p className={`mt-1 text-[11px] font-semibold ${m.mine ? 'text-right' : gutter ? 'pl-10' : ''}`} style={{ color: C.meta }}>
+                    <time dateTime={m.createdAt}>{timeLabel(m.createdAt)}</time>
+                    {status && <> · {status}</>}
+                  </p>
+                )}
                 {m.state === 'failed' && (
-                  <p role="alert" className="mt-1 text-right text-xs font-semibold text-[#C42B1C]">
+                  <p role="alert" className="mt-1 flex items-center justify-end gap-1 text-right text-xs font-semibold text-[#C42B1C]">
+                    <AlertCircle className="h-3.5 w-3.5" aria-hidden />
                     Not sent{m.error ? `: ${m.error}` : ''}.{' '}
                     {m.onRetry && (
                       <button type="button" onClick={m.onRetry} className="underline underline-offset-2">
@@ -457,20 +472,29 @@ function ImageViewer({ src, onClose }: { src: string | null; onClose: () => void
   )
 }
 
-/** The pale yellow chip at the top of a conversation (like WhatsApp's encryption notice). */
+/** A compact note at the top of a conversation (privacy, reply times). */
 export function ChatNotice({ children }: { children: ReactNode }) {
   return (
-    <div role="note" className="flex gap-2 rounded-lg px-3 py-2 text-center text-xs leading-relaxed shadow-sm" style={{ background: '#FFEECD', color: '#3B4A54' }}>
+    <div role="note" className="flex gap-2 rounded-xl px-3 py-2 text-xs leading-relaxed" style={{ background: C.mist, color: C.meta }}>
       <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-      <p className="text-left">{children}</p>
+      <div className="text-left">{children}</div>
     </div>
+  )
+}
+
+/** A small centred milestone in the thread, e.g. "Conversation started · 12 Oct". */
+export function ChatSystemNote({ children }: { children: ReactNode }) {
+  return (
+    <p className="mx-auto w-fit max-w-full rounded-full bg-white px-3 py-1 text-center text-[11px] font-semibold ring-1 ring-line" style={{ color: C.meta }}>
+      {children}
+    </p>
   )
 }
 
 /* ---------- Composer ---------- */
 
 /**
- * Pill input with a round send button. Enter sends and Shift+Enter adds a
+ * A soft input with a labelled Send button. Enter sends and Shift+Enter adds a
  * line on computers; on touch screens Enter adds a line and the button sends.
  */
 export function Composer({
@@ -532,9 +556,9 @@ export function Composer({
   const hasImage = !!attachment && !attachment.preparing
   const canSend = (!!value.trim() || hasImage) && remaining >= 0 && !disabled && !attachment?.preparing
   return (
-    <div className="shrink-0 px-3 py-2.5" style={{ background: C.panel }}>
+    <div className="shrink-0 border-t px-3 py-3" style={{ background: C.panel, borderColor: C.line }}>
       {attachment && (
-        <div className="mb-2 flex items-center gap-3 rounded-lg bg-white p-2 shadow-sm">
+        <div className="mb-2 flex items-center gap-3 rounded-2xl p-2 ring-1 ring-line" style={{ background: C.soft }}>
           <span className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md bg-black/5">
             {attachment.preparing ? (
               <span className="flex h-full w-full items-center justify-center" aria-label="Preparing image">
@@ -550,13 +574,13 @@ export function Composer({
               'Compressing image…'
             ) : (
               <>
-                {attachment.note && <span className="block font-semibold text-[#0A5C4A]">{attachment.note}</span>}
+                {attachment.note && <span className="block font-semibold" style={{ color: C.text }}>{attachment.note}</span>}
                 Add a caption if you like, then send.
               </>
             )}
           </span>
           {onRemoveAttachment && (
-            <button type="button" onClick={onRemoveAttachment} className="rounded-full p-2 hover:bg-black/5" style={{ color: C.meta }} aria-label="Remove image">
+            <button type="button" onClick={onRemoveAttachment} className="rounded-full p-2 hover:bg-mist" style={{ color: C.meta }} aria-label="Remove image">
               <X className="h-5 w-5" aria-hidden />
             </button>
           )}
@@ -582,10 +606,10 @@ export function Composer({
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={disabled}
-              className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full transition hover:bg-black/5 disabled:opacity-40"
+              className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full transition hover:bg-mist disabled:opacity-40"
               style={{ color: C.meta }}
               aria-label="Attach image"
-              title="🖼️ Attach image"
+              title="Attach image"
             >
               <ImagePlus className="h-6 w-6" aria-hidden />
             </button>
@@ -605,18 +629,18 @@ export function Composer({
           placeholder={attachment ? 'Add a caption (optional)' : placeholder}
           disabled={disabled}
           maxLength={maxLength + 200}
-          className="max-h-[140px] min-h-[42px] flex-1 resize-none rounded-lg bg-white px-3 py-2.5 text-[15px] leading-snug outline-none placeholder:text-[#54656F] disabled:opacity-60"
-          style={{ color: C.text }}
+          className="max-h-[140px] min-h-[44px] flex-1 resize-none rounded-2xl px-3.5 py-2.5 text-[15px] leading-snug outline-none ring-tide-600 placeholder:text-[#557178] focus:ring-2 disabled:opacity-60"
+          style={{ color: C.text, background: C.mist }}
         />
         <button
           type="button"
           onClick={onSend}
           disabled={!canSend}
-          aria-label="Send"
-          className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full text-white transition disabled:opacity-40"
+          className="flex h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-2xl px-4 text-sm font-bold text-white transition disabled:opacity-40"
           style={{ background: C.accent }}
         >
-          <SendHorizontal className="h-5 w-5" aria-hidden />
+          <span className="max-sm:sr-only">Send</span>
+          <SendHorizontal className="h-4 w-4" aria-hidden />
         </button>
       </div>
       {(remaining < 300 || footer) && (
