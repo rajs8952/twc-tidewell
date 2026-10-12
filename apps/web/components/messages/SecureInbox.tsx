@@ -29,7 +29,8 @@ import { createClient } from '@/lib/supabase/client'
 import { usePolling } from '@/lib/usePolling'
 import { useLivePolling } from '@/lib/useLivePolling'
 import { useSignedImages } from '@/lib/useSignedImages'
-import { WELLNESS_BY_ID, telHref } from '@/lib/wellness-team'
+import { useWellnessContacts } from '@/lib/useWellnessContacts'
+import { telHref } from '@/lib/wellness-team'
 
 /* ------------------------------------------------------------------
  * The employee's secure inbox ("Your care team"): one card per coach
@@ -107,7 +108,8 @@ function routingLine(team: Team, status: ThreadStatus) {
 
 /** The one-line privacy note under the header; opens to the full reply-time and crisis note. */
 function PrivacyStrip({ team }: { team: Team }) {
-  const phone = WELLNESS_BY_ID.eap.phone
+  const { byId, emergency } = useWellnessContacts()
+  const phone = byId.eap.phone
   const who = TEAMS[team].label.toLowerCase()
   return (
     <details className="group rounded-xl bg-mist px-3 py-1.5 text-xs text-muted">
@@ -129,7 +131,7 @@ function PrivacyStrip({ team }: { team: Team }) {
               </a>
             </>
           ) : null}
-          , or 112 in an emergency.
+          {emergency ? `, or ${emergency} in an emergency` : ''}.
         </strong>
       </p>
     </details>
@@ -143,6 +145,7 @@ function PrivacyStrip({ team }: { team: Team }) {
  */
 export function SecureInbox({ team: routeTeam }: { team?: Team }) {
   const supabase = useMemo(() => createClient(), [])
+  const contacts = useWellnessContacts()
   const [chats, setChats] = useState<ChatSummary[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   /** The open conversation, or a new one being started with a team. */
@@ -554,7 +557,7 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
     </>
   )
 
-  const eapPhone = WELLNESS_BY_ID.eap.phone
+  const eapPhone = contacts.byId.eap.phone
   const startedOn = activeChat ? new Date(activeChat.created_at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : null
 
   const main =
@@ -659,7 +662,7 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
                   )
                 })}
               </div>
-              <p className="mt-4 text-xs text-muted">{TEAMS[activeTeam].intro} You’ll usually hear back within a day. If you’re in danger, call the EAP helpline or 112 now.</p>
+              <p className="mt-4 text-xs text-muted">{TEAMS[activeTeam].intro} You’ll usually hear back within a day. If you’re in danger, call the EAP helpline{contacts.emergency ? ` or ${contacts.emergency}` : ''} now.</p>
             </div>
           }
         />

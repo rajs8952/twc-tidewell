@@ -1,6 +1,7 @@
 import { House, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import { myRole } from '@/app/actions/roles'
+import { AdminNav } from '@/components/admin/AdminNav'
 import { Logo } from '@/components/Logo'
 import { LogoutButton } from '@/components/profile/LogoutButton'
 
@@ -32,6 +33,7 @@ export async function AdminShell({ children }: { children: React.ReactNode }) {
             <LogoutButton compact />
           </div>
         </div>
+        {role === 'admin' && <AdminNav />}
       </header>
       <main className="mx-auto max-w-6xl px-4 py-5 sm:px-6 sm:py-8">
         {role === 'admin' ? (

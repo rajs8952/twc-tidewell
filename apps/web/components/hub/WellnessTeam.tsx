@@ -1,6 +1,9 @@
+'use client'
+
 import { ChevronRight, Clock, ExternalLink, LifeBuoy, Mail, MessageCircleHeart, Phone, type LucideIcon } from 'lucide-react'
 import Link from 'next/link'
-import { EMERGENCY_NUMBER, WELLNESS_TEAM, telHref, type WellnessContact } from '@/lib/wellness-team'
+import { useWellnessContacts } from '@/lib/useWellnessContacts'
+import { telHref, type WellnessContact } from '@/lib/wellness-team'
 
 /**
  * One full-width action row. Every card uses the same rows, stacked at the
@@ -103,12 +106,13 @@ function ContactCard({ contact }: { contact: WellnessContact }) {
   )
 }
 
-/** Static list of the company's EAP, therapist and dietitian (edit lib/wellness-team.ts). */
+/** The company's EAP, therapist and dietitian, with the details admins set in the admin portal. */
 export function WellnessTeam() {
+  const { team, emergency } = useWellnessContacts()
   return (
     <>
       <ul className="grid gap-3 md:grid-cols-3">
-        {WELLNESS_TEAM.map((c) => (
+        {team.map((c) => (
           <ContactCard key={c.id} contact={c} />
         ))}
       </ul>
@@ -116,9 +120,9 @@ export function WellnessTeam() {
         <LifeBuoy className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
         <span>
           If you’re in immediate danger or thinking about harming yourself, call{' '}
-          {EMERGENCY_NUMBER ? (
-            <a href={telHref(EMERGENCY_NUMBER)} className="font-bold underline underline-offset-2">
-              {EMERGENCY_NUMBER}
+          {emergency ? (
+            <a href={telHref(emergency)} className="font-bold underline underline-offset-2">
+              {emergency}
             </a>
           ) : (
             'your local emergency number'

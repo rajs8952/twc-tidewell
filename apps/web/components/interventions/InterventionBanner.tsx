@@ -6,7 +6,8 @@ import Link from 'next/link'
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Intervention, InterventionAction } from '@rajs8952/interventions'
-import { EMERGENCY_NUMBER, WELLNESS_BY_ID, contactHref, telHref } from '@/lib/wellness-team'
+import { useWellnessContacts } from '@/lib/useWellnessContacts'
+import { contactHref, telHref } from '@/lib/wellness-team'
 
 /* ------------------------------------------------------------------
  * Shows one intervention from lib/intervention-engine.ts:
@@ -41,12 +42,13 @@ const TONE = {
 } as const
 
 function InlineBanner({ intervention, onDismiss }: { intervention: Intervention; onDismiss: () => void }) {
+  const contacts = useWellnessContacts()
   const tone = TONE[intervention.severity as keyof typeof TONE]
   const Icon = tone.icon
   const titleId = useId()
   const action = intervention.actions[0]
   const opens = action?.kind === 'open' && !!action.href
-  const href = opens ? action!.href! : ((action?.contact && contactHref(action.contact, 'book')) ?? TEAM_PAGE)
+  const href = opens ? action!.href! : ((action?.contact && contactHref(action.contact, 'book', contacts)) ?? TEAM_PAGE)
   // In-app pages use the action's own label; contacts are named after who it opens a conversation with.
   const label = opens
     ? action!.label
@@ -108,6 +110,8 @@ function InlineBanner({ intervention, onDismiss }: { intervention: Intervention;
 const ACTION_ICON = { call: Phone, chat: MessageCircleHeart, book: CalendarCheck, open: ArrowRight } as const
 
 function CrisisDialog({ intervention, onAcknowledge }: { intervention: Intervention; onAcknowledge: () => void }) {
+  const contacts = useWellnessContacts()
+  const EMERGENCY_NUMBER = contacts.emergency
   const reduce = useReducedMotion()
   const panelRef = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(false)
@@ -116,9 +120,9 @@ function CrisisDialog({ intervention, onAcknowledge }: { intervention: Intervent
 
   // Only actions with real contact details become buttons.
   const actions = intervention.actions
-    .map((a) => ({ ...a, href: a.kind === 'open' ? (a.href ?? null) : a.contact ? contactHref(a.contact, a.kind) : null }))
+    .map((a) => ({ ...a, href: a.kind === 'open' ? (a.href ?? null) : a.contact ? contactHref(a.contact, a.kind, contacts) : null }))
     .filter((a): a is InterventionAction & { href: string } => a.href != null)
-  const eapPhone = WELLNESS_BY_ID.eap.phone
+  const eapPhone = contacts.byId.eap.phone
 
   useEffect(() => setMounted(true), [])
 
