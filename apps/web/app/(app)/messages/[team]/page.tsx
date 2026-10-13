@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { SecureInbox } from '@/components/messages/SecureInbox'
+import { PremiumGate } from '@/components/plans/PremiumGate'
 import { TEAMS, isTeam } from '@/lib/messages'
 
 export const dynamicParams = false
@@ -20,7 +21,9 @@ export default function TeamMessagesPage({ params }: { params: { team: string } 
   return (
     <>
       <h1 className="sr-only">Talk to {TEAMS[params.team].label}</h1>
-      <SecureInbox key={params.team} team={params.team} />
+      <PremiumGate feature="chat">
+        <SecureInbox key={params.team} team={params.team} />
+      </PremiumGate>
     </>
   )
 }

@@ -2,6 +2,7 @@
 
 import { ChevronRight, Clock, ExternalLink, LifeBuoy, Mail, MessageCircleHeart, Phone, type LucideIcon } from 'lucide-react'
 import Link from 'next/link'
+import { PremiumCard } from '@/components/plans/PremiumGate'
 import { useWellnessContacts } from '@/lib/useWellnessContacts'
 import { telHref, type WellnessContact } from '@/lib/wellness-team'
 
@@ -108,14 +109,18 @@ function ContactCard({ contact }: { contact: WellnessContact }) {
 
 /** The company's EAP, therapist and dietitian, with the details admins set in the admin portal. */
 export function WellnessTeam() {
-  const { team, emergency } = useWellnessContacts()
+  const { team, emergency, locked } = useWellnessContacts()
   return (
     <>
-      <ul className="grid gap-3 md:grid-cols-3">
-        {team.map((c) => (
-          <ContactCard key={c.id} contact={c} />
-        ))}
-      </ul>
+      {locked ? (
+        <PremiumCard feature="chat" compact />
+      ) : (
+        <ul className="grid gap-3 md:grid-cols-3">
+          {team.map((c) => (
+            <ContactCard key={c.id} contact={c} />
+          ))}
+        </ul>
+      )}
       <p className="mt-4 flex items-start gap-2 rounded-2xl bg-mist/60 px-4 py-3 text-sm text-ink">
         <LifeBuoy className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
         <span>

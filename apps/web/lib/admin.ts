@@ -43,6 +43,8 @@ export interface AdminUser {
   last_sign_in_at: string | null
   email_confirmed: boolean
   deactivated: boolean
+  /** Their plan (supabase/subscriptions.sql); null before that SQL is run. Staff always have Premium. */
+  plan: { premium: boolean; source: string; until: string | null } | null
 }
 
 /** Mirrors the CHECK on coach_profiles.max_capacity. */

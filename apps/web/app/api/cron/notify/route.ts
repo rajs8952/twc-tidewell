@@ -59,14 +59,18 @@ export async function GET(req: Request) {
   }
   const claimed = (data ?? []) as DueRow[]
   const done = await remindersAlreadyDone(admin, claimed, now)
-  const due = claimed.filter((r) => !done.has(`${r.user_id}:${r.tracker_type}`))
+  // Reminders are Premium: free accounts' reminders are claimed (so they don't pile up) but not sent.
+  const premium = await premiumUsers(admin, claimed.map((r) => r.user_id))
+  const due = claimed.filter((r) => premium(r.user_id) && !done.has(`${r.user_id}:${r.tracker_type}`))
 
   const results = await mapLimit(due, CONCURRENCY, async (row) => ({ row, result: await sendPush(row, reminderPayload(row.tracker_type)) }))
 
   // Weekly recap: "Your week in OmniWell is ready". Optional until weekly-recap.sql has run.
   const recaps = await admin.rpc('claim_weekly_recaps', { p_now: now.toISOString() })
   if (recaps.error && recaps.error.code !== 'PGRST202') console.error('[cron/notify] weekly recap claim failed', recaps.error)
-  const recapRows = (recaps.data ?? []) as { user_id: string; subscription_id: string; endpoint: string; p256dh: string; auth: string }[]
+  const recapClaimed = (recaps.data ?? []) as { user_id: string; subscription_id: string; endpoint: string; p256dh: string; auth: string }[]
+  const recapPremium = await premiumUsers(admin, recapClaimed.map((r) => r.user_id))
+  const recapRows = recapClaimed.filter((r) => recapPremium(r.user_id))
   const recapPayload = { title: 'Your week in OmniWell', body: 'See how last week went, and what to aim for this week.', icon: '/icon/192', badge: '/icon/192', url: '/dashboard#week', tag: 'weekly-recap' }
   const recapResults = await mapLimit(recapRows, CONCURRENCY, async (row) => ({ row, result: await sendPush(row, recapPayload) }))
   for (const r of recapResults) results.push({ row: { ...r.row, schedule_id: '', tracker_type: 'mood' }, result: r.result })
@@ -89,4 +93,16 @@ export async function GET(req: Request) {
     removedExpired: gone.length,
     failed: failed.length,
   })
+}
+
+/** Who has Premium (has_premium() in supabase/subscriptions.sql); everyone, before that SQL is run. */
+async function premiumUsers(admin: NonNullable<ReturnType<typeof supabaseAdmin>>, ids: string[]) {
+  const unique = [...new Set(ids)]
+  const yes = new Set<string>()
+  for (const id of unique) {
+    const { data, error } = await admin.rpc('has_premium', { p_user: id })
+    if (error?.code === 'PGRST202') return () => true
+    if (data === true) yes.add(id)
+  }
+  return (id: string) => yes.has(id)
 }

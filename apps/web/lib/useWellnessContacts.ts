@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { storageKey } from '@/lib/brand'
 import { createClient } from '@/lib/supabase/client'
-import { CONTACT_COLUMNS, DEFAULT_CONTACTS, contactsFrom, type ContactRow, type Contacts } from '@/lib/wellness-team'
+import { usePlan } from '@/lib/usePlan'
+import { CONTACT_COLUMNS, DEFAULT_CONTACTS, contactsFrom, lockContacts, type ContactRow, type Contacts } from '@/lib/wellness-team'
 
 /* ------------------------------------------------------------------
  * The wellness team's current details (supabase/wellness-contacts.sql),
@@ -50,7 +51,9 @@ function load(): Promise<Contacts> {
   return loading
 }
 
+/** The contacts to show: on the Free plan, only the emergency number (the EAP and coaches are Premium). */
 export function useWellnessContacts(): Contacts {
+  const plan = usePlan()
   const [contacts, setContacts] = useState<Contacts>(current ?? DEFAULT_CONTACTS)
   useEffect(() => {
     listeners.add(setContacts)
@@ -63,5 +66,5 @@ export function useWellnessContacts(): Contacts {
       listeners.delete(setContacts)
     }
   }, [])
-  return contacts
+  return plan && !plan.premium ? lockContacts(contacts) : contacts
 }

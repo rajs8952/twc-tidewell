@@ -4,6 +4,8 @@ import { BookOpen, Check, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { PageHeader } from '@/components/PageHeader'
 import { PROGRAMMES, programmeState } from '@/lib/content/programmes'
+import { FREE_PROGRAMME } from '@/lib/plans'
+import { usePlan } from '@/lib/usePlan'
 import { TRACKERS } from '@/lib/trackers'
 import { useProfile } from '@/lib/useProfile'
 import { useProgrammes } from '@/lib/useProgrammes'
@@ -17,6 +19,7 @@ export function ProgrammesView() {
   const { enrolments, ready, error } = useProgrammes()
   const { profile } = useProfile()
   const focus = profile?.focus_trackers ?? []
+  const free = usePlan()?.premium === false
   const ordered = [...PROGRAMMES].sort((a, b) => Number(focus.includes(b.topic)) - Number(focus.includes(a.topic)))
 
   return (
@@ -48,6 +51,7 @@ export function ProgrammesView() {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2 font-bold">
                     {p.title}
+                    {free && p.id !== FREE_PROGRAMME && <span className="rounded-full bg-[#FFF1D9] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#8A4B0A] ring-1 ring-[#F2D3A8]">Premium</span>}
                     {focus.includes(p.topic) && <span className="rounded-full bg-mist px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted ring-1 ring-line">For you</span>}
                   </span>
                   <span className="block text-sm text-muted">{p.summary}</span>

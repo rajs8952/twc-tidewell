@@ -1,10 +1,11 @@
-import { ArrowRight, BarChart3, BookOpen, CalendarRange, Check, EyeOff, Flame, Lightbulb, Lock, MessageCircleHeart, ShieldAlert, Sparkles, Target, Zap } from 'lucide-react'
+import { ArrowRight, BarChart3, BookOpen, Building2, CalendarRange, Check, Crown, EyeOff, Flame, Lightbulb, Lock, MessageCircleHeart, ShieldAlert, Sparkles, Target, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { BrandBackdrop } from './BrandBackdrop'
 import { InsightCard } from './insights/InsightCard'
 import { Logo, LogoMark } from './Logo'
 import { BRAND, PILLAR_COLORS, PILLAR_ORDER } from '@/lib/brand'
 import type { Headline } from '@/lib/insights/headline'
+import { FREE_FEATURES, PREMIUM_FEATURES, PRICES, TRIAL_DAYS } from '@/lib/plans'
 import { BMI_TOOL, TRACKERS, type TrackerId } from '@/lib/trackers'
 
 /** One concrete line per pillar for the feature grid. */
@@ -125,6 +126,9 @@ export function LandingPage() {
           <Logo />
         </Link>
         <nav aria-label="Account" className="flex items-center gap-2 sm:gap-3">
+          <a href="#pricing" className="hidden rounded-full px-4 py-2 text-sm font-bold text-ink hover:bg-white/70 sm:inline-flex">
+            Pricing
+          </a>
           <Link href="/login" className="rounded-full px-4 py-2 text-sm font-bold text-ink hover:bg-white/70">
             Log in
           </Link>
@@ -328,6 +332,75 @@ export function LandingPage() {
               </ul>
             </div>
           </div>
+        </section>
+
+        {/* Pricing */}
+        <section id="pricing" aria-labelledby="pricing-title" className="mx-auto max-w-6xl scroll-mt-6 px-5 pb-16 sm:px-8 lg:pb-24">
+          <div className="max-w-2xl">
+            <p className="inline-flex items-center gap-1.5 text-sm font-bold text-[#B9650E]">
+              <Crown className="h-4 w-4" aria-hidden /> Pricing
+            </p>
+            <h2 id="pricing-title" className="mt-2 text-3xl font-extrabold sm:text-4xl">
+              Start free. Go Premium when you’re ready.
+            </h2>
+            <p className="mt-3 text-lg text-muted">
+              Every new account gets {TRIAL_DAYS} days of Premium free, no card needed. Prices include GST and other taxes; cancel any time.
+            </p>
+          </div>
+          <div className="mt-10 grid gap-4 lg:grid-cols-3">
+            <div className="rounded-3xl bg-white p-6 ring-1 ring-line">
+              <h3 className="text-xl font-extrabold">Free</h3>
+              <p className="mt-2 font-display text-4xl font-extrabold">₹0</p>
+              <p className="text-sm text-muted">Forever</p>
+              <ul className="mt-5 space-y-2.5 text-sm">
+                {FREE_FEATURES.map((f) => (
+                  <li key={f} className="flex gap-2">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#1F6E64]" strokeWidth={3} aria-hidden /> {f}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/signup" className="btn-secondary mt-6 w-full">
+                Create your free account
+              </Link>
+            </div>
+
+            <div className="relative rounded-3xl bg-gradient-to-br from-[#FFF7E6] to-white p-6 ring-2 ring-[#E9A21F] lg:col-span-2">
+              <span className="absolute -top-3 left-6 rounded-full bg-[#B9650E] px-3 py-1 text-xs font-bold text-white">{TRIAL_DAYS}-day free trial</span>
+              <h3 className="flex items-center gap-2 text-xl font-extrabold">
+                <Crown className="h-5 w-5 text-[#B9650E]" aria-hidden /> Premium
+              </h3>
+              <div className="mt-2 flex flex-wrap items-end gap-x-6 gap-y-2">
+                <p>
+                  <span className="font-display text-4xl font-extrabold">{PRICES.monthly.label}</span>
+                  <span className="font-bold text-muted"> / {PRICES.monthly.per}</span>
+                </p>
+                <p className="pb-1 text-sm">
+                  or <b>{PRICES.yearly.label} / {PRICES.yearly.per}</b> <span className="text-muted">({PRICES.yearly.note})</span>
+                </p>
+              </div>
+              <p className="mt-4 text-sm font-semibold">Everything in Free, plus:</p>
+              <ul className="mt-3 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+                {PREMIUM_FEATURES.map((f) => (
+                  <li key={f.key} className="flex gap-2">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#1F6E64]" strokeWidth={3} aria-hidden />
+                    <span>
+                      <b>{f.title}</b>
+                      <span className="block text-muted">{f.text}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <Link href="/signup" className="btn-primary mt-6">
+                Start your free trial <ArrowRight className="h-4 w-4" aria-hidden />
+              </Link>
+            </div>
+          </div>
+          <p className="mt-4 flex items-start gap-2 rounded-2xl bg-white/70 px-4 py-3 text-sm text-ink/85 ring-1 ring-line">
+            <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-[#1F6E64]" aria-hidden />
+            <span>
+              <b>Is your company providing {BRAND.name}?</b> Then Premium is included for you; there’s nothing to pay. In an emergency, 112 is always shown, on every plan.
+            </span>
+          </p>
         </section>
 
         {/* For companies */}

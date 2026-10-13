@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { SecureInbox } from '@/components/messages/SecureInbox'
+import { PremiumGate } from '@/components/plans/PremiumGate'
 
 export const metadata: Metadata = { title: 'Chats' }
 
@@ -11,7 +12,9 @@ export default function MessagesPage() {
   return (
     <>
       <h1 className="sr-only">Chats</h1>
-      <SecureInbox />
+      <PremiumGate feature="chat">
+        <SecureInbox />
+      </PremiumGate>
     </>
   )
 }

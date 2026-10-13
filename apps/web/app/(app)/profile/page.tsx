@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AvatarPicker } from '@/components/AvatarPicker'
 import { InstallCard } from '@/components/pwa/InstallCard'
 import { AdminCard } from '@/components/admin/AdminCard'
+import { PlanCard } from '@/components/plans/PlanCard'
+import { PremiumGate } from '@/components/plans/PremiumGate'
 import { HrCard } from '@/components/hr/HrCard'
 import { CoachPortalCard } from '@/components/therapist/CoachPortalCard'
 import { NotificationSettings } from '@/components/notifications/NotificationSettings'
@@ -208,6 +210,7 @@ export default function ProfilePage() {
           </ProfileSection>
 
           <CoachPortalCard />
+          <PlanCard />
           <HrCard />
           <AdminCard />
           <InstallCard />
@@ -311,7 +314,9 @@ export default function ProfilePage() {
       </form>
 
       <div className="mt-6">
-        <NotificationSettings />
+        <PremiumGate feature="reminders">
+          <NotificationSettings />
+        </PremiumGate>
       </div>
 
     </>

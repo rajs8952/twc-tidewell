@@ -3,7 +3,9 @@
 import { ArrowRight, BookOpen, Lightbulb } from 'lucide-react'
 import Link from 'next/link'
 import { useMemo } from 'react'
-import { PROGRAMMES, programmeState } from '@/lib/content/programmes'
+import { PROGRAMMES, PROGRAMME_BY_ID, programmeState } from '@/lib/content/programmes'
+import { FREE_PROGRAMME } from '@/lib/plans'
+import { usePlan } from '@/lib/usePlan'
 import { tipOfTheDay } from '@/lib/content/tips'
 import { TRACKERS } from '@/lib/trackers'
 import { useProgrammes } from '@/lib/useProgrammes'
@@ -14,6 +16,8 @@ import { useProgrammes } from '@/lib/useProgrammes'
  */
 export function ForYouToday({ focus }: { focus: string[] }) {
   const { enrolments, ready } = useProgrammes()
+  // Free plan: only the free programme is shown or suggested.
+  const free = usePlan()?.premium === false
   const tip = useMemo(() => tipOfTheDay(new Date(), focus), [focus])
   const tipTracker = TRACKERS.find((t) => t.id === tip.topic)!
   const TipIcon = tipTracker.icon
@@ -21,12 +25,16 @@ export function ForYouToday({ focus }: { focus: string[] }) {
   // Programmes with a step ready today, then any in progress; otherwise one to suggest.
   const active = PROGRAMMES.flatMap((p) => {
     const e = enrolments?.[p.id]
-    if (!e) return []
+    if (!e || (free && p.id !== FREE_PROGRAMME)) return []
     const s = programmeState(p, e)
     return s.finished ? [] : [{ p, s }]
   }).sort((a, b) => Number(!!b.s.next) - Number(!!a.s.next))
   const suggestion =
-    enrolments && !Object.keys(enrolments).length ? (PROGRAMMES.find((p) => focus.includes(p.topic)) ?? PROGRAMMES[0]!) : null
+    enrolments && !Object.keys(enrolments).length
+      ? free
+        ? PROGRAMME_BY_ID[FREE_PROGRAMME]!
+        : (PROGRAMMES.find((p) => focus.includes(p.topic)) ?? PROGRAMMES[0]!)
+      : null
 
   return (
     <section aria-labelledby="for-you-title" className="mt-10">

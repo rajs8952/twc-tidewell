@@ -68,6 +68,14 @@ async function applyRole(admin: SupabaseClient, userId: string, role: AppRole, t
   }
 }
 
+/** Company Premium for people an admin adds or imports (their company pays). Skipped before subscriptions.sql is run. */
+async function grantCompanyPremium(admin: SupabaseClient, userId: string) {
+  const { error } = await admin
+    .from('subscriptions')
+    .upsert({ user_id: userId, plan: 'premium', source: 'company', premium_until: null, status: 'active', updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+  if (error && error.code !== 'PGRST205' && error.code !== '42P01') throw new Error(`Couldn’t set their plan: ${error.message}`)
+}
+
 /* ---------- Create ---------- */
 
 /**
@@ -114,6 +122,7 @@ export async function adminCreateUser(email: string, password: string, role: App
     )
     if (profileError) throw new Error(`Couldn’t save the profile: ${profileError.message}`)
     await applyRole(admin, user.id, parsed.value.role, profile.coach_team, profile.full_name)
+    await grantCompanyPremium(admin, user.id)
   } catch (e) {
     await admin.auth.admin.deleteUser(user.id).catch(() => {})
     return { ok: false, error: `${(e as Error).message} The account was not created.` }
@@ -134,6 +143,7 @@ export async function adminCreateUser(email: string, password: string, role: App
       last_sign_in_at: null,
       email_confirmed: true,
       deactivated: false,
+      plan: { premium: true, source: 'company', until: null },
     },
   }
 }
@@ -277,14 +287,19 @@ export async function adminGetUsers(): Promise<ActionResult<AdminUser[]>> {
   const names = new Map<string, string>()
   const teams = new Map<string, Team>()
   const coaches = new Map<string, AdminUser['coach']>()
+  const plans = new Map<string, { plan: string; source: string; premium_until: string | null; status: string }>()
+  let plansReady = true
   for (let i = 0; i < users.length; i += ID_CHUNK) {
     const ids = users.slice(i, i + ID_CHUNK).map((u) => u.id)
-    const [r, p, t, c] = await Promise.all([
+    const [r, p, t, c, s] = await Promise.all([
       admin.from('user_roles').select('user_id, role').in('user_id', ids),
       admin.from('profiles').select('id, full_name').in('id', ids),
       admin.from('therapists').select('user_id, team').in('user_id', ids),
       admin.from('coach_profiles').select('user_id, current_load, max_capacity, is_accepting_new').in('user_id', ids),
+      admin.from('subscriptions').select('user_id, plan, source, premium_until, status').in('user_id', ids),
     ])
+    if (s.error) plansReady = false
+    for (const x of (s.data ?? []) as { user_id: string; plan: string; source: string; premium_until: string | null; status: string }[]) plans.set(x.user_id, x)
     if (r.error || p.error || t.error) return { ok: false, error: (r.error ?? p.error ?? t.error)!.message }
     for (const x of r.data as { user_id: string; role: AppRole }[]) roles.set(x.user_id, x.role)
     for (const x of p.data as { id: string; full_name: string }[]) names.set(x.id, x.full_name)
@@ -309,6 +324,7 @@ export async function adminGetUsers(): Promise<ActionResult<AdminUser[]>> {
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at ?? null,
         email_confirmed: !!u.email_confirmed_at,
+        plan: plansReady ? planOf(roles.get(u.id) ?? 'user', plans.get(u.id), now) : null,
         deactivated: !!u.banned_until && Date.parse(u.banned_until) > now,
       }))
       .sort((a, b) => b.created_at.localeCompare(a.created_at)),
@@ -361,6 +377,7 @@ export async function adminImportUsers(rows: Pick<ImportRow, 'name' | 'email' | 
       const { error: profileError } = await admin.from('profiles').upsert({ id: data.user.id, full_name: row.name }, { onConflict: 'id' })
       if (profileError) throw new Error(`Couldn’t save the profile: ${profileError.message}`)
       await applyRole(admin, data.user.id, row.role, row.team ?? undefined, row.name)
+      await grantCompanyPremium(admin, data.user.id)
     } catch (e) {
       await admin.auth.admin.deleteUser(data.user.id).catch(() => {})
       results.push({ email: row.email, outcome: 'failed', detail: `${(e as Error).message} Not created.` })
@@ -375,4 +392,32 @@ export async function adminImportUsers(rows: Pick<ImportRow, 'name' | 'email' | 
     }
   }
   return { ok: true, data: results }
+}
+
+/* ---------- Plans ---------- */
+
+/** Mirrors has_premium() in supabase/subscriptions.sql. */
+function planOf(role: AppRole, s: { plan: string; source: string; premium_until: string | null; status: string } | undefined, now: number): NonNullable<AdminUser['plan']> {
+  if (role !== 'user') return { premium: true, source: 'staff', until: null }
+  if (!s) return { premium: false, source: 'none', until: null }
+  const premium = s.plan === 'premium' && (!s.premium_until || Date.parse(s.premium_until) > now) && ['active', 'past_due', 'cancelled'].includes(s.status)
+  return { premium, source: s.source, until: s.premium_until }
+}
+
+/** Gives someone Premium (no end date), or moves them to Free. For employees only; staff always have Premium. */
+export async function adminSetPremium(userId: string, premium: boolean): Promise<ActionResult<NonNullable<AdminUser['plan']>>> {
+  if (!isUuid(userId)) return { ok: false, error: 'Unknown user.' }
+  const ctx = await requireAdmin()
+  if ('error' in ctx) return { ok: false, error: ctx.error }
+  const { error } = await ctx.admin
+    .from('subscriptions')
+    .upsert(
+      premium
+        ? { user_id: userId, plan: 'premium', source: 'admin', premium_until: null, status: 'active', updated_at: new Date().toISOString() }
+        : { user_id: userId, plan: 'free', source: 'none', premium_until: null, status: 'active', cancel_at_period_end: false, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' },
+    )
+  if (error) return { ok: false, error: error.code === 'PGRST205' || error.code === '42P01' ? 'Run supabase/subscriptions.sql in Supabase first.' : error.message }
+  audit(ctx, premium ? 'grant premium' : 'set free plan', userId)
+  return { ok: true, data: premium ? { premium: true, source: 'admin', until: null } : { premium: false, source: 'none', until: null } }
 }

@@ -12,6 +12,7 @@ const APP_ROUTES = [
   '/bmi',
   '/insights',
   '/programmes',
+  '/plans',
   '/profile',
   '/messages',
   '/therapist',

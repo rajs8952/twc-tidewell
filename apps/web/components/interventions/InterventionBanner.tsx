@@ -188,7 +188,7 @@ function CrisisDialog({ intervention, onAcknowledge }: { intervention: Intervent
             </h2>
           </div>
           <p id={descId} className="mt-3 text-[15px] leading-snug text-white/90 sm:mt-2 sm:text-base sm:leading-normal">
-            {intervention.message}
+            {contacts.locked && EMERGENCY_NUMBER ? `It sounds like today is really hard. You don’t have to face it alone: if you’re in danger or thinking about harming yourself, call ${EMERGENCY_NUMBER} now.` : intervention.message}
           </p>
 
           {/* The helpline, as large as possible: the EAP if it's set, else the emergency number. */}
@@ -238,7 +238,16 @@ function CrisisDialog({ intervention, onAcknowledge }: { intervention: Intervent
                 </a>
               )
             })}
-            {actions.length === 0 && (
+            {actions.length === 0 && contacts.locked && EMERGENCY_NUMBER && (
+              <a
+                href={telHref(EMERGENCY_NUMBER)}
+                className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-full bg-white px-5 text-base font-bold text-[#0B2228] transition hover:bg-white/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white sm:min-h-[52px]"
+              >
+                <Phone className="h-5 w-5" aria-hidden />
+                Call {EMERGENCY_NUMBER}
+              </a>
+            )}
+            {actions.length === 0 && !contacts.locked && (
               <Link
                 href={TEAM_PAGE}
                 onClick={onAcknowledge}

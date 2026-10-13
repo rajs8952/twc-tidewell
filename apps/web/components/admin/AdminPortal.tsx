@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { Ban, ChevronLeft, FileUp, ChevronRight, Gauge, KeyRound, Undo2, RotateCw, Search, ShieldCheck, UserCog, UserPlus, Users, UserCheck } from 'lucide-react'
+import { Ban, ChevronLeft, Crown, FileUp, ChevronRight, Gauge, KeyRound, Undo2, RotateCw, Search, ShieldCheck, UserCog, UserPlus, Users, UserCheck } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { adminGetUsers } from '@/app/actions/admin'
+import { adminGetUsers, adminSetPremium } from '@/app/actions/admin'
 import { errorMessage } from '@rajs8952/core/errors'
 import type { AdminUser, AppRole } from '@/lib/admin'
 import { TEAMS } from '@/lib/messages'
@@ -96,6 +96,19 @@ function LoadNote({ user }: { user: AdminUser }) {
   )
 }
 
+/** Employees' plan: Premium (and why) or Free. Staff always have Premium, so nothing is shown for them. */
+function PlanNote({ user }: { user: AdminUser }) {
+  if (!user.plan || user.role !== 'user') return null
+  const { premium, source, until } = user.plan
+  const why: Record<string, string> = { company: 'company', grandfathered: 'early member', admin: 'given by admin', paid: 'paid', trial: 'trial' }
+  return (
+    <p className={`mt-1 inline-flex items-center gap-1 text-xs font-semibold ${premium ? 'text-[#8A4B0A]' : 'text-muted'}`}>
+      <Crown className="h-3 w-3" aria-hidden />
+      {premium ? `Premium · ${why[source] ?? source}${until ? ` until ${dateLabel(until)}` : ''}` : source === 'trial' ? 'Free · trial ended' : 'Free'}
+    </p>
+  )
+}
+
 function StatusBadge({ user }: { user: AdminUser }) {
   if (user.deactivated) return <span className="inline-flex items-center gap-1 rounded-full bg-alert/10 px-2.5 py-0.5 text-xs font-bold text-alert"><Ban className="h-3 w-3" aria-hidden />Deactivated</span>
   if (!user.email_confirmed) return <span className="inline-flex rounded-full bg-[#FFF1D6] px-2.5 py-0.5 text-xs font-bold text-[#8A5A00]">Unconfirmed</span>
@@ -113,7 +126,7 @@ function Initials({ user }: { user: AdminUser }) {
 }
 
 /** The row's actions as small labelled buttons (no hidden menus, easy to reach by keyboard). */
-function RowActions({ user, isMe, onRole, onPassword, onActivation, onCapacity, onRelease }: { user: AdminUser; isMe: boolean; onRole: () => void; onPassword: () => void; onActivation: () => void; onCapacity: () => void; onRelease: () => void }) {
+function RowActions({ user, isMe, onRole, onPassword, onActivation, onCapacity, onRelease, onPlan }: { user: AdminUser; isMe: boolean; onRole: () => void; onPassword: () => void; onActivation: () => void; onCapacity: () => void; onRelease: () => void; onPlan: () => void }) {
   const btn = 'inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-bold ring-1 ring-line transition hover:bg-mist'
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -123,6 +136,11 @@ function RowActions({ user, isMe, onRole, onPassword, onActivation, onCapacity, 
       <button type="button" onClick={onPassword} className={btn} aria-label={`Reset password for ${user.full_name || user.email}`}>
         <KeyRound className="h-3.5 w-3.5" aria-hidden /> Password
       </button>
+      {user.role === 'user' && user.plan && (
+        <button type="button" onClick={onPlan} className={btn} aria-label={`${user.plan.premium ? 'Move to Free' : 'Give Premium to'} ${user.full_name || user.email}`}>
+          <Crown className="h-3.5 w-3.5" aria-hidden /> {user.plan.premium ? 'Set Free' : 'Give Premium'}
+        </button>
+      )}
       {user.role === 'coach' && user.coach && (
         <button type="button" onClick={onCapacity} className={btn} aria-label={`Change capacity for ${user.full_name || user.email}`}>
           <Gauge className="h-3.5 w-3.5" aria-hidden /> Capacity
@@ -187,6 +205,17 @@ export function AdminPortal() {
   }, [toast])
 
   const replace = (u: AdminUser) => setUsers((list) => list?.map((x) => (x.id === u.id ? u : x)) ?? list)
+
+  async function togglePlan(u: AdminUser) {
+    const give = !u.plan?.premium
+    const who = u.full_name || u.email || 'this person'
+    const warn = !give && u.plan?.source === 'paid' ? ' They are paying for Premium; their payment isn’t cancelled by this.' : ''
+    if (!window.confirm(give ? `Give ${who} Premium, with no end date?` : `Move ${who} to Free? Chat, reminders, insights and the other Premium features will be locked.${warn}`)) return
+    const res = await adminSetPremium(u.id, give)
+    if (!res.ok) return setToast(res.error)
+    replace({ ...u, plan: res.data })
+    setToast(give ? `${who} now has Premium.` : `${who} is now on Free.`)
+  }
 
   const counts = useMemo(() => {
     const list = users ?? []
@@ -330,12 +359,12 @@ export function AdminPortal() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3"><RoleBadge user={u} /><LoadNote user={u} /></td>
+                    <td className="px-4 py-3"><RoleBadge user={u} /><LoadNote user={u} /><PlanNote user={u} /></td>
                     <td className="px-4 py-3"><StatusBadge user={u} /></td>
                     <td className="whitespace-nowrap px-4 py-3 text-muted">{dateLabel(u.created_at)}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-muted">{dateLabel(u.last_sign_in_at)}</td>
                     <td className="px-4 py-3">
-                      <RowActions user={u} isMe={u.id === me} onRole={() => setRoleFor(u)} onPassword={() => setPasswordFor(u)} onActivation={() => setActivationFor(u)} onCapacity={() => setCapacityFor(u)} onRelease={() => setReleaseFor(u)} />
+                      <RowActions user={u} isMe={u.id === me} onRole={() => setRoleFor(u)} onPassword={() => setPasswordFor(u)} onActivation={() => setActivationFor(u)} onCapacity={() => setCapacityFor(u)} onRelease={() => setReleaseFor(u)} onPlan={() => togglePlan(u)} />
                     </td>
                   </tr>
                 ))}
@@ -358,12 +387,13 @@ export function AdminPortal() {
                         <StatusBadge user={u} />
                       </div>
                       <LoadNote user={u} />
+                      <PlanNote user={u} />
                       <p className="mt-1.5 text-xs text-muted">
                         Joined {dateLabel(u.created_at)} · Last login {dateLabel(u.last_sign_in_at)}
                       </p>
                     </div>
                   </div>
-                  <RowActions user={u} isMe={u.id === me} onRole={() => setRoleFor(u)} onPassword={() => setPasswordFor(u)} onActivation={() => setActivationFor(u)} onCapacity={() => setCapacityFor(u)} onRelease={() => setReleaseFor(u)} />
+                  <RowActions user={u} isMe={u.id === me} onRole={() => setRoleFor(u)} onPassword={() => setPasswordFor(u)} onActivation={() => setActivationFor(u)} onCapacity={() => setCapacityFor(u)} onRelease={() => setReleaseFor(u)} onPlan={() => togglePlan(u)} />
                 </li>
               ))}
             </ul>

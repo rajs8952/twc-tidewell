@@ -4,7 +4,10 @@ import { ArrowLeft, ArrowRight, Check, Loader2, Lock, RotateCcw } from 'lucide-r
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { NOT_ADVICE } from '@/components/programmes/ProgrammesView'
+import { PremiumCard } from '@/components/plans/PremiumGate'
 import { programmeState, type Programme } from '@/lib/content/programmes'
+import { FREE_PROGRAMME } from '@/lib/plans'
+import { usePlan } from '@/lib/usePlan'
 import { TRACKERS } from '@/lib/trackers'
 import { useProgrammes } from '@/lib/useProgrammes'
 
@@ -18,6 +21,9 @@ export function ProgrammeView({ programme: p }: { programme: Programme }) {
   const Icon = t.icon
   const e = enrolments?.[p.id]
   const s = e ? programmeState(p, e) : null
+  const plan = usePlan()
+  // Every programme except the free one is Premium (the database enforces it too).
+  const locked = !!plan && !plan.premium && p.id !== FREE_PROGRAMME
 
   // Open today's step (or the one in the URL, e.g. from Home: #day-3) once progress has loaded.
   useEffect(() => {
@@ -57,7 +63,13 @@ export function ProgrammeView({ programme: p }: { programme: Programme }) {
       {!ready && <p className="notice-error mb-6">Programmes aren’t set up yet. Run supabase/programmes.sql in Supabase first.</p>}
       {error && <p role="alert" className="notice-error mb-6">{error}</p>}
 
-      {enrolments && !e && ready && (
+      {locked && (
+        <div className="mb-6">
+          <PremiumCard feature="programmes" />
+        </div>
+      )}
+
+      {enrolments && !e && ready && !locked && (
         <div className="mb-6 rounded-3xl bg-white p-5 ring-1 ring-line">
           <p className="font-bold">{p.days.length} days, one small step each day</p>
           <p className="mt-1 text-sm text-muted">A new day unlocks each day after you start. Take your time; you can do a day later if you miss one.</p>
@@ -71,30 +83,30 @@ export function ProgrammeView({ programme: p }: { programme: Programme }) {
       <ol className="space-y-3">
         {p.days.map((d, i) => {
           const n = i + 1
-          const locked = !s || n > s.unlocked
+          const dayLocked = locked || !s || n > s.unlocked
           const done = !!s?.done.has(n)
-          const expanded = open === n && !locked
+          const expanded = open === n && !dayLocked
           return (
             <li key={n} id={`day-${n}`} className="scroll-mt-6 rounded-2xl bg-white ring-1 ring-line">
               <button
                 type="button"
                 className="flex w-full items-center gap-3 rounded-2xl p-4 text-left disabled:cursor-default"
-                aria-expanded={locked ? undefined : expanded}
+                aria-expanded={dayLocked ? undefined : expanded}
                 aria-controls={`day-${n}-body`}
-                disabled={locked}
+                disabled={dayLocked}
                 onClick={() => setOpen(expanded ? null : n)}
               >
                 <span
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-extrabold ${done ? 'text-white' : locked ? 'bg-mist text-muted' : 'ring-2'}`}
-                  style={done ? { background: t.accent } : locked ? undefined : { color: t.accent, ['--tw-ring-color' as string]: t.accent }}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-extrabold ${done ? 'text-white' : dayLocked ? 'bg-mist text-muted' : 'ring-2'}`}
+                  style={done ? { background: t.accent } : dayLocked ? undefined : { color: t.accent, ['--tw-ring-color' as string]: t.accent }}
                 >
-                  {done ? <Check className="h-4 w-4" strokeWidth={3} aria-hidden /> : locked ? <Lock className="h-3.5 w-3.5" aria-hidden /> : n}
+                  {done ? <Check className="h-4 w-4" strokeWidth={3} aria-hidden /> : dayLocked ? <Lock className="h-3.5 w-3.5" aria-hidden /> : n}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-xs font-bold uppercase tracking-wide text-muted">Day {n}</span>
-                  <span className={`block font-bold ${locked ? 'text-muted' : ''}`}>{d.title}</span>
+                  <span className={`block font-bold ${dayLocked ? 'text-muted' : ''}`}>{d.title}</span>
                 </span>
-                <span className="sr-only">{done ? ', done' : locked ? (s ? ', unlocks on a later day' : ', start the programme to unlock') : ''}</span>
+                <span className="sr-only">{done ? ', done' : dayLocked ? (s ? ', unlocks on a later day' : ', start the programme to unlock') : ''}</span>
               </button>
               {expanded && (
                 <div id={`day-${n}-body`} className="border-t border-line px-4 pb-4 pt-3">
@@ -135,7 +147,7 @@ export function ProgrammeView({ programme: p }: { programme: Programme }) {
         })}
       </ol>
 
-      {e && (
+      {e && !locked && (
         <div className="mt-6 flex flex-wrap gap-2">
           <button
             type="button"

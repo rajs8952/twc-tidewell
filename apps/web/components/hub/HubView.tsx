@@ -11,6 +11,8 @@ import { FirstWeekChecklist } from '@/components/hub/FirstWeekChecklist'
 import { ForYouToday } from '@/components/hub/ForYouToday'
 import { GardenCard } from '@/components/hub/GardenCard'
 import { WeeklyRecap } from '@/components/hub/WeeklyRecap'
+import { PlanBanner } from '@/components/plans/PlanCard'
+import { usePlan } from '@/lib/usePlan'
 import { HubCard } from '@/components/hub/HubCard'
 import { WellnessTeam } from '@/components/hub/WellnessTeam'
 import { InterventionBanner } from '@/components/interventions/InterventionBanner'
@@ -40,6 +42,8 @@ import { trackProgress } from '@/lib/progress'
 export function HubView() {
   const supabase = useMemo(() => createClient(), [])
   const { profile, error: profileError } = useProfile()
+  // Until the plan is known, keep Premium features (no flash of locks for members).
+  const premium = usePlan()?.premium ?? true
   const router = useRouter()
 
   // A brand-new account goes to the welcome screen once (focus and reminders).
@@ -139,7 +143,8 @@ export function HubView() {
     if (!trackerData || !profile) return []
     const data = <T,>(r: { ok: true; data: T[] } | { ok: false }) => (r.ok ? r.data : undefined)
     const latest = latestInterventions({ mood: data(trackerData.mood), sleep: data(trackerData.sleep), weight: data(trackerData.weight) }, profile)
-    if (!activity || !recent) return latest
+    // Pattern nudges are Premium.
+    if (!activity || !recent || !premium) return latest
     // Patterns over the last week: low-mood or high-stress runs, lapses, comebacks, milestones.
     const goal = effectiveGoal(profile)
     const activeDays = new Set<string>([...Object.values(activity.days).flatMap((set) => [...set]), ...Object.keys(activity.waterTotals).filter((k) => activity.waterTotals[k]! > 0)])
@@ -156,7 +161,7 @@ export function HubView() {
       accountAgeDays: profile.created_at ? (Date.now() - Date.parse(profile.created_at)) / 86_400_000 : 30,
     })
     return [...latest, ...patterns].sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity))
-  }, [trackerData, profile, activity, recent, waterMl])
+  }, [trackerData, profile, activity, recent, waterMl, premium])
   const visible = ready ? interventions.filter((i) => !isDismissed(i.key)) : []
   const crisis = visible.find((i) => i.severity === 'CRITICAL') ?? null
   // At most two banners at once, most important first, so Home doesn't turn into a wall of advice.
@@ -270,6 +275,8 @@ export function HubView() {
 
       {profileError && <p role="alert" className="notice-error mb-6">{profileError}</p>}
 
+      <PlanBanner />
+
       <InterventionBanner intervention={crisis} onDismiss={() => crisis && dismiss(crisis.key)} />
       <div className={banners.length ? 'mb-6 space-y-3' : undefined}>
         <AnimatePresence initial={false}>
@@ -279,7 +286,7 @@ export function HubView() {
         </AnimatePresence>
       </div>
 
-      {recap && <WeeklyRecap recap={recap} />}
+      {recap && premium && <WeeklyRecap recap={recap} />}
 
       {profile && trackerData && (
         <FirstWeekChecklist
@@ -322,7 +329,7 @@ export function HubView() {
         ))}
       </ul>
 
-      {activity && profile && (
+      {activity && profile && premium && (
         <div className="mt-4">
           <GardenCard totals={activity.waterTotals} goal={effectiveGoal(profile)} />
         </div>

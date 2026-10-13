@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { cachedPlan } from '@/lib/usePlan'
 import { cachedContacts } from '@/lib/useWellnessContacts'
-import { WELLNESS_BY_ID, telHref } from '@/lib/wellness-team'
+import { EMERGENCY_NUMBER, WELLNESS_BY_ID, telHref } from '@/lib/wellness-team'
 
 /**
  * The EAP number on the offline page. The page is saved at install time, so
@@ -10,17 +11,19 @@ import { WELLNESS_BY_ID, telHref } from '@/lib/wellness-team'
  * falling back to the defaults.
  */
 export function OfflineHelpline() {
-  const [eap, setEap] = useState(WELLNESS_BY_ID.eap.phone)
+  const [line, setLine] = useState<{ label: string; phone: string | null }>({ label: 'the EAP', phone: WELLNESS_BY_ID.eap.phone })
   useEffect(() => {
     const saved = cachedContacts()
-    if (saved) setEap(saved.byId.eap.phone)
+    // On the Free plan the EAP is Premium: show the emergency number instead.
+    if (cachedPlan()?.premium === false) setLine({ label: 'emergency services', phone: saved?.emergency ?? EMERGENCY_NUMBER })
+    else if (saved) setLine({ label: 'the EAP', phone: saved.byId.eap.phone })
   }, [])
-  if (!eap) return null
+  if (!line.phone) return null
   return (
     <p className="mt-5 text-xs text-muted">
-      Need support now? Call the EAP on{' '}
-      <a href={telHref(eap)} className="font-bold text-ink underline underline-offset-2">
-        {eap}
+      Need support now? Call {line.label} on{' '}
+      <a href={telHref(line.phone)} className="font-bold text-ink underline underline-offset-2">
+        {line.phone}
       </a>
       .
     </p>

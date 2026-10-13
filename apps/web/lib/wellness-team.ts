@@ -92,6 +92,14 @@ export interface Contacts {
   team: WellnessContact[]
   byId: Record<WellnessContact['id'], WellnessContact>
   emergency: string | null
+  /** Free plan: the EAP, therapist and dietitian are Premium; only the emergency number is shown. */
+  locked?: boolean
+}
+
+/** The same contacts with the wellness team's details removed (Free plan). */
+export function lockContacts(c: Contacts): Contacts {
+  const team = c.team.map((t) => ({ ...t, phone: null, email: null, url: null, hours: null }))
+  return { team, byId: Object.fromEntries(team.map((t) => [t.id, t])) as Contacts['byId'], emergency: c.emergency, locked: true }
 }
 
 export const DEFAULT_CONTACTS: Contacts = { team: WELLNESS_TEAM, byId: WELLNESS_BY_ID, emergency: EMERGENCY_NUMBER }
@@ -148,6 +156,7 @@ export const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, '')}`
  * Null when the contact has no details yet.
  */
 export function contactHref(id: WellnessContact['id'], kind: 'call' | 'chat' | 'book', contacts: Contacts = DEFAULT_CONTACTS): string | null {
+  if (contacts.locked) return null // Premium (Free plan sees the emergency number only)
   if (kind !== 'call' && id in SECURE_INBOX) return SECURE_INBOX[id as keyof typeof SECURE_INBOX]
   const c = contacts.byId[id]
   const phone = c.phone ? telHref(c.phone) : null
