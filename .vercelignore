@@ -6,3 +6,5 @@ node_modules
 .turbo
 .claude
 **/public/sw*.js
+# The mobile app (Expo) isn't part of the website.
+apps/mobile
