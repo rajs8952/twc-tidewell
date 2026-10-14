@@ -6,9 +6,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { loadNotifications, markNotificationsRead, type InAppNotification } from '@/lib/notifications-data'
 import { createClient } from '@/lib/supabase/client'
 import { usePolling } from '@/lib/usePolling'
+import { useRealtime, type Watch } from '@/lib/useRealtime'
 
 /** How often the bell checks for new alerts while the tab is visible. */
 const POLL_MS = 30_000
+const SAFETY_MS = 300_000
+/** The coach's own alerts (row-level security: only their rows reach them). */
+const BELL_WATCHES: Watch[] = [{ table: 'in_app_notifications', event: 'INSERT' }]
 
 function ago(iso: string) {
   const min = Math.round((Date.now() - new Date(iso).getTime()) / 60_000)
@@ -35,7 +39,11 @@ export function NotificationBell({ portalPath }: { portalPath: string }) {
   useEffect(() => {
     refresh()
   }, [refresh])
-  usePolling(refresh, POLL_MS)
+  // New alerts arrive through Realtime; polling is the fallback (and a slow safety net).
+  const live = useRealtime(supabase, BELL_WATCHES, () => {
+    refresh()
+  })
+  usePolling(refresh, live ? SAFETY_MS : POLL_MS)
 
   // Close on outside click or Escape.
   useEffect(() => {

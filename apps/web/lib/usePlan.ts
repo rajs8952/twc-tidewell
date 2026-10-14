@@ -17,19 +17,23 @@ import { createClient } from '@/lib/supabase/client'
 
 const CACHE_KEY = storageKey('plan')
 
+/** Whose plan `current` and `loading` are: a different account signing in on this device starts afresh. */
+let owner: string | null | undefined
 let current: PlanInfo | null = null
 let loading: Promise<PlanInfo> | null = null
-const listeners = new Set<(p: PlanInfo) => void>()
+const listeners = new Set<(p: PlanInfo | null) => void>()
 
-/** The plan saved on this device last time, if any. */
+/** The plan saved on this device last time (by whoever was signed in), if any. For the offline page. */
 export function cachedPlan(): PlanInfo | null {
   return cached()
 }
 
-function cached(): PlanInfo | null {
+/** The saved plan, only if it belongs to `user` (when given). */
+function cached(user?: string | null): PlanInfo | null {
   try {
-    const v = JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null') as PlanInfo | null
-    return v && typeof v.premium === 'boolean' ? v : null
+    const v = JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null') as { user?: string; plan?: PlanInfo } | null
+    if (!v?.plan || typeof v.plan.premium !== 'boolean') return null
+    return user === undefined || v.user === user ? v.plan : null
   } catch {
     return null
   }
@@ -38,20 +42,36 @@ function cached(): PlanInfo | null {
 function publish(p: PlanInfo) {
   current = p
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(p))
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ user: owner, plan: p }))
   } catch {
     /* fine: it's reloaded next visit */
   }
   listeners.forEach((l) => l(p))
 }
 
-function load(): Promise<PlanInfo> {
+/** The signed-in account (from the session on this device; no network call). */
+async function signedInUser() {
+  const { data } = await createClient().auth.getSession()
+  return data.session?.user.id ?? null
+}
+
+/** Checks who's signed in first: another account's plan is never reused. */
+async function load(): Promise<PlanInfo> {
+  const user = await signedInUser()
+  if (user !== owner) {
+    owner = user
+    current = null
+    loading = null
+    const saved = cached(user)
+    listeners.forEach((l) => l(saved))
+  }
   loading ??= (async () => {
     const { data, error } = await createClient().rpc('my_plan')
+    if (owner !== user) return current ?? EVERYTHING // signed in as someone else meanwhile
     if (!error && data) publish(data as PlanInfo)
     else if (error?.code === 'PGRST202') publish(EVERYTHING) // not set up yet
     else loading = null
-    return current ?? cached() ?? EVERYTHING
+    return current ?? cached(user) ?? EVERYTHING
   })()
   return loading
 }
@@ -64,13 +84,10 @@ export function refreshPlan() {
 
 /** The plan, or null until it's known (first visit on this device). */
 export function usePlan(): PlanInfo | null {
+  // `current` avoids a loading flash between screens; load() replaces it at once if someone else signed in.
   const [plan, setPlan] = useState<PlanInfo | null>(current)
   useEffect(() => {
     listeners.add(setPlan)
-    if (!current) {
-      const saved = cached()
-      if (saved) setPlan(saved)
-    }
     load().then(setPlan, () => undefined)
     return () => {
       listeners.delete(setPlan)

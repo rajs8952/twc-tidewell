@@ -28,6 +28,7 @@ import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
 import { usePolling } from '@/lib/usePolling'
 import { useLivePolling } from '@/lib/useLivePolling'
+import { newRow, useRealtime, type Watch } from '@/lib/useRealtime'
 import { useSignedImages } from '@/lib/useSignedImages'
 import { useWellnessContacts } from '@/lib/useWellnessContacts'
 import { telHref } from '@/lib/wellness-team'
@@ -138,6 +139,12 @@ function PrivacyStrip({ team }: { team: Team }) {
   )
 }
 
+/** New replies and thread changes (status, receipts) across all of the employee's conversations. */
+const CHAT_LIST_WATCHES: Watch[] = [
+  { table: 'thread_messages', event: 'INSERT' },
+  { table: 'therapist_threads', event: '*' },
+]
+
 /**
  * `team` opens straight onto that team's chat (from "Talk to Therapist" and
  * the like). Without it (/messages, the Chats tab) it's the hub: phones start
@@ -200,8 +207,24 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
       .catch((e) => setLoadError(errorMessage(e)))
   }, [refreshChats, routeTeam])
 
-  // The chat list (other conversations' previews) refreshes in the background.
-  usePolling(() => refreshChats().catch(() => {}), 30_000, chats !== null)
+  // The chat list (other conversations' previews and status) refreshes when Realtime says
+  // something it shows changed; the open conversation keeps itself up to date (below).
+  const chatsRef = useRef(chats)
+  chatsRef.current = chats
+  const listLive = useRealtime(supabase, CHAT_LIST_WATCHES, (c) => {
+    const row = newRow(c)
+    const id = (c.table === 'thread_messages' ? row.thread_id : row.id) as string | undefined
+    if (!id || id === activeIdRef.current) return
+    if (c.table === 'thread_messages') {
+      if (row.sender_role !== 'therapist') return // the employee's own messages are already in the list
+    } else {
+      const known = chatsRef.current?.find((x) => x.id === id)
+      // Their own read receipts change nothing here.
+      if (known && known.status === row.status && known.coach_read_at === row.coach_read_at && known.coach_delivered_at === row.coach_delivered_at) return
+    }
+    refreshChats().catch(() => {})
+  })
+  usePolling(() => refreshChats().catch(() => {}), listLive ? 120_000 : 30_000, chats !== null)
 
   // Load the open conversation.
   useEffect(() => {
@@ -218,7 +241,7 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
       .finally(() => setLoadingThread(false))
   }, [active, supabase])
 
-  // Poll the open conversation for replies: fast while active, slower when quiet.
+  // Replies, status and read receipts for the open conversation: pushed by Realtime, polled as a fallback.
   const { bump } = useLivePolling(async () => {
     const id = activeIdRef.current
     if (!id) return
@@ -241,7 +264,7 @@ export function SecureInbox({ team: routeTeam }: { team?: Team }) {
     if (receipts && activeChat && (receipts.coach_delivered_at !== activeChat.coach_delivered_at || receipts.coach_read_at !== activeChat.coach_read_at)) {
       setChats((cs) => cs?.map((c) => (c.id === id ? { ...c, coach_delivered_at: receipts.coach_delivered_at, coach_read_at: receipts.coach_read_at } : c)) ?? cs)
     }
-  }, active?.kind === 'thread')
+  }, active?.kind === 'thread', { supabase, threadId: active?.kind === 'thread' ? active.id : null })
 
   // Read receipts: the open conversation counts as read while it's on screen
   // (the database ignores calls with nothing new to mark).

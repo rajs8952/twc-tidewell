@@ -16,6 +16,8 @@ import { CONTACT_COLUMNS, DEFAULT_CONTACTS, contactsFrom, lockContacts, type Con
 
 const CACHE_KEY = storageKey('wellness-contacts')
 
+/** Whose contacts `current` and `loading` are (on Free, row-level security only returns the emergency number). */
+let owner: string | null | undefined
 let current: Contacts | null = null
 let loading: Promise<Contacts> | null = null
 const listeners = new Set<(c: Contacts) => void>()
@@ -41,9 +43,18 @@ export function publishContacts(rows: ContactRow[]) {
   listeners.forEach((l) => l(current!))
 }
 
-function load(): Promise<Contacts> {
+async function load(): Promise<Contacts> {
+  // Another account signed in on this device: load its own view afresh.
+  const { data: auth } = await createClient().auth.getSession()
+  const user = auth.session?.user.id ?? null
+  if (user !== owner) {
+    owner = user
+    current = null
+    loading = null
+  }
   loading ??= (async () => {
     const { data, error } = await createClient().from('wellness_contacts').select(CONTACT_COLUMNS)
+    if (owner !== user) return current ?? DEFAULT_CONTACTS // signed in as someone else meanwhile
     if (!error && data?.length) publishContacts(data as ContactRow[])
     else loading = null // try again next time (e.g. after signing in, or once the SQL is run)
     return current ?? cachedContacts() ?? DEFAULT_CONTACTS

@@ -32,6 +32,7 @@ import { trackProgress } from '@/lib/progress'
 import { createClient } from '@/lib/supabase/client'
 import { usePolling } from '@/lib/usePolling'
 import { useLivePolling } from '@/lib/useLivePolling'
+import { newRow, useRealtime, type Watch } from '@/lib/useRealtime'
 import { useSignedImages } from '@/lib/useSignedImages'
 
 /* ------------------------------------------------------------------
@@ -41,13 +42,21 @@ import { useSignedImages } from '@/lib/useSignedImages'
  * coach's own conversations; "Pool" holds unassigned ones any coach of
  * the team can claim, up to their capacity (app/actions/routing.ts).
  * Row-level security only ever returns the coach's own conversations and
- * their team's pool: colleagues' conversations never reach this screen. No WebSockets: the
- * queue refreshes every 15 s and the open chat every few seconds while
- * active (lib/useLivePolling.ts); data goes straight to Supabase
- * (lib/chat-data.ts).
+ * their team's pool: colleagues' conversations never reach this screen.
+ * Supabase Realtime says when the queue or the open chat changed (lib/useRealtime.ts,
+ * lib/useLivePolling.ts), with polling as the fallback; data goes straight
+ * to Supabase (lib/chat-data.ts).
  * ------------------------------------------------------------------ */
 
+/** Without Realtime: how often the queue is re-read. */
 const QUEUE_POLL_MS = 15_000
+/** With Realtime: only a safety net for a missed event. */
+const QUEUE_SAFETY_MS = 120_000
+/** New messages and conversation changes across the coach's team (row-level security scopes them). */
+const QUEUE_WATCHES: Watch[] = [
+  { table: 'thread_messages', event: 'INSERT' },
+  { table: 'therapist_threads', event: '*' },
+]
 type Filter = 'mine' | 'pool' | 'closed'
 
 /** Avatar colours for employees' initials; all give white text 4.5:1 or more. */
@@ -196,12 +205,24 @@ export function TherapistPortal({ team }: { team: Team }) {
 
   /* ----- queue ----- */
 
+  // The capacity bar (coach_profiles) only changes when the coach's own conversations do,
+  // so it's re-read when those change rather than on every queue refresh (and every 5 min).
+  const profileFor = useRef<{ key: string; at: number } | null>(null)
   const refreshQueue = useCallback(async () => {
     try {
-      const [list, profile] = await Promise.all([loadQueue(supabase), loadMyCoachProfile(supabase)])
+      const [list, me] = await Promise.all([loadQueue(supabase), myUserId(supabase)])
       setQueue(list)
-      setCoach(profile)
       setQueueError(null)
+      const key = list
+        .filter((x) => x.status === 'in_progress' && x.assigned_coach_id === me)
+        .map((x) => x.thread_id)
+        .sort()
+        .join(',')
+      const seen = profileFor.current
+      if (!seen || seen.key !== key || Date.now() - seen.at > 5 * 60_000) {
+        setCoach(await loadMyCoachProfile(supabase))
+        profileFor.current = { key, at: Date.now() }
+      }
     } catch (e) {
       setQueueError(errorMessage(e))
     }
@@ -211,7 +232,25 @@ export function TherapistPortal({ team }: { team: Team }) {
     myUserId(supabase).then(setMe)
     trackProgress(refreshQueue())
   }, [supabase, refreshQueue])
-  usePolling(refreshQueue, QUEUE_POLL_MS)
+  // The queue refreshes when Realtime says something it shows changed: a new conversation,
+  // a new message from an employee, or a conversation claimed, released or closed.
+  // The open conversation keeps itself (and its row) up to date.
+  const queueRef = useRef(queue)
+  queueRef.current = queue
+  const queueLive = useRealtime(supabase, QUEUE_WATCHES, (c) => {
+    const row = newRow(c)
+    const id = (c.table === 'thread_messages' ? row.thread_id : row.id) as string | undefined
+    if (!id || id === activeRef.current) return
+    if (c.table === 'thread_messages') {
+      if (row.sender_role !== 'user') return // replies are sent from here
+    } else if (c.eventType === 'UPDATE') {
+      const known = queueRef.current?.find((x) => x.thread_id === id)
+      // Read receipts change nothing in the queue.
+      if (known && known.status === row.status && (known.assigned_coach_id ?? null) === (row.assigned_coach_id ?? null)) return
+    }
+    refreshQueue()
+  })
+  usePolling(refreshQueue, queueLive ? QUEUE_SAFETY_MS : QUEUE_POLL_MS)
 
   /* ----- open conversation ----- */
 
@@ -263,7 +302,7 @@ export function TherapistPortal({ team }: { team: Team }) {
       }
     }
     if (status && item && status !== item.status) patchItem(id, { status })
-  }, activeId !== null)
+  }, activeId !== null, { supabase, threadId: activeId })
 
   // Read receipts: an assigned conversation open on screen counts as read
   // (pool browsing doesn't; the database ignores calls with nothing new).

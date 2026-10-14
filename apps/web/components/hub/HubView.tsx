@@ -16,19 +16,18 @@ import { usePlan } from '@/lib/usePlan'
 import { HubCard } from '@/components/hub/HubCard'
 import { WellnessTeam } from '@/components/hub/WellnessTeam'
 import { InterventionBanner } from '@/components/interventions/InterventionBanner'
-import { getDrinkLogs } from '@rajs8952/storage/supabase'
 import { errorMessage } from '@rajs8952/core/errors'
 import { exerciseRange } from '@rajs8952/core/exercise'
 import { hubSummaries, type HubSummary, type TrackerData } from '@rajs8952/trackers/hub'
-import { addDays, dayKey, greeting, startOfDay, startOfWeek } from '@rajs8952/core/dates'
+import { addDays, dayKey, greeting, startOfWeek } from '@rajs8952/core/dates'
 import { effectiveGoal } from '@rajs8952/core/hydration'
 import { SEVERITY_ORDER, latestInterventions, patternInterventions } from '@rajs8952/interventions'
 import { meditationRange } from '@rajs8952/core/meditation'
 import { MOODS, moodRange, type MoodLog, type MoodState } from '@rajs8952/core/mood'
 import { MoodFace } from '@rajs8952/tracker-mood'
 import { useTrackerStorage } from '@rajs8952/ui'
-import { activeStreak, dayStreak, loadActivity, waterStreak, weekStreak, type Activity } from '@/lib/activity'
-import { computeRecap, loadRecent, type RecentEntries } from '@/lib/recap'
+import { activeStreak, dayStreak, loadHistory, waterStreak, weekStreak, type Activity } from '@/lib/activity'
+import { computeRecap, type RecentEntries } from '@/lib/recap'
 import { sleepRange } from '@rajs8952/core/sleep'
 import { createClient } from '@/lib/supabase/client'
 import { TRACKERS, type TrackerId } from '@/lib/trackers'
@@ -78,19 +77,15 @@ export function HubView() {
         const failed = { ok: false as const, error: errorMessage(e) }
         setTrackerData({ mood: failed, meditation: failed, sleep: failed, weight: failed, exercise: failed })
       })
-    // Water reads straight from the browser, as the water tracker does.
-    const today = startOfDay(now)
-    trackProgress(getDrinkLogs(supabase, today, addDays(today, 1)))
-      .then((logs) => alive && setWaterMl(logs.reduce((s, l) => s + l.effective_ml, 0)))
+    // Streaks, the recap and today's water, in one read per tracker.
+    trackProgress(loadHistory(supabase, now))
+      .then((h) => {
+        if (!alive) return
+        setActivity(h.activity)
+        setRecent(h.recent)
+        setWaterMl(h.waterToday ?? -1)
+      })
       .catch(() => alive && setWaterMl(-1))
-    // Streak history (a few months of "which days"), loaded alongside.
-    loadActivity(supabase, now)
-      .then((a) => alive && setActivity(a))
-      .catch(() => {})
-    // The last two weeks' entries, for the weekly recap and the pattern nudges.
-    loadRecent(supabase, now)
-      .then((r) => alive && setRecent(r))
-      .catch(() => {})
     return () => {
       alive = false
     }

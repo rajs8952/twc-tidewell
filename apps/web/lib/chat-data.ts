@@ -77,18 +77,37 @@ interface ChatCoach {
 
 /* ---------- Receipts (supabase/chat-receipts-and-scoping.sql) ---------- */
 
+/** The other side's latest messages as last reported delivered (see markDelivered). */
+let deliveredUpTo: string | null = null
+
 /**
  * Tells the database the caller's app has received the other side's latest
- * messages (on every chat-list or queue load). Fire and forget: a failure
- * only means ticks update a little later.
+ * messages, when a chat-list or queue load shows something new from them
+ * (`latest`: those conversations and their last message times). Fire and
+ * forget: a failure only means ticks update a little later.
  */
-export function markDelivered(supabase: SupabaseClient) {
-  supabase.rpc('mark_threads_delivered').then(() => {}, () => {})
+export function markDelivered(supabase: SupabaseClient, latest: string) {
+  if (!latest || latest === deliveredUpTo) return
+  deliveredUpTo = latest
+  supabase.rpc('mark_threads_delivered').then(() => {}, () => {
+    deliveredUpTo = null // try again next load
+  })
 }
+
+/** What markDelivered compares: each conversation whose last message came from `from`, with its time. */
+const fromOtherSide = (rows: { id: string; role: string | null; at: string | null }[], from: string) =>
+  rows
+    .filter((r) => r.role === from)
+    .map((r) => `${r.id}@${r.at}`)
+    .sort()
+    .join(',')
+
+/** Fired on `window` after the signed-in person reads a conversation (the unread badge recounts). */
+export const CHATS_READ_EVENT = 'omniwell:chats-read'
 
 /** The caller has the conversation open on screen: its messages count as read. */
 export function markRead(supabase: SupabaseClient, threadId: string) {
-  supabase.rpc('mark_thread_read', { p_thread: threadId }).then(() => {}, () => {})
+  supabase.rpc('mark_thread_read', { p_thread: threadId }).then(() => window.dispatchEvent(new Event(CHATS_READ_EVENT)), () => {})
 }
 
 type ThreadPoll = { status: ThreadStatus } & ThreadReceipts
@@ -101,7 +120,6 @@ export async function listMyChats(supabase: SupabaseClient): Promise<ChatSummary
   ])
   if (error) fail(error, 'load')
   if (!threads?.length) return []
-  markDelivered(supabase)
   const coachOf = new Map(((coaches.data ?? []) as ChatCoach[]).map((c) => [c.thread_id, c]))
   type Preview = Pick<ThreadMessage, 'thread_id' | 'sender_role' | 'content' | 'created_at' | 'media_url'>
   // Each conversation's latest message (supabase/queue-and-previews.sql).
@@ -124,6 +142,7 @@ export async function listMyChats(supabase: SupabaseClient): Promise<ChatSummary
   }
   const last = new Map<string, ChatSummary['last']>()
   for (const m of previews) if (!last.has(m.thread_id)) last.set(m.thread_id, { sender_role: m.sender_role, content: m.content, created_at: m.created_at, media_url: m.media_url })
+  markDelivered(supabase, fromOtherSide([...last].map(([id, m]) => ({ id, role: m?.sender_role ?? null, at: m?.created_at ?? null })), 'therapist'))
   return threads
     .map((t) => {
       const c = coachOf.get(t.id)
@@ -176,8 +195,9 @@ export async function sendUserMessage(supabase: SupabaseClient, threadId: string
 export async function loadQueue(supabase: SupabaseClient): Promise<QueueItem[]> {
   const { data, error } = await supabase.rpc('therapist_queue')
   if (error) fail(error, 'load')
-  markDelivered(supabase)
-  return (data ?? []) as QueueItem[]
+  const queue = (data ?? []) as QueueItem[]
+  markDelivered(supabase, fromOtherSide(queue.map((q) => ({ id: q.thread_id, role: q.last_sender_role, at: q.last_message_at })), 'user'))
+  return queue
 }
 
 export async function loadStaffMessages(supabase: SupabaseClient, threadId: string): Promise<StaffThreadMessage[]> {

@@ -1,14 +1,13 @@
 'use client'
 
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { addDays, dayKey, startOfWeek } from '@rajs8952/core/dates'
 import type { Goals } from '@rajs8952/core/goals'
 import { MOOD_BY_ID, type MoodLog } from '@rajs8952/core/mood'
 
 /* ------------------------------------------------------------------
  * The weekly recap on Home: last week (Monday–Sunday) next to the week
- * before. Entries come straight from the browser (row-level security keeps
- * them to the user's own); the summary is a pure function below.
+ * before. Entries are loaded with Home's history (loadHistory in
+ * lib/activity.ts); the summary is a pure function below.
  * ------------------------------------------------------------------ */
 
 export interface RecentEntries {
@@ -17,23 +16,6 @@ export interface RecentEntries {
   meditation: { duration_min: number; logged_at: string }[]
   exercise: { duration_min: number; logged_at: string }[]
   weight: { weight_kg: number; logged_at: string }[]
-}
-
-/** From the Monday two weeks before this one, up to now: enough for last week, the week before, and the last 7 days. */
-export async function loadRecent(supabase: SupabaseClient, now = new Date()): Promise<RecentEntries> {
-  const from = addDays(startOfWeek(now), -14).toISOString()
-  const get = async <T,>(table: string, cols: string, timeCol = 'logged_at') => {
-    const { data } = await supabase.from(table).select(cols).gte(timeCol, from).order(timeCol, { ascending: false }).limit(2000)
-    return (data ?? []) as unknown as T[]
-  }
-  const [mood, sleep, meditation, exercise, weight] = await Promise.all([
-    get<MoodLog>('mood_logs', 'id, mood_state, energy_level, stress_level, emotions, note, logged_at'),
-    get<RecentEntries['sleep'][number]>('sleep_logs', 'duration_min, wake_at', 'wake_at'),
-    get<RecentEntries['meditation'][number]>('meditation_logs', 'duration_min, logged_at'),
-    get<RecentEntries['exercise'][number]>('exercise_logs', 'duration_min, logged_at'),
-    get<RecentEntries['weight'][number]>('weight_logs', 'weight_kg, logged_at'),
-  ])
-  return { mood, sleep, meditation, exercise, weight: weight.map((w) => ({ ...w, weight_kg: Number(w.weight_kg) })) }
 }
 
 export interface WeekStats {

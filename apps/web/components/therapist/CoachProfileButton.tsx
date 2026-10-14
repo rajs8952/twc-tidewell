@@ -34,9 +34,15 @@ export function CoachProfileButton() {
     loadMyCoachCard(supabase).then(setCard, () => {})
   }, [supabase])
 
-  // Presence: beat now, every minute while visible, and on coming back to the tab.
+  // Presence: beat now, every minute while visible, and on coming back to the tab
+  // if the last beat is a minute old (a quick tab switch doesn't need one).
   useEffect(() => {
-    const beat = () => document.visibilityState === 'visible' && coachHeartbeat(supabase)
+    let last = 0
+    const beat = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - last < HEARTBEAT_MS - 1_000) return
+      last = Date.now()
+      coachHeartbeat(supabase)
+    }
     beat()
     const timer = setInterval(beat, HEARTBEAT_MS)
     document.addEventListener('visibilitychange', beat)
