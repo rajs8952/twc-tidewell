@@ -1,3 +1,6 @@
 packages:
   - apps/*
   - packages/*
+  # The mobile app (Expo) installs on its own (npm, apps/mobile/package-lock.json),
+  # so its React Native and React 19 dependencies never touch the website's.
+  - '!apps/mobile'

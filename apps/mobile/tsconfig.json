@@ -1,0 +1,38 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@/assets/*": [
+        "./assets/*"
+      ],
+      "@rajs8952/storage/supabase": [
+        "../../packages/storage/src/supabase.ts"
+      ],
+      "@rajs8952/trackers/hub": [
+        "../../packages/trackers/src/hub.ts"
+      ],
+      "@rajs8952/core/*": [
+        "./node_modules/@rajs8952/core/src/*"
+      ],
+      "@supabase/supabase-js": [
+        "./node_modules/@supabase/supabase-js"
+      ],
+      "@rajs8952/interventions": [
+        "../../packages/interventions/src/index.ts"
+      ],
+      "@omniwell/web/*": [
+        "../web/lib/*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
+}
