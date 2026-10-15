@@ -22,7 +22,7 @@ import {
   type ChatMessageView,
 } from '@/components/chat/ChatUI'
 import { uploadChatImage } from '@/app/actions/chat-media'
-import { claimTicket } from '@/app/actions/routing'
+import { claimTicket, notifyEmployeeOfReply } from '@/app/actions/routing'
 import { Dialog } from '@/components/Dialog'
 import { errorMessage } from '@rajs8952/core/errors'
 import { ChatImageError, formatBytes, prepareChatImage } from '@/lib/chat-image'
@@ -337,6 +337,8 @@ export function TherapistPortal({ team }: { team: Team }) {
       setPending((ps) => ps.filter((x) => x.key !== p.key))
       if (activeRef.current === p.threadId) setMessages((cur) => mergeMessages(cur, [saved]))
       patchItem(p.threadId, { waiting_since: null, last_sender_role: 'therapist', last_message: saved.content.slice(0, 160), last_message_at: saved.created_at })
+      // Let the employee know on their phone or browser (rate-limited by the database).
+      notifyEmployeeOfReply(p.threadId).catch(() => {})
       bump()
     } catch (e) {
       setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, state: 'failed', error: errorMessage(e) } : x)))

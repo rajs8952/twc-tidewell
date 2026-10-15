@@ -3,6 +3,9 @@
 import { waitUntil } from '@vercel/functions'
 import { headers } from 'next/headers'
 import { alertCoachOfReply, alertCoachesOfQuery, clearPoolAlerts } from '@/lib/coach-alerts'
+import { sendToPhones } from '@/lib/expo-push'
+import { sendPush } from '@/lib/push-server'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { isTeam, validateMessage, type Team } from '@/lib/messages'
 import { SIGNED_OUT, isUuid, signedIn } from '@/lib/supabase/actions'
 import type { ActionResult } from '@rajs8952/core/types'
@@ -122,4 +125,45 @@ export async function notifyCoachOfReply(threadId: string): Promise<ActionResult
   const origin = headers().get('origin') ?? 'https://omniwell-app.vercel.app'
   waitUntil(alertCoachOfReply({ threadId, team: thread.team, coachId: thread.assigned_coach_id, origin }))
   return { ok: true, data: null }
+}
+
+/**
+ * Called by the coach portal after a coach replies: the employee gets a "New
+ * reply" notification on their phones (OmniWell app) and browsers. The
+ * database decides as the signed-in coach (claim_reply_notification(),
+ * supabase/mobile-push.sql): only staff of that conversation's team who just
+ * replied, at most once every 5 minutes per conversation. The notification
+ * never includes the message itself. Returns straight away; sending runs in
+ * the background.
+ */
+export async function notifyEmployeeOfReply(threadId: string): Promise<ActionResult<null>> {
+  if (!isUuid(threadId)) return { ok: false, error: 'That conversation wasn’t found.' }
+  const session = await signedIn()
+  if (!session) return { ok: false, error: SIGNED_OUT }
+  const { data, error } = await session.supabase.rpc('claim_reply_notification', { p_thread: threadId })
+  // Before mobile-push.sql is run (PGRST202), or nothing to send: quietly nothing.
+  const claim = (data ?? [])[0] as { user_id: string; team: string } | undefined
+  if (error || !claim || !isTeam(claim.team)) return { ok: true, data: null }
+  waitUntil(sendReplyNotification(claim.user_id, claim.team, threadId))
+  return { ok: true, data: null }
+}
+
+async function sendReplyNotification(userId: string, team: Team, threadId: string) {
+  const admin = supabaseAdmin()
+  if (!admin) return
+  const title = `New reply from your ${team}`
+  const body = 'Open OmniWell to read it.'
+  const [phones, browsers] = await Promise.all([
+    admin.from('mobile_push_tokens').select('token').eq('user_id', userId),
+    admin.from('push_subscriptions').select('id, endpoint, p256dh, auth').eq('user_id', userId),
+  ])
+  const phoneResult = await sendToPhones(((phones.data ?? []) as { token: string }[]).map((p) => ({ token: p.token, title, body, url: `/chat/${team}?thread=${threadId}`, channelId: 'messages' })))
+  if (phoneResult.gone.length) await admin.from('mobile_push_tokens').delete().in('token', phoneResult.gone)
+  const subs = (browsers.data ?? []) as { id: string; endpoint: string; p256dh: string; auth: string }[]
+  const results = await Promise.all(subs.map((s) => sendPush(s, { title, body, icon: '/icon/192', badge: '/icon/192', url: `/messages/${team}`, tag: `reply-${threadId}` })))
+  const gone = subs.filter((_, i) => {
+    const r = results[i]
+    return r && !r.ok && r.gone
+  })
+  if (gone.length) await admin.from('push_subscriptions').delete().in('id', gone.map((s) => s.id))
 }
