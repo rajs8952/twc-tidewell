@@ -1,7 +1,7 @@
 import { useState, type PropsWithChildren, type ReactNode } from 'react'
 import { ActivityIndicator, InputAccessoryView, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import Svg, { Circle } from 'react-native-svg'
+import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg'
 import { COLORS, PILLAR_COLORS, RADIUS } from '@/lib/theme'
 
 /* ------------------------------------------------------------------
@@ -27,6 +27,51 @@ export function Logo() {
       <LogoMark />
       <Text style={styles.logoText}>OmniWell</Text>
     </View>
+  )
+}
+
+/**
+ * The sign-in and sign-up screens: a large OmniWell logo, name and tagline
+ * over a soft brand wash, then the form on a white card. `compact` shrinks
+ * the logo for follow-up steps (codes, new password) so the form fits.
+ */
+export function AuthScreen({ children, compact = false }: PropsWithChildren<{ compact?: boolean }>) {
+  return (
+    <SafeAreaView style={styles.authSafe} edges={['top', 'bottom']}>
+      <View style={styles.wash} pointerEvents="none">
+        <Svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 100">
+          <Defs>
+            <SvgLinearGradient id="wash" x1="0" y1="0" x2="1" y2="1">
+              <Stop offset="0" stopColor="#DDF1FB" />
+              <Stop offset="0.55" stopColor="#EFECFA" />
+              <Stop offset="1" stopColor={COLORS.background} />
+            </SvgLinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100" height="100" fill="url(#wash)" />
+        </Svg>
+      </View>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled">
+          <View style={[styles.hero, compact && styles.heroCompact]} accessible accessibilityRole="header" accessibilityLabel="OmniWell. Your whole wellbeing, in one place.">
+            <View style={[styles.markHalo, compact && styles.markHaloCompact]}>
+              <LogoMark size={compact ? 56 : 96} />
+            </View>
+            <Text style={[styles.brand, compact && styles.brandCompact]}>OmniWell</Text>
+            {!compact && (
+              <>
+                <Text style={styles.tagline}>Your whole wellbeing, in one place</Text>
+                <View style={styles.pillars}>
+                  {PILLAR_COLORS.map((c) => (
+                    <View key={c} style={[styles.pillar, { backgroundColor: c }]} />
+                  ))}
+                </View>
+              </>
+            )}
+          </View>
+          <View style={styles.authCard}>{children}</View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   )
 }
 
@@ -150,6 +195,19 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 32 },
   logo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   logoText: { fontSize: 20, fontWeight: '700', color: COLORS.ink, letterSpacing: -0.3 },
+  authSafe: { flex: 1, backgroundColor: COLORS.background },
+  wash: { position: 'absolute', top: 0, left: 0, right: 0, height: 420 },
+  authScroll: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 28, paddingBottom: 32 },
+  hero: { alignItems: 'center', marginBottom: 24 },
+  heroCompact: { marginBottom: 16 },
+  markHalo: { width: 132, height: 132, borderRadius: 66, backgroundColor: 'rgba(255,255,255,0.75)', alignItems: 'center', justifyContent: 'center', shadowColor: '#0F2F37', shadowOpacity: 0.08, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
+  markHaloCompact: { width: 80, height: 80, borderRadius: 40 },
+  brand: { marginTop: 14, fontSize: 36, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.8 },
+  brandCompact: { marginTop: 8, fontSize: 24 },
+  tagline: { marginTop: 4, fontSize: 16, color: COLORS.muted },
+  pillars: { flexDirection: 'row', gap: 6, marginTop: 14 },
+  pillar: { width: 18, height: 6, borderRadius: 3 },
+  authCard: { backgroundColor: COLORS.white, borderRadius: 28, borderWidth: 1, borderColor: COLORS.line, padding: 22, shadowColor: '#0F2F37', shadowOpacity: 0.06, shadowRadius: 24, shadowOffset: { width: 0, height: 10 }, elevation: 2 },
   title: { fontSize: 30, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.5 },
   lead: { marginTop: 8, fontSize: 16, lineHeight: 23, color: COLORS.muted },
   field: { gap: 6 },

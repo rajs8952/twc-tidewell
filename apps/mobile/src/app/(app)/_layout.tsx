@@ -24,6 +24,7 @@ export default function AppLayout() {
       <Stack.Screen name="programmes" options={{ title: 'Programmes' }} />
       <Stack.Screen name="programme/[id]" options={{ title: 'Programme' }} />
       <Stack.Screen name="edit-profile" options={{ title: 'Edit profile' }} />
+      <Stack.Screen name="reminders" options={{ title: 'Reminders' }} />
     </Stack>
   )
 }

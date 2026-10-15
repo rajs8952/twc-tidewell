@@ -41,12 +41,25 @@
           "cameraPermission": false,
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#2189D6"
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
-    "backgroundColor": "#F6F9F8"
+    "backgroundColor": "#F6F9F8",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3d929974-3370-4d35-a9c1-b01d25145552"
+      }
+    },
+    "owner": "rajs4319"
   }
 }

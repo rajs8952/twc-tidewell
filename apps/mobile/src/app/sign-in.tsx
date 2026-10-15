@@ -1,8 +1,8 @@
-import * as WebBrowser from 'expo-web-browser'
+import { router } from 'expo-router'
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { CodeEntry } from '@/components/CodeEntry'
-import { Button, Field, Lead, LinkButton, Logo, Notice, Screen, Title } from '@/components/ui'
+import { AuthScreen, Button, Field, Lead, LinkButton, Notice, Title } from '@/components/ui'
 import { NETWORK_MESSAGE, PASSWORD_MIN, codeError, isNetworkError, passwordError, signInError, useSession, validateEmail, validatePassword } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { COLORS } from '@/lib/theme'
@@ -16,8 +16,6 @@ import { COLORS } from '@/lib/theme'
  *   confirm-code  an account that was never confirmed: a fresh code confirms it
  * Once signed in, the root layout moves them into the app.
  * ------------------------------------------------------------------ */
-
-const SIGN_UP_URL = 'https://omniwell-app.vercel.app/signup'
 
 type Mode = 'sign-in' | 'forgot' | 'reset-code' | 'new-password' | 'confirm-code'
 
@@ -105,9 +103,8 @@ export default function SignIn() {
   }
 
   return (
-    <Screen>
-      <Logo />
-      <View style={styles.body}>
+    <AuthScreen compact={mode !== 'sign-in'}>
+      <View>
         {mode === 'sign-in' && (
           <>
             <Title>Welcome back</Title>
@@ -141,7 +138,7 @@ export default function SignIn() {
             </View>
             <View style={styles.footer}>
               <Text style={styles.muted}>New to OmniWell?</Text>
-              <LinkButton title="Create an account" onPress={() => void WebBrowser.openBrowserAsync(SIGN_UP_URL)} />
+              <LinkButton title="Create an account" onPress={() => router.push('/sign-up')} />
             </View>
           </>
         )}
@@ -211,12 +208,11 @@ export default function SignIn() {
           </>
         )}
       </View>
-    </Screen>
+    </AuthScreen>
   )
 }
 
 const styles = StyleSheet.create({
-  body: { marginTop: 40 },
   form: { marginTop: 28, gap: 16 },
   gap: { height: 20 },
   footer: { marginTop: 28, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },

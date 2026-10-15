@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
 import { KeyboardDoneBar } from '@/components/ui'
 import { SessionProvider, useSession } from '@/lib/auth'
+import { useNotificationTaps } from '@/lib/push'
 import { COLORS } from '@/lib/theme'
 
 // Keep the splash screen up until the saved sign-in has been read.
@@ -23,6 +24,7 @@ export default function RootLayout() {
 function RootNavigator() {
   const { session, loading, held } = useSession()
   const signedIn = !!session && !held
+  useNotificationTaps(signedIn)
 
   useEffect(() => {
     if (!loading) SplashScreen.hideAsync()
@@ -36,6 +38,7 @@ function RootNavigator() {
       </Stack.Protected>
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="sign-in" />
+        <Stack.Screen name="sign-up" />
       </Stack.Protected>
     </Stack>
   )

@@ -5,7 +5,7 @@ import { Image } from 'expo-image'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
 import { router } from 'expo-router'
-import { Camera, Crown, Pencil } from 'lucide-react-native'
+import { BellRing, Camera, Crown, Pencil } from 'lucide-react-native'
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Card, Muted, SectionTitle, Status, TrackerScreen } from '@/components/kit'
@@ -14,6 +14,7 @@ import { Loader } from '@/components/Loader'
 import { useSession } from '@/lib/auth'
 import { clearPlan, daysLeft, usePlan } from '@/lib/plan'
 import { clearProfile, useProfile } from '@/lib/profile'
+import { disablePush } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { COLORS } from '@/lib/theme'
 import { messageOf, storage } from '@/lib/trackers'
@@ -84,6 +85,8 @@ export default function Me() {
   }
 
   async function signOut() {
+    // This phone stops getting this person's notifications (while still signed in, so the database allows it).
+    await disablePush().catch(() => {})
     clearProfile()
     clearPlan()
     await supabase.auth.signOut({ scope: 'local' })
@@ -136,6 +139,11 @@ export default function Me() {
         <Text style={styles.editText}>Edit profile</Text>
       </Pressable>
 
+      <Pressable onPress={() => router.push('/reminders')} style={({ pressed }) => [styles.reminders, pressed && { opacity: 0.85 }]} accessibilityRole="button">
+        <BellRing size={18} color={COLORS.ink} />
+        <Text style={styles.remindersText}>Reminders & notifications</Text>
+      </Pressable>
+
       <Button title="Log out" variant="secondary" onPress={() => void signOut()} />
     </TrackerScreen>
   )
@@ -170,4 +178,6 @@ const styles = StyleSheet.create({
   rowValue: { flexShrink: 1, textAlign: 'right', fontSize: 15, fontWeight: '700', color: COLORS.ink },
   edit: { minHeight: 52, borderRadius: 999, backgroundColor: COLORS.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   editText: { fontSize: 16, fontWeight: '700', color: COLORS.white },
+  reminders: { minHeight: 52, borderRadius: 999, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  remindersText: { fontSize: 16, fontWeight: '700', color: COLORS.ink },
 })
