@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { OfflineNotice } from '@/components/kit'
 import { Loader } from '@/components/Loader'
+import { ProfileButton } from '@/components/ProfileButton'
 import { PremiumCard } from '@/components/Support'
 import { Notice } from '@/components/ui'
 import { REPLY_TARGET_HOURS, TEAMS, isOpenStatus, listMyChats, type Chat, type Team } from '@/lib/chat'
@@ -82,9 +83,12 @@ export default function Chats() {
         </Svg>
       </View>
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={locked ? undefined : <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={COLORS.tide500} colors={[COLORS.tide500]} />}>
-        <View style={styles.badge}>
-          <Lock size={13} color="#4A5BC4" />
-          <Text style={styles.badgeText}>Private & confidential</Text>
+        <View style={styles.topBar}>
+          <View style={styles.badge}>
+            <Lock size={13} color="#4A5BC4" />
+            <Text style={styles.badgeText}>Private & confidential</Text>
+          </View>
+          <ProfileButton />
         </View>
         <Text style={styles.title} accessibilityRole="header">
           Your care team
@@ -245,7 +249,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
   wash: { position: 'absolute', top: 0, left: 0, right: 0, height: 320 },
   scroll: { padding: 16, paddingBottom: 40, gap: 14 },
-  badge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: RADIUS.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: RADIUS.pill, paddingHorizontal: 10, paddingVertical: 5 },
   badgeText: { fontSize: 12, fontWeight: '800', color: '#4A5BC4' },
   title: { fontSize: 32, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.6, marginTop: -4 },
   lead: { fontSize: 15, lineHeight: 21, color: COLORS.muted, marginTop: -6 },

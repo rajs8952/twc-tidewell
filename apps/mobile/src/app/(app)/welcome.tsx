@@ -3,7 +3,7 @@ import { hhmm } from '@rajs8952/core/when'
 import { DEFAULT_NOTIFY_TIME } from '@omniwell/web/notifications'
 import { router } from 'expo-router'
 import { BellRing, Check } from 'lucide-react-native'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 import { Card, Muted, TrackerScreen } from '@/components/kit'
 import { Loader } from '@/components/Loader'
@@ -56,6 +56,15 @@ export default function Welcome() {
   const [push, setPush] = useState<'off' | 'on' | 'unavailable'>(unsupportedReason() ? 'unavailable' : 'off')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Seen once is enough: marked done as soon as it opens, so leaving it any way
+  // (closing the app, Android's back button) doesn't bring it back at the next log-in.
+  const profileId = profile?.id
+  const seen = !!profile?.onboarded_at
+  useEffect(() => {
+    if (!profileId || seen) return
+    storage.profile.update(profileId, { onboarded_at: new Date().toISOString() }).then(setProfile, () => {})
+  }, [profileId, seen, setProfile])
 
   if (!profile) return <TrackerScreen title="Welcome" back={false}>{<Loader />}</TrackerScreen>
   const first = profile.full_name.trim().split(/\s+/)[0]

@@ -1,7 +1,8 @@
-import { useId, useState, type PropsWithChildren, type ReactNode } from 'react'
+import { useId, useRef, useState, type PropsWithChildren, type ReactNode } from 'react'
 import { ActivityIndicator, Image, InputAccessoryView, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg'
+import { ScrollerProvider, useRevealOnFocus, useScroller } from '@/lib/revealField'
 import { COLORS, PILLAR_COLORS, RADIUS } from '@/lib/theme'
 
 /* ------------------------------------------------------------------
@@ -39,6 +40,7 @@ const TWC_LOGO = require('../../assets/images/twc-logo.png')
  * the logo for follow-up steps (codes, new password) so the form fits.
  */
 export function AuthScreen({ children, compact = false }: PropsWithChildren<{ compact?: boolean }>) {
+  const { scroller, scrollRef, onScroll } = useScroller()
   return (
     <SafeAreaView style={styles.authSafe} edges={['top', 'bottom']}>
       <View style={styles.wash} pointerEvents="none">
@@ -53,8 +55,11 @@ export function AuthScreen({ children, compact = false }: PropsWithChildren<{ co
           <Rect x="0" y="0" width="100" height="100" fill="url(#wash)" />
         </Svg>
       </View>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled">
+      {/* Not automaticallyAdjustKeyboardInsets: with it, iOS closed the keyboard again as it opened. */}
+      {/* Android too: with edge-to-edge (Android 15+), the window no longer shrinks for the keyboard by itself. */}
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
+        <ScrollerProvider value={scroller}>
+        <ScrollView ref={scrollRef} onScroll={onScroll} scrollEventThrottle={32} contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled">
           <View style={[styles.hero, compact && styles.heroCompact]} accessible accessibilityRole="header" accessibilityLabel="OmniWell by The Wellness Corner. Your whole wellbeing, in one place.">
             {/* Co-branded: OmniWell × TWC (The Wellness Corner). */}
             <View style={styles.lockup}>
@@ -82,6 +87,7 @@ export function AuthScreen({ children, compact = false }: PropsWithChildren<{ co
           </View>
           <View style={styles.authCard}>{children}</View>
         </ScrollView>
+        </ScrollerProvider>
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
@@ -89,12 +95,15 @@ export function AuthScreen({ children, compact = false }: PropsWithChildren<{ co
 
 /** A scrolling screen that keeps fields clear of the keyboard and the phone's notch. */
 export function Screen({ children }: PropsWithChildren) {
+  const { scroller, scrollRef, onScroll } = useScroller()
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          {children}
-        </ScrollView>
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
+        <ScrollerProvider value={scroller}>
+          <ScrollView ref={scrollRef} onScroll={onScroll} scrollEventThrottle={32} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+            {children}
+          </ScrollView>
+        </ScrollerProvider>
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
@@ -138,13 +147,15 @@ export function Field({ label, secure, right, ...input }: TextInputProps & { lab
   const [focused, setFocused] = useState(false)
   const doneId = `done-${useId().replace(/[^A-Za-z0-9_-]/g, '')}`
   const numeric = Platform.OS === 'ios' && !!input.keyboardType && NUMERIC.has(input.keyboardType)
+  const wrap = useRef<View>(null)
+  const reveal = useRevealOnFocus()
   return (
     <View style={styles.field}>
       <View style={styles.labelRow}>
         <Text style={styles.label}>{label}</Text>
         {right}
       </View>
-      <View style={[styles.inputWrap, focused && styles.inputFocused]}>
+      <View ref={wrap} style={[styles.inputWrap, focused && styles.inputFocused]}>
         <TextInput
           {...input}
           inputAccessoryViewID={numeric ? doneId : input.inputAccessoryViewID}
@@ -153,6 +164,7 @@ export function Field({ label, secure, right, ...input }: TextInputProps & { lab
           placeholderTextColor={`${COLORS.muted}99`}
           onFocus={(e) => {
             setFocused(true)
+            reveal(wrap)
             input.onFocus?.(e)
           }}
           onBlur={(e) => {
@@ -246,7 +258,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     paddingHorizontal: 16,
   },
-  inputFocused: { borderColor: COLORS.tide500, shadowColor: COLORS.tide200, shadowOpacity: 0.9, shadowRadius: 0, shadowOffset: { width: 0, height: 0 } },
+  // Android: the border colour only. Changing shadow props on the field's wrapper as it gains focus can make Android drop that focus again.
+  inputFocused: Platform.OS === 'ios' ? { borderColor: COLORS.tide500, shadowColor: COLORS.tide200, shadowOpacity: 0.9, shadowRadius: 0, shadowOffset: { width: 0, height: 0 } } : { borderColor: COLORS.tide500 },
   input: { flex: 1, paddingVertical: 14, fontSize: 16, color: COLORS.ink },
   toggle: { fontSize: 14, fontWeight: '700', color: COLORS.tide600 },
   button: { minHeight: 52, borderRadius: RADIUS.pill, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 20 },

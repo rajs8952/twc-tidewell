@@ -4,6 +4,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { OfflineNotice } from '@/components/kit'
+import { ProfileButton } from '@/components/ProfileButton'
 import { PremiumCard } from '@/components/Support'
 import { telHref, useContacts, type WellnessContact } from '@/lib/contacts'
 import { COLORS, RADIUS } from '@/lib/theme'
@@ -35,9 +36,12 @@ export default function Support() {
         </Svg>
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.badge}>
-          <ShieldCheck size={13} color="#237A70" />
-          <Text style={styles.badgeText}>Confidential support</Text>
+        <View style={styles.topBar}>
+          <View style={styles.badge}>
+            <ShieldCheck size={13} color="#237A70" />
+            <Text style={styles.badgeText}>Confidential support</Text>
+          </View>
+          <ProfileButton />
         </View>
         <Text style={styles.title} accessibilityRole="header">
           Support
@@ -158,7 +162,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
   wash: { position: 'absolute', top: 0, left: 0, right: 0, height: 320 },
   scroll: { padding: 16, paddingBottom: 40, gap: 14 },
-  badge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: RADIUS.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: RADIUS.pill, paddingHorizontal: 10, paddingVertical: 5 },
   badgeText: { fontSize: 12, fontWeight: '800', color: '#237A70' },
   title: { fontSize: 32, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.6, marginTop: -4 },
   lead: { fontSize: 15, lineHeight: 21, color: COLORS.muted, marginTop: -6 },

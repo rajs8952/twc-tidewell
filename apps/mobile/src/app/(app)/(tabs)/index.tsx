@@ -9,13 +9,15 @@ import { weightRange } from '@rajs8952/core/weight'
 import { evaluateMetric, latestInterventions, moodInterventionKey, type Intervention, type KeyedIntervention } from '@rajs8952/interventions'
 import { hubSummaries, type HubSummary, type TrackerData } from '@rajs8952/trackers/hub'
 import { router, type Href } from 'expo-router'
-import { BookOpen, Check, ChevronRight } from 'lucide-react-native'
+import { BookOpen, Check, ChevronRight, Sparkles, Target } from 'lucide-react-native'
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Card, MoodFace, OfflineNotice, Ring, Status } from '@/components/kit'
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
+import { MoodFace, OfflineNotice, Ring, Status } from '@/components/kit'
 import { CrisisPrompt, SupportBanner } from '@/components/Support'
-import { Logo, Notice } from '@/components/ui'
+import { ProfileButton } from '@/components/ProfileButton'
+import { LogoMark, Notice } from '@/components/ui'
 import { Loader } from '@/components/Loader'
 import { dismiss, dismissedKeys } from '@/lib/dismissed'
 import { loadProfile } from '@/lib/profile'
@@ -77,7 +79,8 @@ export default function Home() {
   }
 
   const first = data?.profile.full_name.trim().split(/\s+/)[0]
-  const needsWelcome = !!data?.needsWelcome
+  // Only from freshly loaded data: the copy saved on the phone may be from before the welcome was finished.
+  const needsWelcome = !!data?.needsWelcome && savedAt === null
   useEffect(() => {
     if (needsWelcome) router.replace('/welcome')
   }, [needsWelcome])
@@ -86,6 +89,7 @@ export default function Home() {
   const order = [...TRACKER_ORDER].sort((a, b) => Number(focus.includes(b)) - Number(focus.includes(a)))
   const summaries = data?.summaries
   const loggedCount = summaries ? TRACKER_ORDER.filter((id) => summaries[id].logged).length : 0
+  const metCount = summaries ? TRACKER_ORDER.filter((id) => summaries[id].done).length : 0
 
   async function quick(tracker: TrackerId, key: string, save: () => Promise<string>) {
     setBusy(key)
@@ -118,19 +122,35 @@ export default function Home() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* A soft wash behind the header, in OmniWell's blues. */}
+      <View style={styles.wash} pointerEvents="none">
+        <Svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 100">
+          <Defs>
+            <LinearGradient id="homeWash" x1="0" y1="0" x2="1" y2="1">
+              <Stop offset="0" stopColor="#DDF1FB" />
+              <Stop offset="0.6" stopColor="#E9F5F1" />
+              <Stop offset="1" stopColor={COLORS.background} />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100" height="100" fill="url(#homeWash)" />
+        </Svg>
+      </View>
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={COLORS.tide500} colors={[COLORS.tide500]} />}>
-        <Logo />
-        <View style={{ marginTop: 20 }}>
-          <Text style={styles.date}>{new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
-          <Text style={styles.greeting} accessibilityRole="header">
-            {greeting()}
-            {first ? `, ${first}` : ''}
-          </Text>
+        <View style={styles.topBar}>
+          <View style={styles.brand} accessibilityRole="header" accessibilityLabel="OmniWell">
+            <LogoMark size={30} />
+            <Text style={styles.brandText}>OmniWell</Text>
+          </View>
+          <ProfileButton profile={data?.profile} />
         </View>
 
-        <View style={{ marginTop: 12 }}>
-          <OfflineNotice savedAt={savedAt} />
-        </View>
+        <Text style={styles.date}>{new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
+        <Text style={styles.greeting} accessibilityRole="header">
+          {greeting()}
+          {first ? `, ${first}` : ''}
+        </Text>
+
+        <OfflineNotice savedAt={savedAt} />
         {error && !data && <Notice tone="error">{error}</Notice>}
         {!data && !error && <Loader label="Getting your day ready…" />}
 
@@ -144,133 +164,207 @@ export default function Home() {
 
         {summaries && (
           <>
-            {banner && (
-              <View style={{ marginTop: 16 }}>
-                <SupportBanner intervention={banner} onDismiss={() => acknowledge(banner)} />
-              </View>
-            )}
-            <View style={styles.strip}>
-              <Text style={styles.stripText}>
-                <Text style={styles.stripCount}>{loggedCount} of 6</Text> tracked today
-              </Text>
-              <View style={styles.dots}>
-                {TRACKER_ORDER.map((id) => (
-                  <View key={id} style={[styles.dot, { backgroundColor: summaries[id].logged ? TRACKERS[id].accent : COLORS.line }]} />
-                ))}
+            {/* Today at a glance: how many trackers have an entry, and how many goals are met. */}
+            <View style={styles.hero}>
+              <Ring progress={loggedCount / TRACKER_ORDER.length} color={COLORS.tide500} size={96} stroke={9}>
+                <Text style={styles.heroCount}>
+                  {loggedCount}
+                  <Text style={styles.heroOf}>/{TRACKER_ORDER.length}</Text>
+                </Text>
+              </Ring>
+              <View style={{ flex: 1, gap: 6 }}>
+                <Text style={styles.heroTitle}>{loggedCount === 0 ? 'Start your day' : loggedCount === TRACKER_ORDER.length ? 'Everything tracked' : 'Your day so far'}</Text>
+                <Text style={styles.heroText}>
+                  {loggedCount} of {TRACKER_ORDER.length} tracked today
+                  {metCount > 0 ? ` · ${metCount} ${metCount === 1 ? 'goal' : 'goals'} met` : ''}
+                </Text>
+                <View style={styles.heroIcons}>
+                  {TRACKER_ORDER.map((id) => {
+                    const t = TRACKERS[id]
+                    const Icon = t.icon
+                    const on = summaries[id].logged
+                    return (
+                      <Pressable key={id} onPress={() => router.push(`/${id}` as Href)} hitSlop={4} style={[styles.heroIcon, { backgroundColor: on ? t.accent : COLORS.mist }]} accessibilityRole="button" accessibilityLabel={`${t.name}${on ? ', tracked today' : ', not tracked yet'}`}>
+                        <Icon size={14} color={on ? COLORS.white : COLORS.muted} />
+                      </Pressable>
+                    )
+                  })}
+                </View>
               </View>
             </View>
 
-            <View style={styles.cards}>
+            {banner && <SupportBanner intervention={banner} onDismiss={() => acknowledge(banner)} />}
+
+            {/* One-tap logging, without opening a tracker. */}
+            <View style={styles.quick}>
+              <View style={styles.quickHead}>
+                <Sparkles size={16} color={COLORS.tide600} />
+                <Text style={styles.quickTitle}>Quick log</Text>
+              </View>
+              <Text style={styles.quickLabel}>Water</Text>
+              <View style={styles.quickRow}>
+                {[250, 500].map((ml) => (
+                  <Pressable
+                    key={ml}
+                    onPress={() => void quickWater(ml)}
+                    disabled={!!busy}
+                    style={({ pressed }) => [styles.quickWater, (pressed || busy === `water-${ml}`) && styles.pressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add ${ml} ml of water`}
+                  >
+                    {busy === `water-${ml}` ? <ActivityIndicator size="small" color="#1A5C99" /> : <Text style={styles.quickWaterText}>+ {ml} ml</Text>}
+                  </Pressable>
+                ))}
+              </View>
+              {note?.tracker === 'water' && <Status note={note} />}
+              <Text style={styles.quickLabel}>How are you feeling?</Text>
+              <View style={styles.moodRow}>
+                {MOODS.map((m) => (
+                  <Pressable
+                    key={m.id}
+                    onPress={() => void quickMood(m.id)}
+                    disabled={!!busy}
+                    hitSlop={4}
+                    style={({ pressed }) => [styles.moodButton, pressed && styles.pressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Check in: ${m.label}`}
+                  >
+                    {busy === `mood-${m.id}` ? <ActivityIndicator style={{ width: 36, height: 36 }} color={COLORS.muted} /> : <MoodFace mood={m.id} size={36} />}
+                    <Text style={styles.moodLabel}>{m.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              {note?.tracker === 'mood' && <Status note={note} />}
+            </View>
+
+            <View style={styles.sectionRow}>
+              <Text style={styles.section} accessibilityRole="header">
+                Your trackers
+              </Text>
+              {focus.length > 0 && <Text style={styles.sectionHint}>Your focus first</Text>}
+            </View>
+            <View style={styles.grid}>
               {order.map((id) => (
-                <TrackerCard key={id} meta={TRACKERS[id]} summary={summaries[id]} onOpen={() => router.push(`/${id}` as Href)}>
-                  {id === 'water' && (
-                    <View style={styles.quickRow}>
-                      {[250, 500].map((ml) => (
-                        <Pressable
-                          key={ml}
-                          onPress={() => void quickWater(ml)}
-                          disabled={!!busy}
-                          style={({ pressed }) => [styles.quickWater, (pressed || busy === `water-${ml}`) && styles.pressed]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Add ${ml} ml of water`}
-                        >
-                          {busy === `water-${ml}` ? <ActivityIndicator size="small" color="#1A5C99" /> : <Text style={styles.quickWaterText}>+ {ml} ml</Text>}
-                        </Pressable>
-                      ))}
-                      {note?.tracker === 'water' && <Status note={note} />}
-                    </View>
-                  )}
-                  {id === 'mood' && (
-                    <View style={styles.quickRow}>
-                      {MOODS.map((m) => (
-                        <Pressable
-                          key={m.id}
-                          onPress={() => void quickMood(m.id)}
-                          disabled={!!busy}
-                          hitSlop={4}
-                          style={({ pressed }) => [pressed && styles.pressed]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Check in: ${m.label}`}
-                        >
-                          {busy === `mood-${m.id}` ? <ActivityIndicator style={{ width: 34, height: 34 }} color={COLORS.muted} /> : <MoodFace mood={m.id} size={34} />}
-                        </Pressable>
-                      ))}
-                      {note?.tracker === 'mood' && <Status note={note} />}
-                    </View>
-                  )}
-                </TrackerCard>
+                <TrackerTile key={id} meta={TRACKERS[id]} summary={summaries[id]} focus={focus.includes(id)} onOpen={() => router.push(`/${id}` as Href)} />
               ))}
-              <ToolCard meta={BMI} title="BMI calculator" onOpen={() => router.push('/bmi')} />
-              <ToolCard meta={PROGRAMMES_META} title="Programmes" onOpen={() => router.push('/programmes')} />
+            </View>
+
+            <Text style={styles.section} accessibilityRole="header">
+              More for you
+            </Text>
+            <View style={styles.grid}>
+              <ToolTile meta={BMI} title="BMI calculator" onOpen={() => router.push('/bmi')} />
+              <ToolTile meta={PROGRAMMES_META} title="Programmes" onOpen={() => router.push('/programmes')} />
             </View>
           </>
         )}
-
       </ScrollView>
     </SafeAreaView>
   )
 }
 
-function TrackerCard({ meta, summary, onOpen, children }: { meta: TrackerMeta; summary: HubSummary; onOpen: () => void; children?: React.ReactNode }) {
+/** One tracker: its colour, today's value and progress toward the person's goal. */
+function TrackerTile({ meta, summary, focus, onOpen }: { meta: TrackerMeta; summary: HubSummary; focus: boolean; onOpen: () => void }) {
   const Icon = meta.icon
+  const progress = Math.min(Math.max(summary.progress ?? 0, 0), 1)
   return (
-    <Card style={styles.trackerCard}>
-      <Pressable onPress={onOpen} style={({ pressed }) => [styles.cardTop, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={`${meta.name}: ${summary.value}, ${summary.caption}${summary.done ? ', goal met' : ''}. Open ${meta.name}.`}>
-        <Ring progress={summary.progress} color={meta.accent} size={56} stroke={6}>
-          {summary.done ? <Check size={22} color={meta.accent} strokeWidth={3} /> : <Icon size={22} color={meta.accent} />}
-        </Ring>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.cardName, { color: meta.accent }]}>{meta.name}</Text>
-          <Text style={styles.cardValue}>{summary.value}</Text>
-          <Text style={styles.cardCaption}>{summary.caption}</Text>
+    <Pressable
+      onPress={onOpen}
+      style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
+      accessibilityRole="button"
+      accessibilityLabel={`${meta.name}: ${summary.value}, ${summary.caption}${summary.done ? ', goal met' : ''}. Open ${meta.name}.`}
+    >
+      <View style={styles.tileTop}>
+        <View style={[styles.tileIcon, { backgroundColor: meta.tint }]}>
+          <Icon size={20} color={meta.accent} />
         </View>
-        <ChevronRight size={20} color={COLORS.muted} />
-      </Pressable>
-      {children}
-    </Card>
+        {summary.done ? (
+          <View style={[styles.tag, { backgroundColor: meta.accent }]}>
+            <Check size={11} color={COLORS.white} strokeWidth={3} />
+            <Text style={[styles.tagText, { color: COLORS.white }]}>Goal</Text>
+          </View>
+        ) : focus ? (
+          <View style={[styles.tag, { backgroundColor: meta.tint }]}>
+            <Target size={11} color={meta.accent} />
+            <Text style={[styles.tagText, { color: meta.accent }]}>Focus</Text>
+          </View>
+        ) : null}
+      </View>
+      <Text style={[styles.tileName, { color: meta.accent }]}>{meta.name}</Text>
+      <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
+        {summary.value}
+      </Text>
+      <Text style={styles.tileCaption} numberOfLines={2}>
+        {summary.caption}
+      </Text>
+      <View style={styles.bar}>
+        <View style={[styles.barFill, { width: `${Math.round(progress * 100)}%`, backgroundColor: meta.accent }]} />
+      </View>
+    </Pressable>
   )
 }
 
 /** Home's way into programmes, in the website's programmes colour. */
 const PROGRAMMES_META: TrackerMeta = { id: 'bmi', name: 'Programmes', description: 'One small step a day, for a week or less.', icon: BookOpen, accent: '#B9650E', tint: '#FFF1D9' }
 
-function ToolCard({ meta, title, onOpen }: { meta: TrackerMeta; title: string; onOpen: () => void }) {
+function ToolTile({ meta, title, onOpen }: { meta: TrackerMeta; title: string; onOpen: () => void }) {
   const Icon = meta.icon
   return (
-    <Card style={styles.trackerCard}>
-      <Pressable onPress={onOpen} style={({ pressed }) => [styles.cardTop, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={title}>
-        <View style={[styles.toolIcon, { backgroundColor: meta.tint }]}>
-          <Icon size={22} color={meta.accent} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.cardName, { color: meta.accent }]}>{title}</Text>
-          <Text style={styles.cardCaption}>{meta.description}</Text>
-        </View>
-        <ChevronRight size={20} color={COLORS.muted} />
-      </Pressable>
-    </Card>
+    <Pressable onPress={onOpen} style={({ pressed }) => [styles.tile, styles.toolTile, { backgroundColor: meta.tint, borderColor: meta.tint }, pressed && styles.pressed]} accessibilityRole="button" accessibilityLabel={title}>
+      <View style={[styles.tileIcon, { backgroundColor: COLORS.white }]}>
+        <Icon size={20} color={meta.accent} />
+      </View>
+      <Text style={[styles.toolTitle, { color: meta.accent }]}>{title}</Text>
+      <Text style={styles.tileCaption} numberOfLines={2}>
+        {meta.description}
+      </Text>
+      <ChevronRight size={18} color={meta.accent} style={styles.toolChevron} />
+    </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
-  scroll: { padding: 16, paddingBottom: 40 },
-  date: { fontSize: 14, fontWeight: '600', color: COLORS.muted },
-  greeting: { marginTop: 2, fontSize: 30, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.5 },
-  strip: { marginTop: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.white, borderRadius: RADIUS.pill, borderWidth: 1, borderColor: COLORS.line, paddingHorizontal: 16, paddingVertical: 10 },
-  stripText: { fontSize: 14, color: COLORS.muted },
-  stripCount: { fontWeight: '800', color: COLORS.ink },
-  dots: { flexDirection: 'row', gap: 5 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
-  cards: { marginTop: 16, gap: 12 },
-  trackerCard: { padding: 14, gap: 10 },
-  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  cardName: { fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
-  cardValue: { marginTop: 2, fontSize: 20, fontWeight: '800', color: COLORS.ink },
-  cardCaption: { fontSize: 13, color: COLORS.muted },
-  toolIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  quickRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, paddingLeft: 70 },
-  quickWater: { minHeight: 36, minWidth: 84, paddingHorizontal: 12, borderRadius: RADIUS.pill, backgroundColor: '#E3F0FB', alignItems: 'center', justifyContent: 'center' },
-  quickWaterText: { fontSize: 14, fontWeight: '800', color: '#1A5C99' },
-  pressed: { opacity: 0.7 },
+  wash: { position: 'absolute', top: 0, left: 0, right: 0, height: 340 },
+  scroll: { padding: 16, paddingBottom: 40, gap: 14 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  brandText: { fontSize: 20, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.3 },
+  date: { marginTop: 6, fontSize: 14, fontWeight: '700', color: COLORS.muted },
+  greeting: { marginTop: -10, fontSize: 30, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.6 },
+  hero: { flexDirection: 'row', alignItems: 'center', gap: 18, backgroundColor: COLORS.white, borderRadius: RADIUS.card, padding: 18, shadowColor: '#0F2F37', shadowOpacity: 0.07, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 2 },
+  heroCount: { fontSize: 28, fontWeight: '800', color: COLORS.ink },
+  heroOf: { fontSize: 16, fontWeight: '700', color: COLORS.muted },
+  heroTitle: { fontSize: 18, fontWeight: '800', color: COLORS.ink },
+  heroText: { fontSize: 14, color: COLORS.muted },
+  heroIcons: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
+  heroIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  quick: { backgroundColor: COLORS.white, borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.line, padding: 16, gap: 10 },
+  quickHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  quickTitle: { fontSize: 16, fontWeight: '800', color: COLORS.ink },
+  quickLabel: { fontSize: 13, fontWeight: '700', color: COLORS.muted },
+  quickRow: { flexDirection: 'row', gap: 10 },
+  quickWater: { flex: 1, minHeight: 44, borderRadius: RADIUS.pill, backgroundColor: '#E3F0FB', alignItems: 'center', justifyContent: 'center' },
+  quickWaterText: { fontSize: 15, fontWeight: '800', color: '#1A5C99' },
+  moodRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  moodButton: { alignItems: 'center', gap: 4, minWidth: 52 },
+  moodLabel: { fontSize: 11, fontWeight: '600', color: COLORS.muted },
+  sectionRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 4 },
+  section: { marginTop: 4, fontSize: 18, fontWeight: '800', color: COLORS.ink },
+  sectionHint: { fontSize: 13, fontWeight: '600', color: COLORS.muted },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12 },
+  tile: { width: '48.4%', backgroundColor: COLORS.white, borderRadius: 22, borderWidth: 1, borderColor: COLORS.line, padding: 14, gap: 2 },
+  tileTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  tileIcon: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: 3, borderRadius: RADIUS.pill, paddingHorizontal: 7, paddingVertical: 3 },
+  tagText: { fontSize: 11, fontWeight: '800' },
+  tileName: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
+  tileValue: { fontSize: 20, fontWeight: '800', color: COLORS.ink },
+  tileCaption: { fontSize: 12, lineHeight: 16, color: COLORS.muted, minHeight: 32 },
+  bar: { marginTop: 8, height: 6, borderRadius: 3, backgroundColor: COLORS.mist, overflow: 'hidden' },
+  barFill: { height: 6, borderRadius: 3 },
+  toolTile: { paddingBottom: 16 },
+  toolTitle: { marginTop: 2, fontSize: 15, fontWeight: '800' },
+  toolChevron: { position: 'absolute', top: 16, right: 14 },
+  pressed: { opacity: 0.75 },
 })

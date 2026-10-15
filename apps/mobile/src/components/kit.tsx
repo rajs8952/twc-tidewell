@@ -8,6 +8,7 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, RefreshControl, Scrol
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context'
 import Svg, { Circle, Path } from 'react-native-svg'
 import { savedWhen } from '@/lib/cache'
+import { ScrollerProvider, useScroller } from '@/lib/revealField'
 import { useOnline } from '@/lib/online'
 import { COLORS, RADIUS } from '@/lib/theme'
 
@@ -46,6 +47,7 @@ export function TrackerScreen({
   /** A tab screen without a header: ['top'] (the tab bar covers the bottom). */
   edges?: Edge[]
 }>) {
+  const { scroller, scrollRef: ref, onScroll } = useScroller(scrollRef)
   return (
     <SafeAreaView style={styles.safe} edges={title != null ? ['top', 'bottom'] : edges}>
       {title != null && (
@@ -63,10 +65,15 @@ export function TrackerScreen({
           <View style={styles.headerBack} />
         </View>
       )}
-      {/* Measured from just below the header, so no offset is needed (the chat screen's layout). */}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* Measured from just below the header, so no offset is needed (the chat screen's layout).
+          Not automaticallyAdjustKeyboardInsets: with it, iOS closed the keyboard again as it opened. */}
+      {/* Android too: with edge-to-edge (Android 15+), the window no longer shrinks for the keyboard by itself. */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        <ScrollerProvider value={scroller}>
         <ScrollView
-          ref={scrollRef}
+          ref={ref}
+          onScroll={onScroll}
+          scrollEventThrottle={32}
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={COLORS.tide500} colors={[COLORS.tide500]} /> : undefined}
@@ -74,6 +81,7 @@ export function TrackerScreen({
           <OfflineNotice savedAt={savedAt} />
           {children}
         </ScrollView>
+        </ScrollerProvider>
       </KeyboardAvoidingView>
     </SafeAreaView>
   )

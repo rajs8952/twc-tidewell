@@ -7,10 +7,13 @@ import { analyzeRollup, shiftDate, type Insights } from '@omniwell/web/insights/
 import { buildHeadline } from '@omniwell/web/insights/headline'
 import { STATS_DAYS, computeStats, fmtMin, loadStats, moodWord, type StatsResult, type Together } from '@omniwell/web/insights/stats'
 import { router, type Href } from 'expo-router'
-import { ChevronRight, Link2, Sparkles } from 'lucide-react-native'
+import { CalendarDays, ChevronRight, Link2, Plus, Sparkles, TrendingUp } from 'lucide-react-native'
+import { useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { OfflineNotice } from '@/components/kit'
+import { ProfileButton } from '@/components/ProfileButton'
 import { PremiumCard } from '@/components/Support'
 import { Notice } from '@/components/ui'
 import { Loader } from '@/components/Loader'
@@ -48,7 +51,7 @@ async function load() {
     const analysis = analyzeRollup(rollup.data ?? [], from, STATS_DAYS)
     insights = { insights: analysis.insights, headline: buildHeadline(analysis.insights, analysis.days, goalMl, STATS_DAYS) }
   }
-  return { stats: computeStats(entries, goalMl, goalsOf(profile)), insights }
+  return { profile, stats: computeStats(entries, goalMl, goalsOf(profile)), insights }
 }
 
 const day = (k: string) => parseDayKey(k).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })
@@ -152,14 +155,35 @@ export default function InsightsScreen() {
   const logged = cards.filter((c) => c.l)
   const empty = cards.filter((c) => !c.l)
   const headline = data?.insights?.headline
+  const [headlineSize, setHeadlineSize] = useState({ w: 0, h: 0 })
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* A soft wash behind the header, in the Insights violet. */}
+      <View style={styles.wash} pointerEvents="none">
+        <Svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 100 100">
+          <Defs>
+            <LinearGradient id="insightsWash" x1="0" y1="0" x2="1" y2="1">
+              <Stop offset="0" stopColor="#ECE8FA" />
+              <Stop offset="0.6" stopColor="#E6F1FA" />
+              <Stop offset="1" stopColor={COLORS.background} />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100" height="100" fill="url(#insightsWash)" />
+        </Svg>
+      </View>
       <ScrollView contentContainerStyle={styles.scroll} refreshControl={locked ? undefined : <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={COLORS.tide500} colors={[COLORS.tide500]} />}>
+        <View style={styles.topBar}>
+          <View style={styles.badge}>
+            <CalendarDays size={13} color={ACCENT} />
+            <Text style={styles.badgeText}>Last {STATS_DAYS} days</Text>
+          </View>
+          <ProfileButton profile={data?.profile} />
+        </View>
         <Text style={styles.title} accessibilityRole="header">
           Insights
         </Text>
-        <Text style={styles.lead}>Your habits over the last {STATS_DAYS} days, and how they connect.</Text>
+        <Text style={styles.lead}>How your habits are going, and how they connect, in plain words.</Text>
 
         {locked ? (
           <PremiumCard title="Insights" text={`Your last ${STATS_DAYS} days for every tracker, and how your habits connect, are part of Premium.`} />
@@ -169,21 +193,49 @@ export default function InsightsScreen() {
             {error && <Notice tone="error">{error}</Notice>}
             {!data && !error && <Loader label="Looking at your last 30 days…" />}
 
+            {data && (
+              <View style={styles.active}>
+                <View style={{ flex: 1, gap: 6 }}>
+                  <Text style={styles.activeText}>
+                    <Text style={styles.activeCount}>{data.stats.activeDays}</Text> of {data.stats.span} days with an entry
+                  </Text>
+                  <View style={styles.bar}>
+                    <View style={[styles.barFill, { width: `${Math.round((data.stats.activeDays / Math.max(1, data.stats.span)) * 100)}%` }]} />
+                  </View>
+                </View>
+                <Text style={styles.activeTrackers}>
+                  {logged.length}/{TRACKER_ORDER.length}
+                  {'\n'}
+                  <Text style={styles.activeTrackersLabel}>trackers</Text>
+                </Text>
+              </View>
+            )}
+
             {headline && (
-              <View style={styles.headline}>
+              <View style={styles.headline} onLayout={(e) => setHeadlineSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+                {/* Sized from the card's own measured size: a percentage-sized gradient didn't stretch to fill it. */}
+                <Svg width={headlineSize.w} height={headlineSize.h} style={StyleSheet.absoluteFill}>
+                  <Defs>
+                    <LinearGradient id="headlineFill" x1="0" y1="0" x2="1" y2="1">
+                      <Stop offset="0" stopColor="#6A55C9" />
+                      <Stop offset="1" stopColor="#2189D6" />
+                    </LinearGradient>
+                  </Defs>
+                  <Rect x="0" y="0" width={headlineSize.w} height={headlineSize.h} fill="url(#headlineFill)" />
+                </Svg>
                 <View style={styles.headlineTag}>
-                  <Sparkles size={16} color={ACCENT} />
+                  <Sparkles size={14} color={COLORS.white} />
                   <Text style={styles.headlineTagText}>{headline.kind === 'finding' ? 'Your strongest link' : headline.kind === 'collecting' ? 'Still learning' : 'No clear pattern yet'}</Text>
                 </View>
                 <Text style={styles.headlineText}>{headline.text}</Text>
-                <Text style={styles.muted}>{headline.detail}</Text>
+                <Text style={styles.headlineDetail}>{headline.detail}</Text>
                 {headline.comparison && (
                   <View style={styles.pair}>
                     {headline.comparison.groups.map((g, i) => (
-                      <View key={g.label} style={[styles.pairBox, i === headline.comparison!.better && { borderColor: ACCENT, borderWidth: 1.5 }]}>
-                        <Text style={styles.pairLabel}>{g.label}</Text>
-                        <Text style={styles.pairValue}>{g.display}</Text>
-                        <Text style={styles.pairSmall}>
+                      <View key={g.label} style={[styles.headlineBox, i === headline.comparison!.better && styles.headlineBoxBest]}>
+                        <Text style={styles.headlineBoxLabel}>{g.label}</Text>
+                        <Text style={styles.headlineBoxValue}>{g.display}</Text>
+                        <Text style={styles.headlineBoxSmall}>
                           {headline.comparison!.outcomeLabel} · {plural(g.days, 'day')}
                         </Text>
                       </View>
@@ -196,51 +248,61 @@ export default function InsightsScreen() {
             {data && (
               <>
                 <Text style={styles.section} accessibilityRole="header">
-                  Your last {data.stats.span} days
+                  Tracker by tracker
                 </Text>
-                <Text style={styles.muted}>{data.stats.activeDays ? `You logged something on ${plural(data.stats.activeDays, 'day')}.` : 'Nothing logged yet. Your numbers appear here from your first entry.'}</Text>
+                {logged.length === 0 && <Text style={styles.muted}>Nothing logged yet. Your numbers appear here from your first entry.</Text>}
                 {logged.map(({ id, l }) => {
                   const t = TRACKERS[id]
                   const Icon = t.icon
                   return (
                     <Pressable key={id} onPress={() => router.push(`/${id}` as Href)} style={({ pressed }) => [styles.card, pressed && { opacity: 0.8 }]} accessibilityRole="button">
-                      <View style={styles.cardHead}>
-                        <Icon size={16} color={t.accent} />
-                        <Text style={styles.cardName}>{t.name}</Text>
-                        <ChevronRight size={16} color={COLORS.muted} style={{ marginLeft: 'auto' }} />
-                      </View>
-                      <Text style={styles.big}>{l!.big}</Text>
-                      <Text style={styles.small}>{l!.caption}</Text>
-                      {l!.facts.length > 0 && (
-                        <View style={styles.facts}>
-                          {l!.facts.map((f) => (
-                            <View key={f.label} style={styles.fact}>
-                              <Text style={styles.factLabel}>{f.label}</Text>
-                              <Text style={styles.factValue}>{f.value}</Text>
-                            </View>
-                          ))}
+                      <View style={[styles.cardAccent, { backgroundColor: t.accent }]} />
+                      <View style={styles.cardBody}>
+                        <View style={styles.cardHead}>
+                          <View style={[styles.cardIcon, { backgroundColor: t.tint }]}>
+                            <Icon size={18} color={t.accent} />
+                          </View>
+                          <Text style={[styles.cardName, { color: t.accent }]}>{t.name}</Text>
+                          <ChevronRight size={18} color={COLORS.muted} style={{ marginLeft: 'auto' }} />
                         </View>
-                      )}
+                        <Text style={styles.big}>{l!.big}</Text>
+                        <Text style={styles.small}>{l!.caption}</Text>
+                        {l!.facts.length > 0 && (
+                          <View style={styles.facts}>
+                            {l!.facts.map((f) => (
+                              <View key={f.label} style={[styles.fact, { backgroundColor: t.tint }]}>
+                                <Text style={styles.factLabel}>{f.label}</Text>
+                                <Text style={styles.factValue}>{f.value}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                      </View>
                     </Pressable>
                   )
                 })}
-                {empty.map(({ id }) => {
-                  const t = TRACKERS[id]
-                  const Icon = t.icon
-                  return (
-                    <Pressable key={id} onPress={() => router.push(`/${id}` as Href)} style={styles.empty} accessibilityRole="button">
-                      <Icon size={18} color={t.accent} />
-                      <Text style={[styles.muted, { flex: 1 }]}>
-                        <Text style={{ fontWeight: '800', color: COLORS.ink }}>{t.name}</Text>: nothing logged in the last {data.stats.span} days.
-                      </Text>
-                      <ChevronRight size={16} color={COLORS.muted} />
-                    </Pressable>
-                  )
-                })}
+                {empty.length > 0 && (
+                  <View style={styles.emptyBox}>
+                    <Text style={styles.emptyTitle}>Not tracked in the last {data.stats.span} days</Text>
+                    <View style={styles.chips}>
+                      {empty.map(({ id }) => {
+                        const t = TRACKERS[id]
+                        const Icon = t.icon
+                        return (
+                          <Pressable key={id} onPress={() => router.push(`/${id}` as Href)} style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }]} accessibilityRole="button" accessibilityLabel={`Start tracking ${t.name}`}>
+                            <Icon size={14} color={t.accent} />
+                            <Text style={styles.chipText}>{t.name}</Text>
+                            <Plus size={14} color={COLORS.muted} />
+                          </Pressable>
+                        )
+                      })}
+                    </View>
+                  </View>
+                )}
 
                 <View style={styles.sectionRow}>
                   <Link2 size={18} color={ACCENT} />
-                  <Text style={styles.section} accessibilityRole="header">
+                  <Text style={styles.sectionInline} accessibilityRole="header">
                     Habits that go together
                   </Text>
                 </View>
@@ -252,12 +314,15 @@ export default function InsightsScreen() {
 
                 {data.insights && (
                   <>
-                    <Text style={styles.section} accessibilityRole="header">
-                      Water, sleep and mood over time
-                    </Text>
+                    <View style={styles.sectionRow}>
+                      <TrendingUp size={18} color={ACCENT} />
+                      <Text style={styles.sectionInline} accessibilityRole="header">
+                        Water, sleep and mood over time
+                      </Text>
+                    </View>
                     {data.insights.insights.map((i) => (
-                      <View key={i.id} style={styles.card}>
-                        <Text style={styles.cardName}>{TITLE[i.id]}</Text>
+                      <View key={i.id} style={styles.overTime}>
+                        <Text style={styles.overTimeName}>{TITLE[i.id]}</Text>
                         <Text style={styles.connHead}>{i.headline}</Text>
                         <Text style={styles.muted}>{i.message}</Text>
                       </View>
@@ -275,7 +340,7 @@ export default function InsightsScreen() {
 
 function TogetherCard({ t }: { t: Together }) {
   return (
-    <View style={styles.card}>
+    <View style={styles.together}>
       <Text style={styles.togetherSentence}>{t.sentence}</Text>
       <View style={styles.pair}>
         {[
@@ -296,31 +361,59 @@ function TogetherCard({ t }: { t: Together }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
-  scroll: { padding: 16, paddingBottom: 40, gap: 12 },
-  title: { fontSize: 30, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.5 },
-  lead: { fontSize: 15, lineHeight: 21, color: COLORS.muted, marginBottom: 4 },
-  section: { marginTop: 10, fontSize: 18, fontWeight: '800', color: COLORS.ink },
-  sectionRow: { marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  wash: { position: 'absolute', top: 0, left: 0, right: 0, height: 320 },
+  scroll: { padding: 16, paddingBottom: 40, gap: 14 },
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.8)', borderRadius: RADIUS.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  badgeText: { fontSize: 12, fontWeight: '800', color: ACCENT },
+  title: { fontSize: 32, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.6, marginTop: -4 },
+  lead: { fontSize: 15, lineHeight: 21, color: COLORS.muted, marginTop: -6 },
+  active: { flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: COLORS.white, borderRadius: RADIUS.card, padding: 16, shadowColor: '#0F2F37', shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 2 },
+  activeText: { fontSize: 14, color: COLORS.muted },
+  activeCount: { fontSize: 22, fontWeight: '800', color: COLORS.ink },
+  activeTrackers: { textAlign: 'center', fontSize: 20, fontWeight: '800', color: ACCENT },
+  activeTrackersLabel: { fontSize: 11, fontWeight: '700', color: COLORS.muted },
+  bar: { height: 8, borderRadius: 4, backgroundColor: '#ECE8FA', overflow: 'hidden' },
+  barFill: { height: 8, borderRadius: 4, backgroundColor: ACCENT },
+  headline: { borderRadius: RADIUS.card, overflow: 'hidden', padding: 20, gap: 8, backgroundColor: '#4F6FCF' },
+  headlineTag: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: RADIUS.pill, paddingHorizontal: 10, paddingVertical: 4 },
+  headlineTagText: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6, color: COLORS.white },
+  headlineText: { fontSize: 21, fontWeight: '800', lineHeight: 27, color: COLORS.white },
+  headlineDetail: { fontSize: 14, lineHeight: 20, color: 'rgba(255,255,255,0.88)' },
+  headlineBox: { flex: 1, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.14)', padding: 12, gap: 2, borderWidth: 1.5, borderColor: 'transparent' },
+  headlineBoxBest: { backgroundColor: 'rgba(255,255,255,0.24)', borderColor: 'rgba(255,255,255,0.7)' },
+  headlineBoxLabel: { fontSize: 12, color: 'rgba(255,255,255,0.85)' },
+  headlineBoxValue: { fontSize: 17, fontWeight: '800', color: COLORS.white },
+  headlineBoxSmall: { fontSize: 11, color: 'rgba(255,255,255,0.8)' },
+  section: { marginTop: 6, fontSize: 18, fontWeight: '800', color: COLORS.ink },
+  sectionRow: { marginTop: 6, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sectionInline: { fontSize: 18, fontWeight: '800', color: COLORS.ink },
   muted: { fontSize: 14, lineHeight: 20, color: COLORS.muted },
-  small: { fontSize: 12, color: COLORS.muted },
-  headline: { borderRadius: RADIUS.card, backgroundColor: '#F1EEFB', borderWidth: 1, borderColor: '#DCD5F5', padding: 18, gap: 8 },
-  headlineTag: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headlineTagText: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6, color: ACCENT },
-  headlineText: { fontSize: 20, fontWeight: '800', lineHeight: 26, color: COLORS.ink },
-  card: { borderRadius: RADIUS.card, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, padding: 16, gap: 4 },
-  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  cardName: { fontSize: 14, fontWeight: '800', color: COLORS.ink },
-  big: { marginTop: 4, fontSize: 24, fontWeight: '800', color: COLORS.ink },
-  facts: { marginTop: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: COLORS.line, gap: 4 },
-  fact: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  factLabel: { fontSize: 14, color: COLORS.muted },
-  factValue: { flexShrink: 1, textAlign: 'right', fontSize: 14, fontWeight: '700', color: COLORS.ink },
-  empty: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: RADIUS.card, borderWidth: 1, borderStyle: 'dashed', borderColor: COLORS.line, padding: 14 },
+  small: { fontSize: 13, color: COLORS.muted },
+  card: { flexDirection: 'row', borderRadius: RADIUS.card, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, overflow: 'hidden' },
+  cardAccent: { width: 5 },
+  cardBody: { flex: 1, padding: 16, gap: 2 },
+  cardHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 },
+  cardIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  cardName: { fontSize: 13, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
+  big: { fontSize: 26, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.4 },
+  facts: { marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  fact: { borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, gap: 1, maxWidth: '100%' },
+  factLabel: { fontSize: 11, fontWeight: '700', color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.4 },
+  factValue: { fontSize: 14, fontWeight: '700', color: COLORS.ink },
+  emptyBox: { borderRadius: RADIUS.card, borderWidth: 1, borderStyle: 'dashed', borderColor: COLORS.line, padding: 14, gap: 10 },
+  emptyTitle: { fontSize: 13, fontWeight: '700', color: COLORS.muted },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, borderRadius: RADIUS.pill, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, paddingHorizontal: 12 },
+  chipText: { fontSize: 14, fontWeight: '700', color: COLORS.ink },
+  together: { borderRadius: RADIUS.card, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, padding: 16, gap: 4 },
+  togetherSentence: { fontSize: 16, lineHeight: 22, fontWeight: '800', color: COLORS.ink },
+  overTime: { borderRadius: RADIUS.card, backgroundColor: '#F4F2FC', borderWidth: 1, borderColor: '#E3DEF7', padding: 16, gap: 4 },
+  overTimeName: { fontSize: 15, fontWeight: '800', color: ACCENT },
   connHead: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6, color: COLORS.muted },
-  togetherSentence: { fontSize: 16, fontWeight: '800', color: COLORS.ink },
-  pair: { flexDirection: 'row', gap: 8, marginTop: 6 },
-  pairBox: { flex: 1, borderRadius: 14, backgroundColor: COLORS.mist, padding: 10, gap: 2, borderWidth: 1, borderColor: 'transparent' },
+  pair: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  pairBox: { flex: 1, borderRadius: 16, backgroundColor: COLORS.mist, padding: 12, gap: 2 },
   pairLabel: { fontSize: 12, color: COLORS.muted },
-  pairValue: { fontSize: 16, fontWeight: '800', color: COLORS.ink },
+  pairValue: { fontSize: 17, fontWeight: '800', color: COLORS.ink },
   pairSmall: { fontSize: 11, color: COLORS.muted },
 })
