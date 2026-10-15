@@ -3,6 +3,7 @@ import { useFocusEffect } from 'expo-router'
 import { Apple, HeartHandshake, MessageCircleHeart, type LucideIcon } from 'lucide-react-native'
 import { useCallback, useState } from 'react'
 import { usePlan } from './plan'
+import { readCache, saveCache } from './cache'
 import { supabase } from './supabase'
 
 /* ------------------------------------------------------------------
@@ -66,10 +67,17 @@ export function useContacts(): Contacts {
       supabase
         .from('wellness_contacts')
         .select('id, name, description, phone, email, url, hours')
-        .then(({ data, error }) => {
-          if (!alive || error || !data) return
+        .then(async ({ data, error }) => {
+          if (!alive) return
+          if (error || !data) {
+            // Offline: the details saved on this phone (the emergency number is always there).
+            const cached = await readCache<Row[]>('contacts')
+            if (alive && cached && !saved.length) setRows((saved = cached.data))
+            return
+          }
           saved = data as Row[]
           setRows(saved)
+          void saveCache('contacts', saved)
         })
       return () => {
         alive = false

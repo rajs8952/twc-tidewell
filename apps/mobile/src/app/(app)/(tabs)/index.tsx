@@ -10,10 +10,10 @@ import { evaluateMetric, latestInterventions, moodInterventionKey, type Interven
 import { hubSummaries, type HubSummary, type TrackerData } from '@rajs8952/trackers/hub'
 import { router, type Href } from 'expo-router'
 import { BookOpen, Check, ChevronRight } from 'lucide-react-native'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Card, MoodFace, Ring, Status } from '@/components/kit'
+import { Card, MoodFace, OfflineNotice, Ring, Status } from '@/components/kit'
 import { CrisisPrompt, SupportBanner } from '@/components/Support'
 import { Logo, Notice } from '@/components/ui'
 import { Loader } from '@/components/Loader'
@@ -51,11 +51,13 @@ async function loadHome() {
     waterMl: drinks,
     summaries: hubSummaries(data, drinks === null ? null : { todayMl: drinks, goalMl: goal }, now, goalsOf(profile)),
     prompts: prompts.filter((p) => !dismissed.includes(p.key)),
+    // A brand-new account goes to the welcome screen once, as on the website (onboarded_at is absent before onboarding.sql).
+    needsWelcome: profile.onboarded_at === null && !!profile.created_at && now.getTime() - Date.parse(profile.created_at) < 3 * 86_400_000,
   }
 }
 
 export default function Home() {
-  const { data, set, error, refreshing, refresh } = useLoad(loadHome)
+  const { data, set, error, savedAt, refreshing, refresh } = useLoad(loadHome, 'home')
   const [busy, setBusy] = useState<string | null>(null)
   const [note, setNote] = useState<{ tracker: TrackerId; text: string; error?: boolean } | null>(null)
   /** A prompt being shown: the crisis prompt (CRITICAL) or a banner. */
@@ -75,6 +77,13 @@ export default function Home() {
   }
 
   const first = data?.profile.full_name.trim().split(/\s+/)[0]
+  const needsWelcome = !!data?.needsWelcome
+  useEffect(() => {
+    if (needsWelcome) router.replace('/welcome')
+  }, [needsWelcome])
+  // The trackers they chose to focus on come first.
+  const focus = data?.profile.focus_trackers ?? []
+  const order = [...TRACKER_ORDER].sort((a, b) => Number(focus.includes(b)) - Number(focus.includes(a)))
   const summaries = data?.summaries
   const loggedCount = summaries ? TRACKER_ORDER.filter((id) => summaries[id].logged).length : 0
 
@@ -119,6 +128,9 @@ export default function Home() {
           </Text>
         </View>
 
+        <View style={{ marginTop: 12 }}>
+          <OfflineNotice savedAt={savedAt} />
+        </View>
         {error && !data && <Notice tone="error">{error}</Notice>}
         {!data && !error && <Loader label="Getting your day ready…" />}
 
@@ -149,7 +161,7 @@ export default function Home() {
             </View>
 
             <View style={styles.cards}>
-              {TRACKER_ORDER.map((id) => (
+              {order.map((id) => (
                 <TrackerCard key={id} meta={TRACKERS[id]} summary={summaries[id]} onOpen={() => router.push(`/${id}` as Href)}>
                   {id === 'water' && (
                     <View style={styles.quickRow}>

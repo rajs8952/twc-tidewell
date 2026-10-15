@@ -1,30 +1,15 @@
 import { Stack } from 'expo-router'
 import { COLORS } from '@/lib/theme'
-import { BMI, TRACKERS } from '@/lib/trackers'
 
-/** The signed-in app: the tabs, and the trackers and conversations opened from them (native header and back swipe). */
+/**
+ * The signed-in app: the tabs, and the screens opened over them (back swipe).
+ * Each screen draws its own header (components/kit.tsx TrackerScreen, the chat
+ * screen): with the navigator's native header, iOS kept closing the keyboard.
+ */
 export default function AppLayout() {
   return (
-    <Stack
-      screenOptions={{
-        contentStyle: { backgroundColor: COLORS.background },
-        headerStyle: { backgroundColor: COLORS.background },
-        headerShadowVisible: false,
-        headerTintColor: COLORS.ink,
-        headerTitleStyle: { fontWeight: '800', color: COLORS.ink },
-        headerBackButtonDisplayMode: 'minimal',
-      }}
-    >
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      {Object.values(TRACKERS).map((t) => (
-        <Stack.Screen key={t.id} name={t.id} options={{ title: t.name }} />
-      ))}
-      <Stack.Screen name="bmi" options={{ title: `${BMI.name} calculator` }} />
-      <Stack.Screen name="chat/[team]" options={{ headerShown: false }} />
-      <Stack.Screen name="programmes" options={{ title: 'Programmes' }} />
-      <Stack.Screen name="programme/[id]" options={{ title: 'Programme' }} />
-      <Stack.Screen name="edit-profile" options={{ title: 'Edit profile' }} />
-      <Stack.Screen name="reminders" options={{ title: 'Reminders' }} />
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.background } }}>
+      <Stack.Screen name="welcome" options={{ gestureEnabled: false }} />
     </Stack>
   )
 }

@@ -10,6 +10,7 @@ import { Loader } from '@/components/Loader'
 import { PremiumCard } from '@/components/Support'
 import { Button } from '@/components/ui'
 import { usePlan } from '@/lib/plan'
+import { saveSchedule } from '@/lib/reminders'
 import { disablePush, enablePush, pushState, unsupportedReason, type PushState } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
 import { COLORS, RADIUS } from '@/lib/theme'
@@ -86,12 +87,11 @@ export default function Reminders() {
     if (next.repeat_every_minutes && !next.end_time) next.end_time = defaultEndFor(next.notify_time)
     setSchedules((s) => (s ? { ...s, [t]: next } : s))
     setNote(null)
-    const row = { is_enabled: next.is_enabled, notify_time: next.notify_time, repeat_every_minutes: next.repeat_every_minutes, end_time: next.repeat_every_minutes ? next.end_time : null }
-    const upd = await supabase.from('notification_schedules').update(row).eq('tracker_type', t).select('tracker_type').maybeSingle()
-    let error = upd.error
-    if (!error && !upd.data) {
-      const { data: auth } = await supabase.auth.getUser()
-      error = (await supabase.from('notification_schedules').insert({ user_id: auth.user?.id, tracker_type: t, ...row })).error
+    let error: { code?: string; message: string } | null = null
+    try {
+      await saveSchedule(t, { is_enabled: next.is_enabled, notify_time: next.notify_time, repeat_every_minutes: next.repeat_every_minutes, end_time: next.end_time })
+    } catch (e) {
+      error = e as { code?: string; message: string }
     }
     if (error) {
       setSchedules(before)
@@ -130,14 +130,14 @@ export default function Reminders() {
 
   if (locked) {
     return (
-      <TrackerScreen>
+      <TrackerScreen title={'Reminders'}>
         <PremiumCard title="Reminders" text="Gentle nudges for each tracker, which stop once you’re done for the day, are part of Premium." />
       </TrackerScreen>
     )
   }
 
   return (
-    <TrackerScreen>
+    <TrackerScreen title={'Reminders'}>
       <Card>
         <View style={styles.phoneRow}>
           <View style={[styles.icon, { backgroundColor: state === 'on' ? '#E1F2EF' : COLORS.mist }]}>
@@ -229,7 +229,7 @@ function TimeRow({ label, value, onChange }: { label: string; value: string; onC
     <View style={styles.timeRow}>
       <Text style={styles.timeLabel}>{label}</Text>
       {Platform.OS === 'ios' ? (
-        <DateTimePicker mode="time" display="compact" value={asDate(value)} onChange={(_e, d) => d && onChange(hhmm(d))} />
+        <DateTimePicker mode="time" display="compact" value={asDate(value)} onValueChange={(_e, d) => onChange(hhmm(d))} />
       ) : (
         <>
           <Pressable onPress={() => setOpen(true)} style={styles.timeButton} accessibilityRole="button" accessibilityLabel={`${label} ${fmt(value)}. Change time`}>
@@ -239,10 +239,11 @@ function TimeRow({ label, value, onChange }: { label: string; value: string; onC
             <DateTimePicker
               mode="time"
               value={asDate(value)}
-              onChange={(e, d) => {
+              onValueChange={(_e, d) => {
                 setOpen(false)
-                if (e.type === 'set' && d) onChange(hhmm(d))
+                onChange(hhmm(d))
               }}
+              onDismiss={() => setOpen(false)}
             />
           )}
         </>

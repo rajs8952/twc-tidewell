@@ -11,13 +11,23 @@ import { dismiss } from '@/lib/dismissed'
 import { COLORS } from '@/lib/theme'
 import { TRACKERS, storage, unwrap } from '@/lib/trackers'
 import { useLoad } from '@/lib/useLoad'
+import { WeekBars } from '@/components/WeekBars'
+import { thisWeek } from '@/lib/week'
 
 const ACCENT = TRACKERS.mood.accent
 const cap = (s: string) => s[0]!.toUpperCase() + s.slice(1)
 
+/** Each day's average mood (1–5) as a bar in that mood's colour. */
+function moodWeek(logs: MoodLog[]) {
+  return thisWeek(logs, (l) => l.logged_at, (l) => MOOD_BY_ID[l.mood_state].score, new Date(), (v) => v.reduce((s, x) => s + x, 0) / v.length).map((d) => ({
+    ...d,
+    parts: d.value ? [{ value: d.value, color: MOODS[Math.round(d.value) - 1]!.color }] : [],
+  }))
+}
+
 /** Mood: how you feel, with optional energy, stress, feelings and a note; this week's check-ins. */
 export default function Mood() {
-  const { data, error, refreshing, refresh, reload } = useLoad(async () => unwrap(await storage.mood.list(moodRange())))
+  const { data, error, savedAt, refreshing, refresh, reload } = useLoad(async () => unwrap(await storage.mood.list(moodRange())), 'mood')
   const [mood, setMood] = useState<MoodState | null>(null)
   const [energy, setEnergy] = useState<number | null>(null)
   const [stress, setStress] = useState<number | null>(null)
@@ -85,7 +95,7 @@ export default function Mood() {
   }
 
   return (
-    <TrackerScreen refreshing={refreshing} onRefresh={refresh} scrollRef={scroll}>
+    <TrackerScreen title={TRACKERS.mood.name} savedAt={savedAt} refreshing={refreshing} onRefresh={refresh} scrollRef={scroll}>
       <CrisisPrompt
         intervention={crisis}
         onAcknowledge={() => {
@@ -133,6 +143,19 @@ export default function Mood() {
         <Button title={editing ? 'Save changes' : 'Save check-in'} onPress={() => void save()} busy={busy} disabled={!mood} />
         <Status note={note} />
       </Card>
+
+      {data && data.length > 0 && (
+        <Card>
+          <SectionTitle>Your week</SectionTitle>
+          <WeekBars
+            days={moodWeek(data)}
+            color={ACCENT}
+            format={(v) => (v ? MOODS[Math.round(v) - 1]!.label : 'No check-in')}
+            summary={`Mood each day this week: ${moodWeek(data).map((d) => `${d.label} ${d.value ? MOODS[Math.round(d.value) - 1]!.label : 'no check-in'}`).join(', ')}.`}
+          />
+          <Muted style={{ fontSize: 12 }}>Each bar is that day’s average, from Awful (lowest) to Great (highest).</Muted>
+        </Card>
+      )}
 
       <Card>
         <SectionTitle>This week</SectionTitle>

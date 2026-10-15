@@ -5,7 +5,7 @@ import { Image } from 'expo-image'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
 import { router } from 'expo-router'
-import { BellRing, Camera, Crown, Pencil } from 'lucide-react-native'
+import { BellRing, Camera, Crown, KeyRound, Pencil } from 'lucide-react-native'
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Card, Muted, SectionTitle, Status, TrackerScreen } from '@/components/kit'
@@ -35,7 +35,7 @@ export default function Me() {
   const [note, setNote] = useState<{ text: string; error?: boolean } | null>(null)
 
   if (!profile) {
-    return <TrackerScreen edges={['top']} header={false}>{error ? <Notice tone="error">{error}</Notice> : <Loader label="Loading your profile…" />}</TrackerScreen>
+    return <TrackerScreen edges={['top']}>{error ? <Notice tone="error">{error}</Notice> : <Loader label="Loading your profile…" />}</TrackerScreen>
   }
 
   const me = profile
@@ -93,7 +93,7 @@ export default function Me() {
   }
 
   return (
-    <TrackerScreen edges={['top']} header={false}>
+    <TrackerScreen edges={['top']}>
       <Text style={styles.title} accessibilityRole="header">
         Profile
       </Text>
@@ -144,7 +144,16 @@ export default function Me() {
         <Text style={styles.remindersText}>Reminders & notifications</Text>
       </Pressable>
 
+      <Pressable onPress={() => router.push('/change-password')} style={({ pressed }) => [styles.reminders, pressed && { opacity: 0.85 }]} accessibilityRole="button">
+        <KeyRound size={18} color={COLORS.ink} />
+        <Text style={styles.remindersText}>Change password</Text>
+      </Pressable>
+
       <Button title="Log out" variant="secondary" onPress={() => void signOut()} />
+
+      <Pressable onPress={() => router.push('/delete-account')} style={styles.delete} accessibilityRole="button">
+        <Text style={styles.deleteText}>Delete my account</Text>
+      </Pressable>
     </TrackerScreen>
   )
 }
@@ -179,5 +188,7 @@ const styles = StyleSheet.create({
   edit: { minHeight: 52, borderRadius: 999, backgroundColor: COLORS.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   editText: { fontSize: 16, fontWeight: '700', color: COLORS.white },
   reminders: { minHeight: 52, borderRadius: 999, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  delete: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  deleteText: { fontSize: 14, fontWeight: '700', color: COLORS.alert },
   remindersText: { fontSize: 16, fontWeight: '700', color: COLORS.ink },
 })

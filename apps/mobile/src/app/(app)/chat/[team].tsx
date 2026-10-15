@@ -35,6 +35,7 @@ import { COLORS, RADIUS } from '@/lib/theme'
 import { messageOf } from '@/lib/trackers'
 import { recountUnread } from '@/lib/useUnread'
 import { useRealtime } from '@/lib/useRealtime'
+import { alertCoach } from '@/lib/website'
 
 /* ------------------------------------------------------------------
  * One conversation with the therapist or dietitian team, like the
@@ -197,7 +198,7 @@ export default function Conversation() {
         id = started.threadId
         threadRef.current = id
         setThreadId(id)
-        setChat({ id, team, status: started.status, created_at: new Date().toISOString(), last: null, coach_name: null, coach_title: null, coach_online: false })
+        setChat({ id, team, status: started.status, created_at: new Date().toISOString(), last: null, coach_name: null, coach_title: null, coach_avatar_url: null, coach_online: false })
         textSent = true
         if (started.assigned) listMyChats().then((cs) => setChat(cs.find((c) => c.id === id) ?? null), () => {})
       }
@@ -208,6 +209,8 @@ export default function Conversation() {
       }
       if (!textSent) saved.push(await sendMessage(id, p.content, imagePath))
       else if (imagePath) saved.push(await sendMessage(id, '', imagePath))
+      // Tell the coach(es), as the website does: a new conversation, or a follow-up in one.
+      alertCoach(id, textSent ? 'new' : 'reply')
       const all = textSent ? await loadMessages(id) : saved
       setPending((ps) => ps.filter((x) => x.key !== p.key))
       setMessages((cur) => mergeMessages(cur, all))

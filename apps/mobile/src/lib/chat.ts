@@ -57,6 +57,8 @@ export interface Chat extends Partial<Receipts> {
   last: Pick<ThreadMessage, 'sender_role' | 'content' | 'created_at' | 'media_url'> | null
   coach_name: string | null
   coach_title: string | null
+  /** The coach's photo (coach-profile-presence.sql), if they've added one. */
+  coach_avatar_url: string | null
   coach_online: boolean
 }
 
@@ -122,7 +124,7 @@ export async function listMyChats(): Promise<Chat[]> {
   ])
   if (error) fail(error, 'load')
   if (!threads?.length) return []
-  type Coach = { thread_id: string; coach_name: string; coach_title?: string | null; coach_online?: boolean }
+  type Coach = { thread_id: string; coach_name: string; coach_title?: string | null; coach_avatar_url?: string | null; coach_online?: boolean }
   type Preview = Pick<ThreadMessage, 'thread_id' | 'sender_role' | 'content' | 'created_at' | 'media_url'>
   const coachOf = new Map(((coaches.data ?? []) as Coach[]).map((c) => [c.thread_id, c]))
   const last = new Map<string, Chat['last']>()
@@ -134,10 +136,10 @@ export async function listMyChats(): Promise<Chat[]> {
       .sort()
       .join(','),
   )
-  return (threads as Omit<Chat, 'last' | 'coach_name' | 'coach_title' | 'coach_online'>[])
+  return (threads as Omit<Chat, 'last' | 'coach_name' | 'coach_title' | 'coach_avatar_url' | 'coach_online'>[])
     .map((t) => {
       const c = coachOf.get(t.id)
-      return { ...t, last: last.get(t.id) ?? null, coach_name: c?.coach_name ?? null, coach_title: c?.coach_title || null, coach_online: !!c?.coach_online }
+      return { ...t, last: last.get(t.id) ?? null, coach_name: c?.coach_name ?? null, coach_title: c?.coach_title || null, coach_avatar_url: c?.coach_avatar_url ?? null, coach_online: !!c?.coach_online }
     })
     .sort((a, b) => (b.last?.created_at ?? b.created_at).localeCompare(a.last?.created_at ?? a.created_at))
 }

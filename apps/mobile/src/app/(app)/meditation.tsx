@@ -4,6 +4,7 @@ import { dayKey } from '@rajs8952/core/dates'
 import { whenProblem, whenToIso, type WhenChoice } from '@rajs8952/core/when'
 import { useEffect, useRef, useState } from 'react'
 import { AppState, StyleSheet, Text, View, type ScrollView } from 'react-native'
+import { BreathingGuide } from '@/components/BreathingGuide'
 import { Bar, Card, Chip, ChipRow, EditingBar, EntryRow, Label, Muted, Ring, SectionTitle, Status, Stepper, TrackerScreen, WhenPicker, whenLabel } from '@/components/kit'
 import { Button, Notice } from '@/components/ui'
 import { Loader } from '@/components/Loader'
@@ -11,6 +12,8 @@ import { loadProfile } from '@/lib/profile'
 import { COLORS } from '@/lib/theme'
 import { TRACKERS, storage, unwrap } from '@/lib/trackers'
 import { useLoad } from '@/lib/useLoad'
+import { WeekBars } from '@/components/WeekBars'
+import { hm, thisWeek } from '@/lib/week'
 
 const ACCENT = TRACKERS.meditation.accent
 
@@ -21,7 +24,7 @@ async function load() {
 
 /** Meditation: a timer or a quick log, today's minutes toward the goal, and this week's sessions. */
 export default function Meditation() {
-  const { data, error, refreshing, refresh, reload } = useLoad(load)
+  const { data, error, savedAt, refreshing, refresh, reload } = useLoad(load, 'meditation')
   const [type, setType] = useState<SessionType>('mindfulness')
   const [minutes, setMinutes] = useState(10)
   const [calmBefore, setCalmBefore] = useState<number | null>(null)
@@ -114,7 +117,7 @@ export default function Meditation() {
   const timedMinutes = Math.max(1, Math.round(elapsed / 60))
 
   return (
-    <TrackerScreen refreshing={refreshing} onRefresh={refresh} scrollRef={scroll}>
+    <TrackerScreen title={TRACKERS.meditation.name} savedAt={savedAt} refreshing={refreshing} onRefresh={refresh} scrollRef={scroll}>
       {error && <Notice tone="error">{error}</Notice>}
 
       <Card>
@@ -128,16 +131,35 @@ export default function Meditation() {
         {data && <Bar progress={todayMin / data.goal} color={ACCENT} />}
       </Card>
 
+      {data && (
+        <Card>
+          <SectionTitle>This week</SectionTitle>
+          <WeekBars
+            days={thisWeek(data.logs, (l) => l.logged_at, (l) => l.duration_min)}
+            color={ACCENT}
+            goal={data.goal}
+            goalLabel={`Goal ${data.goal} min`}
+            format={hm}
+            summary={`Meditation each day this week: ${thisWeek(data.logs, (l) => l.logged_at, (l) => l.duration_min).map((d) => `${d.label} ${hm(d.value)}`).join(', ')}. Daily goal ${data.goal} minutes.`}
+          />
+        </Card>
+      )}
+
       {timer ? (
         <Card style={styles.timerCard}>
-          <View style={{ alignItems: 'center' }}>
-          <Ring progress={elapsed / timer.seconds} color={ACCENT} size={200} stroke={12}>
-            <Text style={styles.clock} accessibilityLabel={`${formatClock(timer.seconds - elapsed)} left`}>
-              {formatClock(timer.seconds - elapsed)}
-            </Text>
-            <Muted>{SESSION_BY_ID[type].label}</Muted>
-          </Ring>
-          </View>
+          {type === 'breathing' && !finished ? (
+            // Breathing: follow the circle (as on the website).
+            <BreathingGuide elapsed={elapsed} left={timer.seconds - elapsed} color={ACCENT} />
+          ) : (
+            <View style={{ alignItems: 'center' }}>
+              <Ring progress={elapsed / timer.seconds} color={ACCENT} size={200} stroke={12}>
+                <Text style={styles.clock} accessibilityLabel={`${formatClock(timer.seconds - elapsed)} left`}>
+                  {formatClock(timer.seconds - elapsed)}
+                </Text>
+                <Muted>{SESSION_BY_ID[type].label}</Muted>
+              </Ring>
+            </View>
+          )}
           <Muted style={{ textAlign: 'center' }}>{SESSION_BY_ID[type].hint}</Muted>
           {finished || elapsed >= 60 ? (
             <>

@@ -51,7 +51,7 @@ export default function BmiScreen() {
   }
 
   return (
-    <TrackerScreen>
+    <TrackerScreen title={'BMI calculator'}>
       {error && <Notice tone="error">{error}</Notice>}
 
       <Card style={styles.hero}>

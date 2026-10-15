@@ -1,5 +1,6 @@
 import { useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
+import { readCache, saveCache } from './cache'
 import { supabase } from './supabase'
 
 /* ------------------------------------------------------------------
@@ -24,10 +25,13 @@ let current: PlanInfo | null = null
 
 export async function loadPlan(): Promise<PlanInfo> {
   const { data, error } = await supabase.rpc('my_plan')
-  if (!error && data) current = data as PlanInfo
-  else if (error?.code === 'PGRST202') current = EVERYTHING
-  else if (!current) throw new Error(error?.message ?? 'Couldn’t load your plan.')
-  return current!
+  if (!error && data) {
+    current = data as PlanInfo
+    void saveCache('plan', current)
+  } else if (error?.code === 'PGRST202') current = EVERYTHING
+  else if (!current) current = (await readCache<PlanInfo>('plan'))?.data ?? null
+  if (!current) throw new Error(error?.message ?? 'Couldn’t load your plan.')
+  return current
 }
 
 export function clearPlan() {

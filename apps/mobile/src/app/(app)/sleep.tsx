@@ -12,6 +12,8 @@ import { loadProfile } from '@/lib/profile'
 import { COLORS, RADIUS } from '@/lib/theme'
 import { TRACKERS, storage, unwrap } from '@/lib/trackers'
 import { useLoad } from '@/lib/useLoad'
+import { WeekBars } from '@/components/WeekBars'
+import { hm, thisWeek } from '@/lib/week'
 
 const ACCENT = TRACKERS.sleep.accent
 
@@ -24,7 +26,7 @@ const fmtHours = (h: number) => formatDuration(Math.round(h * 60))
 
 /** Sleep: last night against the goal, logging a night (wake time + hours slept), and the last two weeks. */
 export default function Sleep() {
-  const { data, error, refreshing, refresh, reload } = useLoad(load)
+  const { data, error, savedAt, refreshing, refresh, reload } = useLoad(load, 'sleep')
   /** Days before today the night ended (0 today, -1 yesterday; editing can go further back). */
   const [wakeDay, setWakeDay] = useState(0)
   const [wakeAt, setWakeAt] = useState('07:00')
@@ -93,7 +95,7 @@ export default function Sleep() {
   }
 
   return (
-    <TrackerScreen refreshing={refreshing} onRefresh={refresh} scrollRef={scroll}>
+    <TrackerScreen title={TRACKERS.sleep.name} savedAt={savedAt} refreshing={refreshing} onRefresh={refresh} scrollRef={scroll}>
       {error && <Notice tone="error">{error}</Notice>}
 
       <Card>
@@ -102,6 +104,20 @@ export default function Sleep() {
         {data && <Muted>Your goal: {formatDuration(data.goal)} a night</Muted>}
         {data && <Bar progress={lastNight / data.goal} color={ACCENT} />}
       </Card>
+
+      {data && (
+        <Card>
+          <SectionTitle>This week</SectionTitle>
+          <WeekBars
+            days={thisWeek(data.logs, (l) => l.wake_at, (l) => l.duration_min)}
+            color={ACCENT}
+            goal={data.goal}
+            goalLabel={`Goal ${hm(data.goal)}`}
+            format={hm}
+            summary={`Sleep each night this week: ${thisWeek(data.logs, (l) => l.wake_at, (l) => l.duration_min).map((d) => `${d.label} ${d.value ? hm(d.value) : 'not logged'}`).join(', ')}. Goal ${hm(data.goal)}.`}
+          />
+        </Card>
+      )}
 
       <Card>
         <SectionTitle>{editing ? 'Edit night' : 'Log a night'}</SectionTitle>
@@ -115,7 +131,7 @@ export default function Sleep() {
         {Platform.OS === 'ios' ? (
           <View style={styles.timeRow}>
             <Muted>at</Muted>
-            <DateTimePicker mode="time" display="compact" value={asDate()} onChange={(_e, d) => d && setWakeAt(hhmm(d))} />
+            <DateTimePicker mode="time" display="compact" value={asDate()} onValueChange={(_e, d) => setWakeAt(hhmm(d))} />
           </View>
         ) : (
           <>
@@ -126,10 +142,11 @@ export default function Sleep() {
               <DateTimePicker
                 mode="time"
                 value={asDate()}
-                onChange={(e, d) => {
+                onValueChange={(_e, d) => {
                   setAndroidPicker(false)
-                  if (e.type === 'set' && d) setWakeAt(hhmm(d))
+                  setWakeAt(hhmm(d))
                 }}
+                onDismiss={() => setAndroidPicker(false)}
               />
             )}
           </>

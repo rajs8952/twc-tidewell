@@ -20,7 +20,7 @@ export default function Programmes() {
   const ordered = [...PROGRAMMES].sort((a, b) => Number(focus.includes(b.topic)) - Number(focus.includes(a.topic)))
 
   return (
-    <TrackerScreen>
+    <TrackerScreen title={'Programmes'}>
       <Muted>One small step a day, for a week or less.</Muted>
       {error && <Notice tone="error">{error}</Notice>}
       {ordered.map((p) => {

@@ -4,7 +4,9 @@ import { whenProblem, whenToIso, type WhenChoice } from '@rajs8952/core/when'
 import type { DrinkLog } from '@rajs8952/core/types'
 import { useRef, useState } from 'react'
 import type { ScrollView } from 'react-native'
-import { StyleSheet, Text } from 'react-native'
+import { router } from 'expo-router'
+import { ChartColumn, Sprout } from 'lucide-react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Card, Chip, ChipRow, EditingBar, EntryRow, Label, Muted, Ring, SectionTitle, Status, TrackerScreen, WhenPicker, whenLabel } from '@/components/kit'
 import { Button, Field, Notice } from '@/components/ui'
 import { Loader } from '@/components/Loader'
@@ -27,7 +29,7 @@ async function load() {
 
 /** Water › Today: progress toward the personal goal, logging a drink, and today's drinks. */
 export default function Water() {
-  const { data, error, refreshing, refresh, reload } = useLoad(load)
+  const { data, error, savedAt, refreshing, refresh, reload } = useLoad(load, 'water')
   const [beverage, setBeverage] = useState<BeverageId>('water')
   const [ml, setMl] = useState(250)
   const [custom, setCustom] = useState('')
@@ -98,7 +100,7 @@ export default function Water() {
   }
 
   return (
-    <TrackerScreen refreshing={refreshing} onRefresh={refresh} scrollRef={scroll}>
+    <TrackerScreen title={TRACKERS.water.name} savedAt={savedAt} refreshing={refreshing} onRefresh={refresh} scrollRef={scroll}>
       {error && <Notice tone="error">{error}</Notice>}
 
       <Card style={styles.hero}>
@@ -113,6 +115,17 @@ export default function Water() {
           </Muted>
         )}
       </Card>
+
+      <View style={styles.links}>
+        <Pressable onPress={() => router.push('/water-stats')} style={({ pressed }) => [styles.link, pressed && { opacity: 0.8 }]} accessibilityRole="button">
+          <ChartColumn size={18} color={ACCENT} />
+          <Text style={styles.linkText}>Stats</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push('/water-garden')} style={({ pressed }) => [styles.link, pressed && { opacity: 0.8 }]} accessibilityRole="button">
+          <Sprout size={18} color="#4F9B5B" />
+          <Text style={styles.linkText}>Garden</Text>
+        </Pressable>
+      </View>
 
       <Card>
         <SectionTitle>{editing ? 'Edit drink' : 'Log a drink'}</SectionTitle>
@@ -170,5 +183,8 @@ export default function Water() {
 const styles = StyleSheet.create({
   hero: { alignItems: 'center', paddingVertical: 24, gap: 14 },
   total: { fontSize: 28, fontWeight: '800', color: COLORS.ink, fontVariant: ['tabular-nums'] },
+  links: { flexDirection: 'row', gap: 10 },
+  link: { flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: COLORS.white, borderRadius: 999, borderWidth: 1, borderColor: COLORS.line },
+  linkText: { fontSize: 15, fontWeight: '700', color: COLORS.ink },
   message: { fontSize: 15, fontWeight: '600', color: COLORS.ink, textAlign: 'center' },
 })

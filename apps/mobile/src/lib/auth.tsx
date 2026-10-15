@@ -1,5 +1,6 @@
 import type { Session } from '@supabase/supabase-js'
 import { createContext, use, useEffect, useState, type PropsWithChildren } from 'react'
+import { clearCache } from './cache'
 import { supabase } from './supabase'
 
 /* ------------------------------------------------------------------
@@ -23,7 +24,11 @@ export function SessionProvider({ children }: PropsWithChildren) {
       .getSession()
       .then(({ data }) => setSession(data.session))
       .finally(() => setLoading(false))
-    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s))
+    const { data } = supabase.auth.onAuthStateChange((event, s) => {
+      setSession(s)
+      // Nothing saved for the last person stays on the phone.
+      if (event === 'SIGNED_OUT') void clearCache()
+    })
     return () => data.subscription.unsubscribe()
   }, [])
 

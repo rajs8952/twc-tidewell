@@ -1,11 +1,14 @@
 import DateTimePicker from '@react-native-community/datetimepicker'
 import { MAX_BACKDATE_DAYS, hhmm, whenProblem, type WhenChoice } from '@rajs8952/core/when'
 import { MOOD_BY_ID, type MoodState } from '@rajs8952/core/mood'
-import { Minus, Plus, Trash2 } from 'lucide-react-native'
+import { router } from 'expo-router'
+import { ChevronLeft, Minus, Plus, Trash2, WifiOff } from 'lucide-react-native'
 import { useState, type PropsWithChildren, type ReactNode, type RefObject } from 'react'
 import { Alert, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View, type ViewStyle } from 'react-native'
-import { SafeAreaView, useSafeAreaInsets, type Edge } from 'react-native-safe-area-context'
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context'
 import Svg, { Circle, Path } from 'react-native-svg'
+import { savedWhen } from '@/lib/cache'
+import { useOnline } from '@/lib/online'
 import { COLORS, RADIUS } from '@/lib/theme'
 
 /* ------------------------------------------------------------------
@@ -13,41 +16,62 @@ import { COLORS, RADIUS } from '@/lib/theme'
  * ------------------------------------------------------------------ */
 
 /**
- * A screen under the navigation header (or, with header={false}, a tab): scrolls, pulls to refresh,
- * and shrinks for the keyboard so the field being typed in stays visible. The sign-in and chat screens
- * work the same way; ScrollView's automaticallyAdjustKeyboardInsets closed the keyboard as it opened.
+ * A screen opened over the tabs (with `title`: its own header with ‹ back), or a tab
+ * (no `title`, edges={['top']}). It scrolls, pulls to refresh, and shrinks for the
+ * keyboard so the field being typed in stays visible.
+ *
+ * The header is drawn here, not by the navigator: with the navigator's native header
+ * above it, iOS kept closing the keyboard as it opened (as on the chat and sign-in
+ * screens, which draw their own and always worked). Swipe-back still works.
  */
 export function TrackerScreen({
   children,
   refreshing,
   onRefresh,
   scrollRef,
+  title,
+  back = true,
   edges = ['bottom'],
-  header = true,
+  savedAt,
 }: PropsWithChildren<{
+  /** When the data shown is the copy saved on the phone (lib/useLoad.ts): says so. */
+  savedAt?: number | null
   refreshing?: boolean
   onRefresh?: () => void
   scrollRef?: RefObject<ScrollView | null>
-  /** A tab screen: ['top'] (the tab bar covers the bottom). */
+  /** The header title; omit on tab screens. */
+  title?: string
+  /** Show ‹ back in the header (not on the welcome screen). */
+  back?: boolean
+  /** A tab screen without a header: ['top'] (the tab bar covers the bottom). */
   edges?: Edge[]
-  /** Under a navigation header (its height is allowed for when making room for the keyboard). */
-  header?: boolean
 }>) {
-  const insets = useSafeAreaInsets()
   return (
-    <SafeAreaView style={styles.safe} edges={edges}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        // iPhone navigation header: the status bar plus 44 pt.
-        keyboardVerticalOffset={header ? insets.top + 44 : 0}
-      >
+    <SafeAreaView style={styles.safe} edges={title != null ? ['top', 'bottom'] : edges}>
+      {title != null && (
+        <View style={styles.header}>
+          {back ? (
+            <Pressable onPress={() => router.back()} hitSlop={12} style={styles.headerBack} accessibilityRole="button" accessibilityLabel="Back">
+              <ChevronLeft size={28} color={COLORS.ink} />
+            </Pressable>
+          ) : (
+            <View style={styles.headerBack} />
+          )}
+          <Text style={styles.headerTitle} numberOfLines={1} accessibilityRole="header">
+            {title}
+          </Text>
+          <View style={styles.headerBack} />
+        </View>
+      )}
+      {/* Measured from just below the header, so no offset is needed (the chat screen's layout). */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           ref={scrollRef}
           contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
           refreshControl={onRefresh ? <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={COLORS.tide500} colors={[COLORS.tide500]} /> : undefined}
         >
+          <OfflineNotice savedAt={savedAt} />
           {children}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -184,7 +208,7 @@ export function WhenPicker({ value, onChange, color, original }: { value: WhenCh
         (Platform.OS === 'ios' ? (
           <View style={styles.timeRow}>
             <Muted>At</Muted>
-            <DateTimePicker mode="time" display="compact" value={asDate()} onChange={(_e, d) => d && onChange({ day, time: hhmm(d) })} />
+            <DateTimePicker mode="time" display="compact" value={asDate()} onValueChange={(_e, d) => onChange({ day, time: hhmm(d) })} />
           </View>
         ) : (
           <>
@@ -195,10 +219,11 @@ export function WhenPicker({ value, onChange, color, original }: { value: WhenCh
               <DateTimePicker
                 mode="time"
                 value={asDate()}
-                onChange={(e, d) => {
+                onValueChange={(_e, d) => {
                   setAndroidOpen(false)
-                  if (e.type === 'set' && d) onChange({ day, time: hhmm(d) })
+                  onChange({ day, time: hhmm(d) })
                 }}
+                onDismiss={() => setAndroidOpen(false)}
               />
             )}
           </>
@@ -292,6 +317,9 @@ export function Status({ note }: { note: { text: string; error?: boolean } | nul
 export const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
   scroll: { padding: 16, paddingBottom: 40, gap: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', minHeight: 48, paddingHorizontal: 8, backgroundColor: COLORS.background },
+  headerBack: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '800', color: COLORS.ink },
   card: { backgroundColor: COLORS.white, borderRadius: RADIUS.card, borderWidth: 1, borderColor: COLORS.line, padding: 16, gap: 12 },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   section: { fontSize: 18, fontWeight: '800', color: COLORS.ink },
@@ -339,4 +367,24 @@ const editStyles = StyleSheet.create({
   editing: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
   editingText: { fontSize: 13, fontWeight: '800' },
   editingCancel: { fontSize: 14, fontWeight: '700', color: COLORS.ink },
+})
+
+/** "You're offline" and/or "Showing what was saved …" at the top of a screen. */
+export function OfflineNotice({ savedAt }: { savedAt?: number | null }) {
+  const online = useOnline()
+  if (online && !savedAt) return null
+  return (
+    <View style={offlineStyles.box} accessibilityRole="alert">
+      <WifiOff size={16} color="#8A5A0B" />
+      <Text style={offlineStyles.text}>
+        {online ? 'Couldn’t refresh just now.' : 'You’re offline.'}
+        {savedAt ? ` Showing what was saved ${savedWhen(savedAt)}.` : ' Changes need a connection.'}
+      </Text>
+    </View>
+  )
+}
+
+const offlineStyles = StyleSheet.create({
+  box: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, backgroundColor: '#FFF7E6', borderWidth: 1, borderColor: '#F5D9A3', paddingHorizontal: 12, paddingVertical: 8 },
+  text: { flex: 1, fontSize: 13, fontWeight: '600', color: '#8A5A0B' },
 })

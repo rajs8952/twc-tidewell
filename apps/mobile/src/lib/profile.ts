@@ -1,6 +1,7 @@
 import type { Profile } from '@rajs8952/core/types'
 import { useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
+import { readCache, saveCache } from './cache'
 import { storage } from './trackers'
 
 /* ------------------------------------------------------------------
@@ -15,9 +16,15 @@ let pending: Promise<Profile> | null = null
 export function loadProfile(fresh = false): Promise<Profile> {
   if (fresh) pending = null
   pending ??= storage.profile.get().then(
-    (p) => (current = p),
-    (e) => {
+    (p) => {
+      void saveCache('profile', p)
+      return (current = p)
+    },
+    async (e) => {
       pending = null
+      // Offline: the copy saved on this phone, if there is one.
+      const cached = await readCache<Profile>('profile')
+      if (cached) return (current = cached.data)
       throw e
     },
   )

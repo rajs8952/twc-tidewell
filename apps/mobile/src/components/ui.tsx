@@ -1,5 +1,5 @@
-import { useState, type PropsWithChildren, type ReactNode } from 'react'
-import { ActivityIndicator, InputAccessoryView, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native'
+import { useId, useState, type PropsWithChildren, type ReactNode } from 'react'
+import { ActivityIndicator, Image, InputAccessoryView, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import Svg, { Circle, Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg'
 import { COLORS, PILLAR_COLORS, RADIUS } from '@/lib/theme'
@@ -30,6 +30,9 @@ export function Logo() {
   )
 }
 
+/** The Wellness Corner's logo, shown with OmniWell's on the sign-in screens. */
+const TWC_LOGO = require('../../assets/images/twc-logo.png')
+
 /**
  * The sign-in and sign-up screens: a large OmniWell logo, name and tagline
  * over a soft brand wash, then the form on a white card. `compact` shrinks
@@ -52,11 +55,20 @@ export function AuthScreen({ children, compact = false }: PropsWithChildren<{ co
       </View>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled">
-          <View style={[styles.hero, compact && styles.heroCompact]} accessible accessibilityRole="header" accessibilityLabel="OmniWell. Your whole wellbeing, in one place.">
-            <View style={[styles.markHalo, compact && styles.markHaloCompact]}>
-              <LogoMark size={compact ? 56 : 96} />
+          <View style={[styles.hero, compact && styles.heroCompact]} accessible accessibilityRole="header" accessibilityLabel="OmniWell by The Wellness Corner. Your whole wellbeing, in one place.">
+            {/* Co-branded: OmniWell × TWC (The Wellness Corner). */}
+            <View style={styles.lockup}>
+              <View style={[styles.markHalo, compact && styles.markHaloCompact]}>
+                <LogoMark size={compact ? 46 : 82} />
+              </View>
+              <Text style={[styles.times, compact && styles.timesCompact]}>×</Text>
+              <View style={[styles.markHalo, compact && styles.markHaloCompact]}>
+                <Image source={TWC_LOGO} style={compact ? styles.twcCompact : styles.twc} resizeMode="contain" />
+              </View>
             </View>
-            <Text style={[styles.brand, compact && styles.brandCompact]}>OmniWell</Text>
+            <Text style={[styles.brand, compact && styles.brandCompact]}>
+              OmniWell <Text style={styles.brandX}>×</Text> TWC
+            </Text>
             {!compact && (
               <>
                 <Text style={styles.tagline}>Your whole wellbeing, in one place</Text>
@@ -101,14 +113,16 @@ export function Lead({ children }: PropsWithChildren) {
 }
 
 /** iPhone number keypads have no Return key: number fields get a Done bar above the keypad. */
-const DONE_BAR = 'omniwell-keyboard-done'
 const NUMERIC = new Set(['number-pad', 'decimal-pad', 'numeric', 'phone-pad'])
 
-/** The Done bar itself, rendered once at the app's root (iPhone only). */
-export function KeyboardDoneBar() {
-  if (Platform.OS !== 'ios') return null
+/**
+ * The Done bar for one number field, rendered next to it (the documented pattern).
+ * Not one shared bar at the app's root: re-rendering that while a keyboard was
+ * opening made iOS close the keyboard again, on any field.
+ */
+function DoneBar({ id }: { id: string }) {
   return (
-    <InputAccessoryView nativeID={DONE_BAR}>
+    <InputAccessoryView nativeID={id}>
       <View style={styles.doneBar}>
         <Pressable onPress={() => Keyboard.dismiss()} hitSlop={10} accessibilityRole="button" accessibilityLabel="Done, close the keyboard">
           <Text style={styles.doneText}>Done</Text>
@@ -122,6 +136,8 @@ export function KeyboardDoneBar() {
 export function Field({ label, secure, right, ...input }: TextInputProps & { label: string; secure?: boolean; right?: ReactNode }) {
   const [shown, setShown] = useState(false)
   const [focused, setFocused] = useState(false)
+  const doneId = `done-${useId().replace(/[^A-Za-z0-9_-]/g, '')}`
+  const numeric = Platform.OS === 'ios' && !!input.keyboardType && NUMERIC.has(input.keyboardType)
   return (
     <View style={styles.field}>
       <View style={styles.labelRow}>
@@ -131,7 +147,7 @@ export function Field({ label, secure, right, ...input }: TextInputProps & { lab
       <View style={[styles.inputWrap, focused && styles.inputFocused]}>
         <TextInput
           {...input}
-          inputAccessoryViewID={Platform.OS === 'ios' && input.keyboardType && NUMERIC.has(input.keyboardType) ? DONE_BAR : input.inputAccessoryViewID}
+          inputAccessoryViewID={numeric ? doneId : input.inputAccessoryViewID}
           accessibilityLabel={label}
           secureTextEntry={secure && !shown}
           placeholderTextColor={`${COLORS.muted}99`}
@@ -145,6 +161,7 @@ export function Field({ label, secure, right, ...input }: TextInputProps & { lab
           }}
           style={[styles.input, input.style]}
         />
+        {numeric && <DoneBar id={doneId} />}
         {secure && (
           <Pressable onPress={() => setShown((s) => !s)} hitSlop={10} accessibilityRole="button" accessibilityLabel={shown ? 'Hide password' : 'Show password'}>
             <Text style={styles.toggle}>{shown ? 'Hide' : 'Show'}</Text>
@@ -200,9 +217,15 @@ const styles = StyleSheet.create({
   authScroll: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 28, paddingBottom: 32 },
   hero: { alignItems: 'center', marginBottom: 24 },
   heroCompact: { marginBottom: 16 },
-  markHalo: { width: 132, height: 132, borderRadius: 66, backgroundColor: 'rgba(255,255,255,0.75)', alignItems: 'center', justifyContent: 'center', shadowColor: '#0F2F37', shadowOpacity: 0.08, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
-  markHaloCompact: { width: 80, height: 80, borderRadius: 40 },
-  brand: { marginTop: 14, fontSize: 36, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.8 },
+  lockup: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  times: { fontSize: 28, fontWeight: '300', color: COLORS.muted },
+  timesCompact: { fontSize: 20 },
+  twc: { width: 84, height: 84 },
+  twcCompact: { width: 48, height: 48 },
+  brandX: { fontWeight: '400', color: COLORS.muted },
+  markHalo: { width: 116, height: 116, borderRadius: 58, backgroundColor: 'rgba(255,255,255,0.75)', alignItems: 'center', justifyContent: 'center', shadowColor: '#0F2F37', shadowOpacity: 0.08, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 3 },
+  markHaloCompact: { width: 68, height: 68, borderRadius: 34 },
+  brand: { marginTop: 14, fontSize: 32, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.6, textAlign: 'center' },
   brandCompact: { marginTop: 8, fontSize: 24 },
   tagline: { marginTop: 4, fontSize: 16, color: COLORS.muted },
   pillars: { flexDirection: 'row', gap: 6, marginTop: 14 },

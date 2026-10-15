@@ -17,7 +17,7 @@ const UNIT_KEY = 'omniwell.weight-unit'
 
 /** Weight: the latest weigh-in and the 90-day trend, logging a weigh-in, and past entries. */
 export default function Weight() {
-  const { data, error, refreshing, refresh, reload } = useLoad(async () => unwrap(await storage.weight.list(weightRange())))
+  const { data, error, savedAt, refreshing, refresh, reload } = useLoad(async () => unwrap(await storage.weight.list(weightRange())), 'weight')
   const [unit, setUnit] = useState<WeightUnit>('kg')
   const [value, setValue] = useState('')
   const [fat, setFat] = useState('')
@@ -89,7 +89,7 @@ export default function Weight() {
   }
 
   return (
-    <TrackerScreen refreshing={refreshing} onRefresh={refresh} scrollRef={scroll}>
+    <TrackerScreen title={TRACKERS.weight.name} savedAt={savedAt} refreshing={refreshing} onRefresh={refresh} scrollRef={scroll}>
       {error && <Notice tone="error">{error}</Notice>}
 
       <Card>

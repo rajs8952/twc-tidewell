@@ -10,6 +10,7 @@ import { router, type Href } from 'expo-router'
 import { ChevronRight, Link2, Sparkles } from 'lucide-react-native'
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { OfflineNotice } from '@/components/kit'
 import { PremiumCard } from '@/components/Support'
 import { Notice } from '@/components/ui'
 import { Loader } from '@/components/Loader'
@@ -145,7 +146,7 @@ function linesFor(id: TrackerId, s: StatsResult['trackers']): { big: string; cap
 export default function InsightsScreen() {
   const plan = usePlan()
   const locked = !!plan && !plan.premium
-  const { data, error, refreshing, refresh } = useLoad(load)
+  const { data, error, savedAt, refreshing, refresh } = useLoad(load, 'insights')
 
   const cards = data ? TRACKER_ORDER.map((id) => ({ id, l: linesFor(id, data.stats.trackers) })) : []
   const logged = cards.filter((c) => c.l)
@@ -164,6 +165,7 @@ export default function InsightsScreen() {
           <PremiumCard title="Insights" text={`Your last ${STATS_DAYS} days for every tracker, and how your habits connect, are part of Premium.`} />
         ) : (
           <>
+            <OfflineNotice savedAt={savedAt} />
             {error && <Notice tone="error">{error}</Notice>}
             {!data && !error && <Loader label="Looking at your last 30 days…" />}
 

@@ -11,6 +11,8 @@ import { loadProfile } from '@/lib/profile'
 import { COLORS } from '@/lib/theme'
 import { TRACKERS, storage, unwrap } from '@/lib/trackers'
 import { useLoad } from '@/lib/useLoad'
+import { WeekBars } from '@/components/WeekBars'
+import { hm, thisWeek } from '@/lib/week'
 
 const ACCENT = TRACKERS.exercise.accent
 
@@ -21,7 +23,7 @@ async function load() {
 
 /** Exercise: this week's minutes against the weekly goal, logging a workout, and the last two weeks. */
 export default function Exercise() {
-  const { data, error, refreshing, refresh, reload } = useLoad(load)
+  const { data, error, savedAt, refreshing, refresh, reload } = useLoad(load, 'exercise')
   const [activity, setActivity] = useState<ActivityId>('walking')
   const [minutes, setMinutes] = useState(30)
   const [intensity, setIntensity] = useState<Intensity>('moderate')
@@ -80,7 +82,7 @@ export default function Exercise() {
   }
 
   return (
-    <TrackerScreen refreshing={refreshing} onRefresh={refresh} scrollRef={scroll}>
+    <TrackerScreen title={TRACKERS.exercise.name} savedAt={savedAt} refreshing={refreshing} onRefresh={refresh} scrollRef={scroll}>
       {error && <Notice tone="error">{error}</Notice>}
 
       <Card>
@@ -89,6 +91,18 @@ export default function Exercise() {
         {data && <Muted>of your {formatMinutes(data.goal)} weekly goal{weekMin >= data.goal ? ' · goal met' : ''}</Muted>}
         {data && <Bar progress={weekMin / data.goal} color={ACCENT} />}
       </Card>
+
+      {data && (
+        <Card>
+          <SectionTitle>Minutes each day</SectionTitle>
+          <WeekBars
+            days={thisWeek(data.logs, (l) => l.logged_at, (l) => l.duration_min)}
+            color={ACCENT}
+            format={hm}
+            summary={`Exercise each day this week: ${thisWeek(data.logs, (l) => l.logged_at, (l) => l.duration_min).map((d) => `${d.label} ${hm(d.value)}`).join(', ')}.`}
+          />
+        </Card>
+      )}
 
       <Card>
         <SectionTitle>{editing ? 'Edit workout' : 'Log a workout'}</SectionTitle>

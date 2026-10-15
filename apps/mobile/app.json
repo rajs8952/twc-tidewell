@@ -8,7 +8,6 @@
     "scheme": "omniwell",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.omniwellhealth.omniwell",
       "supportsTablet": false
     },
@@ -29,7 +28,7 @@
         {
           "backgroundColor": "#EDF4F3",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 140
         }
       ],
       "expo-secure-store",

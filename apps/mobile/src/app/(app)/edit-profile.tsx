@@ -36,7 +36,7 @@ export default function EditProfile() {
   const [note, setNote] = useState<{ text: string; error?: boolean } | null>(null)
 
   if (!profile) {
-    return <TrackerScreen>{loadError ? <Notice tone="error">{loadError}</Notice> : <Loader label="Loading your profile…" />}</TrackerScreen>
+    return <TrackerScreen title={'Edit profile'}>{loadError ? <Notice tone="error">{loadError}</Notice> : <Loader label="Loading your profile…" />}</TrackerScreen>
   }
 
   const saved = profile
@@ -91,7 +91,7 @@ export default function EditProfile() {
   }
 
   return (
-    <TrackerScreen>
+    <TrackerScreen title={'Edit profile'}>
       <Card>
         <Field label="Name" value={form.full_name} onChangeText={(v) => set('full_name', v)} autoCapitalize="words" maxLength={80} textContentType="name" />
       </Card>

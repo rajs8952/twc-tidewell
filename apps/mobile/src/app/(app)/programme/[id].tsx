@@ -1,6 +1,6 @@
 import { PROGRAMME_BY_ID, programmeState } from '@omniwell/web/content/programmes'
 import { FREE_PROGRAMME } from '@omniwell/web/plans'
-import { Stack, router, useLocalSearchParams, type Href } from 'expo-router'
+import { router, useLocalSearchParams, type Href } from 'expo-router'
 import { ArrowRight, Check, Lock, RotateCcw } from 'lucide-react-native'
 import { useState } from 'react'
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native'
@@ -23,7 +23,7 @@ export default function Programme() {
 
   if (!p) {
     return (
-      <TrackerScreen>
+      <TrackerScreen title="Programme">
         <Notice tone="error">That programme wasn’t found.</Notice>
       </TrackerScreen>
     )
@@ -44,8 +44,7 @@ export default function Programme() {
   }
 
   return (
-    <TrackerScreen>
-      <Stack.Screen options={{ title: p.title }} />
+    <TrackerScreen title={p.title}>
       <View style={styles.head}>
         <View style={[styles.icon, { backgroundColor: t.accent }]}>
           <Icon size={28} color={COLORS.white} />

@@ -2,9 +2,9 @@ import { Stack } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
-import { KeyboardDoneBar } from '@/components/ui'
 import { SessionProvider, useSession } from '@/lib/auth'
 import { useNotificationTaps } from '@/lib/push'
+import { useTimezoneSync } from '@/lib/timezone'
 import { COLORS } from '@/lib/theme'
 
 // Keep the splash screen up until the saved sign-in has been read.
@@ -15,7 +15,6 @@ export default function RootLayout() {
     <SessionProvider>
       <StatusBar style="dark" />
       <RootNavigator />
-      <KeyboardDoneBar />
     </SessionProvider>
   )
 }
@@ -25,6 +24,7 @@ function RootNavigator() {
   const { session, loading, held } = useSession()
   const signedIn = !!session && !held
   useNotificationTaps(signedIn)
+  useTimezoneSync(signedIn)
 
   useEffect(() => {
     if (!loading) SplashScreen.hideAsync()
