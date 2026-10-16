@@ -1,21 +1,22 @@
 import { Stack } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { View } from 'react-native'
+import { AnimatedSplash, SPLASH_BACKGROUND } from '@/components/AnimatedSplash'
 import { SessionProvider, useSession } from '@/lib/auth'
 import { useNotificationTaps } from '@/lib/push'
 import { useTimezoneSync } from '@/lib/timezone'
 import { COLORS } from '@/lib/theme'
 
-// Keep the splash screen up until the saved sign-in has been read, and for at least SPLASH_MS.
+// The phone's own splash (plain navy) stays until the saved sign-in has been read;
+// then the animated splash, drawn on the same navy, plays over the app as it loads.
 SplashScreen.preventAutoHideAsync()
-SplashScreen.setOptions({ fade: true, duration: 400 })
-const SPLASH_MS = 3000
+SplashScreen.setOptions({ fade: false })
 
 export default function RootLayout() {
   return (
     <SessionProvider>
-      <StatusBar style="dark" />
       <RootNavigator />
     </SessionProvider>
   )
@@ -24,30 +25,31 @@ export default function RootLayout() {
 /** Signed in: the app. Signed out (or choosing a new password): the sign-in screens. */
 function RootNavigator() {
   const { session, loading, held } = useSession()
-  const [shownLongEnough, setShownLongEnough] = useState(false)
+  const [splashDone, setSplashDone] = useState(false)
   const signedIn = !!session && !held
   useNotificationTaps(signedIn)
   useTimezoneSync(signedIn)
+  const finishSplash = useCallback(() => setSplashDone(true), [])
 
-  // The screens load underneath meanwhile, so the app is ready when the splash goes.
   useEffect(() => {
-    const timer = setTimeout(() => setShownLongEnough(true), SPLASH_MS)
-    return () => clearTimeout(timer)
-  }, [])
-  useEffect(() => {
-    if (!loading && shownLongEnough) SplashScreen.hideAsync()
-  }, [loading, shownLongEnough])
+    if (!loading) SplashScreen.hideAsync()
+  }, [loading])
 
-  if (loading) return null
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.background } }}>
-      <Stack.Protected guard={signedIn}>
-        <Stack.Screen name="(app)" />
-      </Stack.Protected>
-      <Stack.Protected guard={!signedIn}>
-        <Stack.Screen name="sign-in" />
-        <Stack.Screen name="sign-up" />
-      </Stack.Protected>
-    </Stack>
+    <View style={{ flex: 1, backgroundColor: splashDone ? COLORS.background : SPLASH_BACKGROUND }}>
+      <StatusBar style={splashDone ? 'dark' : 'light'} />
+      {!loading && (
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.background } }}>
+          <Stack.Protected guard={signedIn}>
+            <Stack.Screen name="(app)" />
+          </Stack.Protected>
+          <Stack.Protected guard={!signedIn}>
+            <Stack.Screen name="sign-in" />
+            <Stack.Screen name="sign-up" />
+          </Stack.Protected>
+        </Stack>
+      )}
+      {!splashDone && <AnimatedSplash start={!loading} onDone={finishSplash} />}
+    </View>
   )
 }

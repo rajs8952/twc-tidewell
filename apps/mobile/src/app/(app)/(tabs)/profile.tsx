@@ -1,23 +1,25 @@
 import { ageFromBirthYear, bmi } from '@rajs8952/core/biometrics'
 import { goalsOf } from '@rajs8952/core/goals'
 import { ACTIVITY_LEVELS, GENDERS, effectiveGoal, formatMl } from '@rajs8952/core/hydration'
+import Constants from 'expo-constants'
 import { Image } from 'expo-image'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
 import { router } from 'expo-router'
-import { BellRing, Camera, Crown, KeyRound, Pencil } from 'lucide-react-native'
+import { Activity, BellRing, Cake, Camera, ChevronRight, Crown, KeyRound, LogOut, Pencil, Ruler, Scale, UserRound, type LucideIcon } from 'lucide-react-native'
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
-import { Card, Muted, SectionTitle, Status, TrackerScreen } from '@/components/kit'
-import { Button, Notice } from '@/components/ui'
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
+import { Status, TrackerScreen } from '@/components/kit'
+import { Notice } from '@/components/ui'
 import { Loader } from '@/components/Loader'
 import { useSession } from '@/lib/auth'
 import { clearPlan, daysLeft, usePlan } from '@/lib/plan'
 import { clearProfile, useProfile } from '@/lib/profile'
 import { disablePush } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
-import { COLORS } from '@/lib/theme'
-import { messageOf, storage } from '@/lib/trackers'
+import { COLORS, RADIUS } from '@/lib/theme'
+import { TRACKERS, messageOf, storage } from '@/lib/trackers'
 
 /* ------------------------------------------------------------------
  * Me: your profile at a glance (photo, name, plan, body details, water
@@ -33,6 +35,7 @@ export default function Me() {
   const plan = usePlan()
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<{ text: string; error?: boolean } | null>(null)
+  const [hero, setHero] = useState({ w: 0, h: 0 })
 
   if (!profile) {
     return <TrackerScreen edges={['top']}>{error ? <Notice tone="error">{error}</Notice> : <Loader label="Loading your profile…" />}</TrackerScreen>
@@ -46,20 +49,23 @@ export default function Me() {
   const value = bmi(me.height_cm, me.weight_kg)
   const initials = me.full_name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?'
 
-  const details = [
-    { label: 'Height', value: me.height_cm ? `${me.height_cm} cm` : 'Not set' },
-    { label: 'Weight', value: `${me.weight_kg} kg` },
-    { label: 'Age', value: age != null ? String(age) : 'Not set' },
-    { label: 'Sex', value: GENDERS.find((g) => g.id === me.gender)?.label ?? '—' },
-    { label: 'Activity', value: ACTIVITY_LEVELS.find((a) => a.id === me.activity_level)?.label ?? '—' },
-    ...(value ? [{ label: 'BMI', value: String(value) }] : []),
+  const stats = [
+    { label: 'Height', value: me.height_cm ? `${me.height_cm}` : '—', unit: me.height_cm ? 'cm' : '', icon: Ruler },
+    { label: 'Weight', value: `${me.weight_kg}`, unit: 'kg', icon: Scale },
+    { label: 'BMI', value: value ? String(value) : '—', unit: '', icon: Activity },
+  ]
+  const details: { label: string; value: string; icon: LucideIcon }[] = [
+    { label: 'Age', value: age != null ? `${age} years` : 'Not set', icon: Cake },
+    { label: 'Sex', value: GENDERS.find((g) => g.id === me.gender)?.label ?? 'Not set', icon: UserRound },
+    { label: 'Activity level', value: ACTIVITY_LEVELS.find((a) => a.id === me.activity_level)?.label ?? 'Not set', icon: Activity },
   ]
   const targets = [
-    { label: 'Water', value: `${formatMl(effectiveGoal(me))} a day${me.custom_goal_ml != null ? ' (your own)' : ''}` },
-    { label: 'Sleep', value: `${fmtMin(goals.sleepMin)} a night` },
-    { label: 'Meditation', value: `${goals.meditationMin} min a day` },
-    { label: 'Exercise', value: `${goals.exerciseWeekMin} min a week` },
+    { id: 'water' as const, value: formatMl(effectiveGoal(me)), per: me.custom_goal_ml != null ? 'a day · your own' : 'a day' },
+    { id: 'sleep' as const, value: fmtMin(goals.sleepMin), per: 'a night' },
+    { id: 'meditation' as const, value: `${goals.meditationMin} min`, per: 'a day' },
+    { id: 'exercise' as const, value: `${goals.exerciseWeekMin} min`, per: 'a week' },
   ]
+  const version = Constants.expoConfig?.version
 
   /** A new photo: cropped square, shrunk to 512 px, uploaded to the avatars bucket (as the website does). */
   async function changePhoto() {
@@ -94,101 +100,156 @@ export default function Me() {
 
   return (
     <TrackerScreen edges={['top']}>
-      <Text style={styles.title} accessibilityRole="header">
-        Profile
-      </Text>
-
-      <Card>
-        <View style={styles.account}>
-          <Pressable onPress={() => void changePhoto()} disabled={busy} style={styles.avatarWrap} accessibilityRole="button" accessibilityLabel="Change photo">
-            {me.avatar_url ? (
-              <Image source={{ uri: me.avatar_url }} style={styles.avatar} contentFit="cover" />
-            ) : (
-              <View style={[styles.avatar, styles.avatarEmpty]}>
-                <Text style={styles.initials}>{initials}</Text>
-              </View>
-            )}
-            <View style={styles.camera}>{busy ? <ActivityIndicator size="small" color={COLORS.white} /> : <Camera size={14} color={COLORS.white} />}</View>
-          </Pressable>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{me.full_name || 'Your name'}</Text>
-            <Muted>{session?.user.email}</Muted>
-            {!!planLine && (
-              <View style={styles.planRow}>
-                {plan?.premium && <Crown size={14} color="#B9650E" />}
-                <Text style={[styles.plan, plan?.premium && { color: '#8A4B0A' }]}>{planLine}</Text>
-              </View>
-            )}
+      {/* You: photo, name, email and plan, on the brand gradient. */}
+      <View style={styles.hero} onLayout={(e) => setHero({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
+        <Svg width={hero.w} height={hero.h} style={StyleSheet.absoluteFill}>
+          <Defs>
+            <LinearGradient id="profileHero" x1="0" y1="0" x2="1" y2="1">
+              <Stop offset="0" stopColor="#1A6DB5" />
+              <Stop offset="0.55" stopColor="#4A5BC4" />
+              <Stop offset="1" stopColor="#7C6BD6" />
+            </LinearGradient>
+          </Defs>
+          <Rect x={0} y={0} width={hero.w} height={hero.h} fill="url(#profileHero)" />
+        </Svg>
+        <Pressable onPress={() => void changePhoto()} disabled={busy} style={styles.avatarWrap} accessibilityRole="button" accessibilityLabel="Change photo">
+          {me.avatar_url ? (
+            <Image source={{ uri: me.avatar_url }} style={styles.avatar} contentFit="cover" transition={150} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarEmpty]}>
+              <Text style={styles.initials}>{initials}</Text>
+            </View>
+          )}
+          <View style={styles.camera}>{busy ? <ActivityIndicator size="small" color={COLORS.ink} /> : <Camera size={15} color={COLORS.ink} />}</View>
+        </Pressable>
+        <Text style={styles.name} accessibilityRole="header">
+          {me.full_name || 'Your name'}
+        </Text>
+        <Text style={styles.email}>{session?.user.email}</Text>
+        {!!planLine && (
+          <View style={[styles.planPill, plan?.premium && styles.planPremium]}>
+            {plan?.premium && <Crown size={13} color="#8A4B0A" />}
+            <Text style={[styles.plan, plan?.premium && { color: '#8A4B0A' }]}>{planLine}</Text>
           </View>
+        )}
+        <View style={styles.stats}>
+          {stats.map((st, i) => (
+            <View key={st.label} style={[styles.stat, i > 0 && styles.statDivider]}>
+              <Text style={styles.statValue}>
+                {st.value}
+                {!!st.unit && <Text style={styles.statUnit}> {st.unit}</Text>}
+              </Text>
+              <Text style={styles.statLabel}>{st.label}</Text>
+            </View>
+          ))}
         </View>
-        <Status note={note} />
-      </Card>
+      </View>
+      <Status note={note} />
 
-      <Card>
-        <SectionTitle>Your details</SectionTitle>
-        <Rows rows={details} />
-      </Card>
+      <Text style={styles.section} accessibilityRole="header">
+        Your goals
+      </Text>
+      <View style={styles.goals}>
+        {targets.map((g) => {
+          const t = TRACKERS[g.id]
+          const Icon = t.icon
+          return (
+            <View key={g.id} style={[styles.goal, { backgroundColor: t.tint }]}>
+              <View style={styles.goalIcon}>
+                <Icon size={18} color={t.accent} />
+              </View>
+              <Text style={[styles.goalName, { color: t.accent }]}>{t.name}</Text>
+              <Text style={styles.goalValue}>{g.value}</Text>
+              <Text style={styles.goalPer}>{g.per}</Text>
+            </View>
+          )
+        })}
+      </View>
 
-      <Card>
-        <SectionTitle>Your goals</SectionTitle>
-        <Rows rows={targets} />
-      </Card>
+      <Text style={styles.section} accessibilityRole="header">
+        About you
+      </Text>
+      <View style={styles.group}>
+        {details.map((d, i) => {
+          const Icon = d.icon
+          return (
+            <View key={d.label} style={[styles.detail, i > 0 && styles.rowDivider]}>
+              <Icon size={18} color={COLORS.muted} />
+              <Text style={styles.detailLabel}>{d.label}</Text>
+              <Text style={styles.detailValue}>{d.value}</Text>
+            </View>
+          )
+        })}
+      </View>
 
-      <Pressable onPress={() => router.push('/edit-profile')} style={({ pressed }) => [styles.edit, pressed && { opacity: 0.85 }]} accessibilityRole="button">
-        <Pencil size={18} color={COLORS.white} />
-        <Text style={styles.editText}>Edit profile</Text>
-      </Pressable>
-
-      <Pressable onPress={() => router.push('/reminders')} style={({ pressed }) => [styles.reminders, pressed && { opacity: 0.85 }]} accessibilityRole="button">
-        <BellRing size={18} color={COLORS.ink} />
-        <Text style={styles.remindersText}>Reminders & notifications</Text>
-      </Pressable>
-
-      <Pressable onPress={() => router.push('/change-password')} style={({ pressed }) => [styles.reminders, pressed && { opacity: 0.85 }]} accessibilityRole="button">
-        <KeyRound size={18} color={COLORS.ink} />
-        <Text style={styles.remindersText}>Change password</Text>
-      </Pressable>
-
-      <Button title="Log out" variant="secondary" onPress={() => void signOut()} />
+      <Text style={styles.section} accessibilityRole="header">
+        Account
+      </Text>
+      <View style={styles.group}>
+        <MenuRow icon={Pencil} color="#1A6DB5" label="Edit profile" hint="Photo, details and goals" onPress={() => router.push('/edit-profile')} />
+        <MenuRow icon={BellRing} color="#E9851F" label="Reminders & notifications" hint="Times, repeats and this phone" onPress={() => router.push('/reminders')} divider />
+        <MenuRow icon={KeyRound} color="#4A5BC4" label="Change password" onPress={() => router.push('/change-password')} divider />
+        <MenuRow icon={LogOut} color={COLORS.muted} label="Log out" onPress={() => void signOut()} divider />
+      </View>
 
       <Pressable onPress={() => router.push('/delete-account')} style={styles.delete} accessibilityRole="button">
         <Text style={styles.deleteText}>Delete my account</Text>
       </Pressable>
+      {!!version && <Text style={styles.version}>OmniWell {version}</Text>}
     </TrackerScreen>
   )
 }
 
-function Rows({ rows }: { rows: { label: string; value: string }[] }) {
+function MenuRow({ icon: Icon, color, label, hint, onPress, divider }: { icon: LucideIcon; color: string; label: string; hint?: string; onPress: () => void; divider?: boolean }) {
   return (
-    <View>
-      {rows.map((r) => (
-        <View key={r.label} style={styles.row}>
-          <Text style={styles.rowLabel}>{r.label}</Text>
-          <Text style={styles.rowValue}>{r.value}</Text>
-        </View>
-      ))}
-    </View>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.menuRow, divider && styles.rowDivider, pressed && { backgroundColor: COLORS.mist }]} accessibilityRole="button" accessibilityLabel={label}>
+      <View style={[styles.menuIcon, { backgroundColor: `${color}1A` }]}>
+        <Icon size={18} color={color} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.menuLabel}>{label}</Text>
+        {!!hint && <Text style={styles.menuHint}>{hint}</Text>}
+      </View>
+      <ChevronRight size={18} color={COLORS.muted} />
+    </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 30, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.5 },
-  account: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  avatarWrap: { width: 72, height: 72 },
-  avatar: { width: 72, height: 72, borderRadius: 36 },
-  avatarEmpty: { backgroundColor: COLORS.mist, alignItems: 'center', justifyContent: 'center' },
-  initials: { fontSize: 24, fontWeight: '800', color: COLORS.ink },
-  camera: { position: 'absolute', right: -2, bottom: -2, width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.ink, borderWidth: 2, borderColor: COLORS.white, alignItems: 'center', justifyContent: 'center' },
-  name: { fontSize: 19, fontWeight: '800', color: COLORS.ink },
-  planRow: { marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  plan: { fontSize: 13, fontWeight: '700', color: COLORS.muted },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: COLORS.line },
-  rowLabel: { fontSize: 15, color: COLORS.muted },
-  rowValue: { flexShrink: 1, textAlign: 'right', fontSize: 15, fontWeight: '700', color: COLORS.ink },
-  edit: { minHeight: 52, borderRadius: 999, backgroundColor: COLORS.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  editText: { fontSize: 16, fontWeight: '700', color: COLORS.white },
-  reminders: { minHeight: 52, borderRadius: 999, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  hero: { borderRadius: 28, overflow: 'hidden', alignItems: 'center', paddingTop: 26, paddingHorizontal: 18, paddingBottom: 18, backgroundColor: '#3E64C0' },
+  avatarWrap: { width: 96, height: 96 },
+  avatar: { width: 96, height: 96, borderRadius: 48, borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)' },
+  avatarEmpty: { backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
+  initials: { fontSize: 32, fontWeight: '800', color: COLORS.white },
+  camera: { position: 'absolute', right: 0, bottom: 0, width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
+  name: { marginTop: 12, fontSize: 24, fontWeight: '800', color: COLORS.white, letterSpacing: -0.4, textAlign: 'center' },
+  email: { marginTop: 2, fontSize: 14, color: 'rgba(255,255,255,0.85)' },
+  planPill: { marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: RADIUS.pill, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 5 },
+  planPremium: { backgroundColor: '#FFE7B8' },
+  plan: { fontSize: 13, fontWeight: '800', color: COLORS.white },
+  stats: { marginTop: 18, alignSelf: 'stretch', flexDirection: 'row', borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.14)', paddingVertical: 12 },
+  stat: { flex: 1, alignItems: 'center', gap: 2 },
+  statDivider: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: 'rgba(255,255,255,0.35)' },
+  statValue: { fontSize: 20, fontWeight: '800', color: COLORS.white },
+  statUnit: { fontSize: 13, fontWeight: '700', color: 'rgba(255,255,255,0.8)' },
+  statLabel: { fontSize: 12, fontWeight: '600', color: 'rgba(255,255,255,0.8)' },
+  section: { marginTop: 6, fontSize: 18, fontWeight: '800', color: COLORS.ink },
+  goals: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 10 },
+  goal: { width: '48.5%', borderRadius: 22, padding: 14, gap: 2 },
+  goalIcon: { width: 34, height: 34, borderRadius: 12, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  goalName: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6 },
+  goalValue: { fontSize: 20, fontWeight: '800', color: COLORS.ink },
+  goalPer: { fontSize: 12, color: COLORS.muted },
+  group: { borderRadius: RADIUS.card, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.line, overflow: 'hidden' },
+  rowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: COLORS.line },
+  detail: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, minHeight: 52 },
+  detailLabel: { flex: 1, fontSize: 15, color: COLORS.muted },
+  detailValue: { fontSize: 15, fontWeight: '700', color: COLORS.ink },
+  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 12, minHeight: 60 },
+  menuIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  menuLabel: { fontSize: 16, fontWeight: '700', color: COLORS.ink },
+  menuHint: { marginTop: 1, fontSize: 13, color: COLORS.muted },
   delete: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   deleteText: { fontSize: 14, fontWeight: '700', color: COLORS.alert },
-  remindersText: { fontSize: 16, fontWeight: '700', color: COLORS.ink },
+  version: { textAlign: 'center', fontSize: 12, color: COLORS.muted, marginTop: -8 },
 })
