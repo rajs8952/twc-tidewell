@@ -16,7 +16,17 @@ export interface PlanInfo {
   plan: 'free' | 'premium'
   source: 'none' | 'trial' | 'paid' | 'company' | 'grandfathered' | 'admin'
   premium_until: string | null
+  billing_period?: 'monthly' | 'yearly' | null
+  status?: 'active' | 'past_due' | 'cancelled' | 'halted'
+  cancel_at_period_end?: boolean
 }
+
+/**
+ * Whether the app offers buying Premium (Razorpay, through the website). Apple
+ * normally requires its own in-app purchase for this, so turn it off for the
+ * App Store build unless OmniWell is only provided by companies (iOS).
+ */
+export const CAN_UPGRADE_IN_APP = true
 
 /** Before supabase/subscriptions.sql is run, everyone keeps everything. */
 const EVERYTHING: PlanInfo = { premium: true, staff: false, plan: 'premium', source: 'grandfathered', premium_until: null }

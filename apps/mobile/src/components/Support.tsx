@@ -5,6 +5,7 @@ import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'r
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { telHref, useContacts, type Contacts } from '@/lib/contacts'
+import { CAN_UPGRADE_IN_APP } from '@/lib/plan'
 import { COLORS, RADIUS } from '@/lib/theme'
 
 /* ------------------------------------------------------------------
@@ -155,6 +156,12 @@ export function PremiumCard({ title, text }: { title: string; text: string }) {
       </View>
       <Text style={styles.premiumTitle}>{title}</Text>
       <Text style={styles.premiumText}>{text}</Text>
+      {CAN_UPGRADE_IN_APP && (
+        <Pressable onPress={() => router.push('/plans')} style={({ pressed }) => [styles.premiumButton, pressed && { opacity: 0.85 }]} accessibilityRole="button">
+          <Crown size={16} color={COLORS.white} />
+          <Text style={styles.premiumButtonText}>See Premium</Text>
+        </Pressable>
+      )}
       <Text style={styles.premiumNote}>Premium isn’t active on your account. If your company provides OmniWell, ask your HR team about it. The emergency number is always free.</Text>
     </View>
   )
@@ -186,6 +193,8 @@ const styles = StyleSheet.create({
   bannerText: { fontSize: 14, lineHeight: 20, color: COLORS.muted },
   bannerButton: { marginTop: 6, alignSelf: 'flex-start', minHeight: 42, borderRadius: RADIUS.pill, backgroundColor: COLORS.ink, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16 },
   bannerButtonText: { fontSize: 14, fontWeight: '700', color: COLORS.white },
+  premiumButton: { alignSelf: 'flex-start', marginTop: 4, minHeight: 44, borderRadius: RADIUS.pill, backgroundColor: '#B9650E', flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 18 },
+  premiumButtonText: { fontSize: 15, fontWeight: '800', color: COLORS.white },
   premium: { borderRadius: RADIUS.card, backgroundColor: '#FFF7E6', borderWidth: 1, borderColor: '#F5D9A3', padding: 20, gap: 8 },
   premiumIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center' },
   premiumTitle: { fontSize: 18, fontWeight: '800', color: COLORS.ink },

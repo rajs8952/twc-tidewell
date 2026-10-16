@@ -50,6 +50,8 @@ export interface RazorpaySubscription {
   current_end: number | null
   customer_id: string | null
   notes: Record<string, string> | []
+  /** Razorpay's own payment page for this subscription (the OmniWell app opens it). */
+  short_url?: string | null
 }
 
 /** A new subscription for this person (they pay for it in Razorpay Checkout). */

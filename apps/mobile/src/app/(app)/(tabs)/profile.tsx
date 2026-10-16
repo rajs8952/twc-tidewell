@@ -14,7 +14,7 @@ import { Status, TrackerScreen } from '@/components/kit'
 import { Notice } from '@/components/ui'
 import { Loader } from '@/components/Loader'
 import { useSession } from '@/lib/auth'
-import { clearPlan, daysLeft, usePlan } from '@/lib/plan'
+import { CAN_UPGRADE_IN_APP, clearPlan, daysLeft, usePlan } from '@/lib/plan'
 import { clearProfile, useProfile } from '@/lib/profile'
 import { disablePush } from '@/lib/push'
 import { supabase } from '@/lib/supabase'
@@ -127,10 +127,10 @@ export default function Me() {
         </Text>
         <Text style={styles.email}>{session?.user.email}</Text>
         {!!planLine && (
-          <View style={[styles.planPill, plan?.premium && styles.planPremium]}>
+          <Pressable onPress={() => router.push('/plans')} disabled={!CAN_UPGRADE_IN_APP} style={[styles.planPill, plan?.premium && styles.planPremium]} accessibilityRole="button" accessibilityLabel={`${planLine}. Open Premium`}>
             {plan?.premium && <Crown size={13} color="#8A4B0A" />}
             <Text style={[styles.plan, plan?.premium && { color: '#8A4B0A' }]}>{planLine}</Text>
-          </View>
+          </Pressable>
         )}
         <View style={styles.stats}>
           {stats.map((st, i) => (
@@ -187,6 +187,7 @@ export default function Me() {
       </Text>
       <View style={styles.group}>
         <MenuRow icon={Pencil} color="#1A6DB5" label="Edit profile" hint="Photo, details and goals" onPress={() => router.push('/edit-profile')} />
+        {CAN_UPGRADE_IN_APP && <MenuRow icon={Crown} color="#B9650E" label="Premium" hint={plan?.premium ? 'Your plan and renewal' : 'See what Premium adds'} onPress={() => router.push('/plans')} divider />}
         <MenuRow icon={BellRing} color="#E9851F" label="Reminders & notifications" hint="Times, repeats and this phone" onPress={() => router.push('/reminders')} divider />
         <MenuRow icon={KeyRound} color="#4A5BC4" label="Change password" onPress={() => router.push('/change-password')} divider />
         <MenuRow icon={LogOut} color={COLORS.muted} label="Log out" onPress={() => void signOut()} divider />
